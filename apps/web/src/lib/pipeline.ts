@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm'
+import { eq, and } from 'drizzle-orm'
 import { unlink } from 'node:fs/promises'
 import { extname } from 'node:path'
 import { db } from './db.ts'
@@ -176,11 +176,12 @@ async function generateDailyBatch(
 
   const cardTypes = (strategy?.cardTypes as CardType[] | undefined) ?? undefined
 
-  // Find chunks that already have cards (resume support)
+  // Find chunks in THIS document that already have cards (resume support)
   const existingCards = await db
     .select({ chunkId: cards.chunkId })
     .from(cards)
-    .where(eq(cards.userId, userId))
+    .innerJoin(chunks, eq(cards.chunkId, chunks.id))
+    .where(and(eq(cards.userId, userId), eq(chunks.documentId, documentId)))
   const chunksWithCards = new Set(existingCards.map((r) => r.chunkId))
   const remaining = textChunks.filter((c) => !chunksWithCards.has(c.id))
 
@@ -213,9 +214,24 @@ async function generateDailyBatch(
     console.log(`[pipeline] batch done: doc=${documentId} cards=${totalCards}`)
   }
 
-  const allDone = remaining.length <= DAILY_CHUNK_LIMIT
+  // Re-check: how many chunks still need cards after this batch?
+  // (The AI may have returned [] for some chunks, so more may be "done" than we processed)
+  const postBatchCards = await db
+    .select({ chunkId: cards.chunkId })
+    .from(cards)
+    .innerJoin(chunks, eq(cards.chunkId, chunks.id))
+    .where(and(eq(cards.userId, userId), eq(chunks.documentId, documentId)))
+  const postBatchSet = new Set(postBatchCards.map((r) => r.chunkId))
+  const stillRemaining = textChunks.filter((c) => !postBatchSet.has(c.id))
 
-  if (allDone) {
+  // Also count: chunks we attempted this batch that got 0 cards (AI returned [])
+  // These should count as "done" — don't retry them forever
+  const attemptedThisBatch = new Set(todaysBatch.map((c) => c.id))
+  const trueRemaining = stillRemaining.filter((c) => !attemptedThisBatch.has(c.id))
+
+  totalCards = postBatchCards.length
+
+  if (trueRemaining.length === 0) {
     await db
       .update(documents)
       .set({ processingStatus: 'ready', cardCount: totalCards })
@@ -223,9 +239,12 @@ async function generateDailyBatch(
     await db.update(jobs).set({ status: 'done', finishedAt: new Date() }).where(eq(jobs.id, jobId))
     console.log(`[pipeline] done: doc=${documentId} chunks=${allChunks.length} cards=${totalCards}`)
   } else {
-    // More chunks remain — will be processed by daily cron
+    await db
+      .update(documents)
+      .set({ cardCount: totalCards })
+      .where(eq(documents.id, documentId))
     await db.update(jobs).set({ status: 'done', finishedAt: new Date() }).where(eq(jobs.id, jobId))
-    console.log(`[pipeline] daily batch done: doc=${documentId} cards=${totalCards}, ${remaining.length - todaysBatch.length} chunks remaining`)
+    console.log(`[pipeline] daily batch done: doc=${documentId} cards=${totalCards}, ${trueRemaining.length} chunks remaining`)
   }
 }
 
