@@ -19,10 +19,11 @@ export async function generateCardsForChunk(
   prevChunk: Chunk | null,
   doc: Document,
   provider: AIProvider,
+  cardTypes: CardType[] = PHASE1_CARD_TYPES,
 ): Promise<InsertCard[]> {
   const results: InsertCard[] = []
 
-  for (const cardType of PHASE1_CARD_TYPES) {
+  for (const cardType of cardTypes) {
     const prompt = buildPrompt(cardType, chunk, prevChunk, doc)
     const front = await provider.generate(prompt)
 

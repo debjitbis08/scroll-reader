@@ -2,7 +2,12 @@ import type { APIRoute } from 'astro'
 import { eq, and } from 'drizzle-orm'
 import { db } from '../../../../lib/db.ts'
 import { documents, jobs } from '@scroll-reader/db'
+import { resolveCardStrategy } from '@scroll-reader/shared-types'
+import type { DocumentType, ReadingGoal } from '@scroll-reader/shared-types'
 import { runPipeline } from '../../../../lib/pipeline.ts'
+
+const VALID_DOC_TYPES: DocumentType[] = ['book', 'paper', 'article', 'manual', 'note', 'scripture', 'other', 'fiction']
+const VALID_GOALS: ReadingGoal[] = ['casual', 'reflective', 'study']
 
 export const POST: APIRoute = async ({ request, locals, params }) => {
   if (!locals.user) return new Response('Unauthorized', { status: 401 })
@@ -23,7 +28,12 @@ export const POST: APIRoute = async ({ request, locals, params }) => {
   }
 
   const body = await request.json()
-  const { pageStart, pageEnd } = body as { pageStart: number; pageEnd: number }
+  const { pageStart, pageEnd, documentType, readingGoal } = body as {
+    pageStart: number
+    pageEnd: number
+    documentType?: string
+    readingGoal?: string
+  }
 
   if (
     typeof pageStart !== 'number' || typeof pageEnd !== 'number' ||
@@ -33,10 +43,27 @@ export const POST: APIRoute = async ({ request, locals, params }) => {
     return new Response('Invalid page range', { status: 400 })
   }
 
-  // Save page range and transition to chunking
+  // Validate and resolve card strategy
+  const docType: DocumentType = (documentType && VALID_DOC_TYPES.includes(documentType as DocumentType))
+    ? documentType as DocumentType
+    : 'other'
+  const goal: ReadingGoal = (readingGoal && VALID_GOALS.includes(readingGoal as ReadingGoal))
+    ? readingGoal as ReadingGoal
+    : 'reflective'
+
+  const cardStrategy = resolveCardStrategy(docType, goal)
+
+  // Save page range, strategy, and transition to chunking
   await db
     .update(documents)
-    .set({ pageStart, pageEnd, processingStatus: 'chunking' })
+    .set({
+      pageStart,
+      pageEnd,
+      documentType: docType,
+      readingGoal: goal,
+      cardStrategy,
+      processingStatus: 'chunking',
+    })
     .where(eq(documents.id, docId))
 
   // Get the existing job row

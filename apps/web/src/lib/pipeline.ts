@@ -1,4 +1,4 @@
-import { eq, and } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { unlink } from 'node:fs/promises'
 import { extname } from 'node:path'
 import { db } from './db.ts'
@@ -9,6 +9,7 @@ import { callSegmenter, callChunker } from './chunker.ts'
 import { createProvider } from './ai/index.ts'
 import { aiChunk } from './ai/chunk.ts'
 import { generateCardsForChunk } from './cards/generate.ts'
+import type { CardType, CardStrategy } from '@scroll-reader/shared-types'
 import { TRIAL_CHUNK_LIMIT, DAILY_CHUNK_LIMIT, BATCH_SIZE } from 'astro:env/server'
 
 type PendingChunk = {
@@ -129,7 +130,20 @@ export async function runPipeline(
     await unlink(filePath).catch(() => {})
 
     // --- Generate cards for today's batch ---
-    await generateDailyBatch(jobId, userId, documentId, insertedChunks)
+    const strategy = doc.cardStrategy as CardStrategy | null
+
+    // If strategy says no cards (e.g. fiction/casual), skip generation entirely
+    if (strategy && strategy.cardTypes.length === 0) {
+      await db
+        .update(documents)
+        .set({ processingStatus: 'ready', cardCount: 0 })
+        .where(eq(documents.id, documentId))
+      await db.update(jobs).set({ status: 'done', finishedAt: new Date() }).where(eq(jobs.id, jobId))
+      console.log(`[pipeline] done (no cards): doc=${documentId} chunks=${insertedChunks.length}`)
+      return
+    }
+
+    await generateDailyBatch(jobId, userId, documentId, insertedChunks, strategy)
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     console.error(`[pipeline] error: job=${jobId}`, err)
@@ -149,9 +163,18 @@ async function generateDailyBatch(
   userId: string,
   documentId: string,
   allChunks: Chunk[],
+  strategy?: CardStrategy | null,
 ): Promise<void> {
   const provider = createProvider()
-  const textChunks = allChunks.filter((c) => c.chunkType === 'text')
+  const allTextChunks = allChunks.filter((c) => c.chunkType === 'text')
+
+  // Apply chunk interval filter — only every Nth text chunk gets cards
+  const interval = strategy?.chunkInterval ?? 1
+  const textChunks = interval > 1
+    ? allTextChunks.filter((_, i) => i % interval === 0)
+    : allTextChunks
+
+  const cardTypes = (strategy?.cardTypes as CardType[] | undefined) ?? undefined
 
   // Find chunks that already have cards (resume support)
   const existingCards = await db
@@ -177,7 +200,7 @@ async function generateDailyBatch(
 
     for (const chunk of batch) {
       const prevChunk: Chunk | null = allChunks[allChunks.indexOf(chunk) - 1] ?? null
-      const newCards = await generateCardsForChunk(chunk, prevChunk, doc as Document, provider)
+      const newCards = await generateCardsForChunk(chunk, prevChunk, doc as Document, provider, cardTypes)
       await db.insert(cards).values(newCards)
       totalCards += newCards.length
     }
@@ -237,7 +260,7 @@ export async function processDaily(): Promise<void> {
         await db.insert(jobs).values({ userId: doc.userId, documentId: doc.id }).returning()
       )[0].id
 
-      await generateDailyBatch(jobId, doc.userId, doc.id, allChunks)
+      await generateDailyBatch(jobId, doc.userId, doc.id, allChunks, doc.cardStrategy as CardStrategy | null)
     } catch (err) {
       console.error(`[daily] error processing doc=${doc.id}:`, err)
     }

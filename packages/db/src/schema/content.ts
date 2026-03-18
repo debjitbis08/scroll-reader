@@ -1,10 +1,12 @@
-import { pgTable, pgEnum, text, boolean, integer, timestamp, uuid, unique } from 'drizzle-orm/pg-core'
+import { pgTable, pgEnum, text, boolean, integer, timestamp, uuid, unique, jsonb } from 'drizzle-orm/pg-core'
 
 export const aiProviderEnum = pgEnum('ai_provider_enum', ['gemini', 'ollama'])
 
 export const documentTypeEnum = pgEnum('document_type', [
-  'book', 'paper', 'article', 'manual', 'note', 'scripture', 'other',
+  'book', 'paper', 'article', 'manual', 'note', 'scripture', 'other', 'fiction',
 ])
+
+export const readingGoalEnum = pgEnum('reading_goal', ['casual', 'reflective', 'study'])
 
 export const processingStatusEnum = pgEnum('processing_status', [
   'pending', 'preview', 'chunking', 'generating', 'ready', 'error',
@@ -56,6 +58,8 @@ export const documents = pgTable('documents', {
   pageEnd: integer('page_end'),
   chunkCount: integer('chunk_count').default(0),
   cardCount: integer('card_count').default(0),
+  readingGoal: readingGoalEnum('reading_goal'),
+  cardStrategy: jsonb('card_strategy').$type<{ cardTypes: string[]; chunkInterval: number }>(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 })
 
