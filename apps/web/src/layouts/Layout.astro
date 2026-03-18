@@ -1,0 +1,68 @@
+---
+import '../styles/global.css'
+
+interface Props {
+  title?: string
+}
+
+const { title = 'Scroll Reader' } = Astro.props
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <!--
+      Prevent flash of wrong theme: runs synchronously before first paint.
+      Reads `ctp-theme` from localStorage and adds the flavor class to <html>.
+      'auto' (default, no class) defers to prefers-color-scheme via CSS.
+    -->
+    <script is:inline>
+      ;(function () {
+        var t = localStorage.getItem('ctp-theme')
+        if (t === 'mocha' || t === 'latte') document.documentElement.classList.add(t)
+      })()
+    </script>
+  </head>
+  <body class="min-h-screen bg-ctp-base text-ctp-text antialiased">
+    <slot />
+  </body>
+</html>
+
+<script>
+  // Theme cycling: auto (system) → latte (light) → mocha (dark) → auto
+  const THEMES = ['auto', 'latte', 'mocha'] as const
+  type Theme = (typeof THEMES)[number]
+
+  function getTheme(): Theme {
+    return (localStorage.getItem('ctp-theme') as Theme) ?? 'auto'
+  }
+
+  function applyTheme(theme: Theme): void {
+    const html = document.documentElement
+    html.classList.remove('latte', 'mocha')
+    if (theme !== 'auto') html.classList.add(theme)
+    localStorage.setItem('ctp-theme', theme)
+    updateToggles(theme)
+  }
+
+  function updateToggles(theme: Theme): void {
+    document.querySelectorAll<HTMLElement>('[data-theme-toggle]').forEach((el) => {
+      el.dataset.currentTheme = theme
+      el.setAttribute('aria-label', `Theme: ${theme}`)
+    })
+  }
+
+  function initToggles(): void {
+    document.querySelectorAll<HTMLElement>('[data-theme-toggle]').forEach((el) => {
+      el.addEventListener('click', () => {
+        const idx = THEMES.indexOf(getTheme())
+        applyTheme(THEMES[(idx + 1) % THEMES.length])
+      })
+    })
+    updateToggles(getTheme())
+  }
+
+  initToggles()
+</script>

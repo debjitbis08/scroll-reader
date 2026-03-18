@@ -1,0 +1,34 @@
+{
+  "name": "@scroll-reader/web",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "NODE_OPTIONS='--max-http-header-size=32768' astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "typecheck": "astro check"
+  },
+  "dependencies": {
+    "@astrojs/node": "^9.0.0",
+    "@astrojs/solid-js": "^4.0.0",
+    "@iconify-json/mdi": "^1.2.0",
+    "@scroll-reader/db": "workspace:*",
+    "@scroll-reader/shared-types": "workspace:*",
+    "@supabase/ssr": "^0.6.0",
+    "@supabase/supabase-js": "^2.47.0",
+    "astro": "^5.0.0",
+    "astro-icon": "^1.1.0",
+    "drizzle-orm": "^0.40.0",
+    "postgres": "^3.4.5",
+    "solid-js": "^1.9.0",
+    "tailwindcss": "^4.0.0"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.0",
+    "@catppuccin/tailwindcss": "^1.0.0",
+    "@tailwindcss/vite": "^4.0.0",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  }
+}

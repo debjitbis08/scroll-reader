@@ -1,0 +1,57 @@
+import { readFile } from 'node:fs/promises'
+import { extname, dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { spawn } from 'node:child_process'
+import { EXTRACTOR_BIN } from 'astro:env/server'
+
+export interface TextElement { type: 'text'; content: string; chapter?: string }
+export interface ImageElement { type: 'image'; alt: string }
+export type DocElement = TextElement | ImageElement
+
+function resolveExtractorBin(): string {
+  if (EXTRACTOR_BIN) return EXTRACTOR_BIN
+  const here = dirname(fileURLToPath(import.meta.url))
+  return join(here, '../../../../packages/extractor/target/debug/extractor')
+}
+
+export async function extractDocument(filePath: string): Promise<DocElement[]> {
+  const ext = extname(filePath).toLowerCase()
+  if (ext === '.txt') {
+    const content = await readFile(filePath, 'utf-8')
+    return [{ type: 'text', content }]
+  }
+  if (ext === '.epub' || ext === '.pdf') return callExtractor(filePath)
+  throw new Error(`Unsupported file type: ${ext}`)
+}
+
+async function callExtractor(filePath: string): Promise<DocElement[]> {
+  const binPath = resolveExtractorBin()
+
+  return new Promise((resolve, reject) => {
+    const proc = spawn(binPath, [], { stdio: ['pipe', 'pipe', 'pipe'] })
+    let stdout = ''
+    let stderr = ''
+
+    proc.stdout.on('data', (d: Buffer) => { stdout += d.toString() })
+    proc.stderr.on('data', (d: Buffer) => { stderr += d.toString() })
+
+    proc.on('close', (code) => {
+      if (code !== 0) {
+        reject(new Error(`extractor exited ${code}: ${stderr.trim()}`))
+        return
+      }
+      try {
+        resolve(JSON.parse(stdout) as DocElement[])
+      } catch {
+        reject(new Error(`extractor output is not valid JSON: ${stdout.slice(0, 200)}`))
+      }
+    })
+
+    proc.on('error', (err) => {
+      reject(new Error(`Failed to spawn extractor at "${binPath}": ${err.message}`))
+    })
+
+    proc.stdin.write(JSON.stringify({ file_path: filePath }))
+    proc.stdin.end()
+  })
+}

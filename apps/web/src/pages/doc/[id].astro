@@ -1,0 +1,177 @@
+---
+import Layout from '../../layouts/Layout.astro'
+import { Icon } from 'astro-icon/components'
+import { eq, and } from 'drizzle-orm'
+import { db } from '../../lib/db.ts'
+import { documents, chunks, cards, jobs } from '@scroll-reader/db'
+import JobPoller from '../../components/JobPoller.tsx'
+import AutoRefresh from '../../components/AutoRefresh.tsx'
+
+if (!Astro.locals.user) return Astro.redirect('/login')
+
+const userId = Astro.locals.user.id
+const docId = Astro.params.id!
+
+// Load document (verify ownership)
+const [doc] = await db
+  .select()
+  .from(documents)
+  .where(and(eq(documents.id, docId), eq(documents.userId, userId)))
+  .limit(1)
+
+if (!doc) return Astro.redirect('/')
+
+// Load most recent job for this document
+const [job] = await db
+  .select()
+  .from(jobs)
+  .where(and(eq(jobs.documentId, docId), eq(jobs.userId, userId)))
+  .orderBy(jobs.createdAt)
+  .limit(1)
+
+const isChunking = doc.processingStatus === 'pending' || doc.processingStatus === 'chunking'
+const isGenerating = doc.processingStatus === 'generating'
+const isError = doc.processingStatus === 'error'
+
+// Load cards grouped by chunk (even while still generating — show partial progress)
+type CardRow = typeof cards.$inferSelect
+type ChunkRow = typeof chunks.$inferSelect
+type GroupedCard = { chunk: ChunkRow; cards: CardRow[] }
+
+let grouped: GroupedCard[] = []
+
+if (!isChunking && !isError) {
+  const cardRows = await db
+    .select()
+    .from(cards)
+    .innerJoin(chunks, eq(cards.chunkId, chunks.id))
+    .where(and(eq(cards.userId, userId), eq(chunks.documentId, docId)))
+    .orderBy(chunks.chunkIndex)
+
+  // Group cards by chunk
+  const chunkMap = new Map<string, GroupedCard>()
+  for (const row of cardRows) {
+    const key = row.chunks.id
+    if (!chunkMap.has(key)) chunkMap.set(key, { chunk: row.chunks, cards: [] })
+    chunkMap.get(key)!.cards.push(row.cards)
+  }
+  grouped = Array.from(chunkMap.values())
+}
+
+const CARD_TYPE_LABEL: Record<string, string> = {
+  reflect: 'Reflect',
+  discover: 'Discover',
+  raw_commentary: 'Notes',
+}
+const CARD_TYPE_COLOR: Record<string, string> = {
+  reflect: 'text-ctp-mauve',
+  discover: 'text-ctp-blue',
+  raw_commentary: 'text-ctp-green',
+}
+---
+
+<Layout title={`${doc.title} — Scroll Reader`}>
+  <div class="mx-auto max-w-3xl space-y-8 px-4 py-10">
+    <!-- Header -->
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <a href="/" class="text-sm text-ctp-subtext0 hover:text-ctp-mauve">← Library</a>
+        <h1 class="mt-2 text-2xl font-bold">{doc.title}</h1>
+        {doc.processingStatus === 'ready' && (
+          <p class="mt-1 text-sm text-ctp-subtext0">
+            {doc.cardCount} card{doc.cardCount !== 1 ? 's' : ''} ·
+            {doc.chunkCount} passage{doc.chunkCount !== 1 ? 's' : ''} (preview)
+          </p>
+        )}
+      </div>
+      <div class="flex items-center gap-1">
+        <button
+          data-delete-doc
+          data-doc-id={doc.id}
+          class="rounded-md p-2 text-ctp-subtext0 transition-colors hover:bg-ctp-red/10 hover:text-ctp-red"
+          title="Delete document"
+        >
+          <Icon name="mdi:delete-outline" class="size-5" />
+        </button>
+        <button
+          data-theme-toggle
+          class="rounded-md p-2 text-ctp-subtext0 transition-colors hover:bg-ctp-surface0 hover:text-ctp-text"
+        >
+          <Icon name="mdi:theme-light-dark" class="size-5" />
+        </button>
+      </div>
+    </div>
+
+    <!-- Chunking state: show spinner -->
+    {isChunking && job && (
+      <JobPoller jobId={job.id} client:load />
+    )}
+
+    <!-- Error state -->
+    {isError && (
+      <div class="rounded-xl bg-ctp-red/10 px-6 py-4 text-ctp-red">
+        <p class="font-medium">Processing failed</p>
+        {job?.error && <p class="mt-1 text-sm opacity-80">{job.error}</p>}
+        <a href="/upload" class="mt-3 inline-block text-sm font-medium underline">
+          Try another document
+        </a>
+      </div>
+    )}
+
+    <!-- Generating state: show progress + cards so far, auto-refresh to show new cards -->
+    {isGenerating && job && (
+      <>
+        <div class="flex items-center gap-3 rounded-xl bg-ctp-mauve/10 px-6 py-4 text-ctp-mauve">
+          <Icon name="mdi:loading" class="size-5 animate-spin" />
+          <p class="text-sm font-medium">
+            Generating cards… {doc.cardCount} so far
+          </p>
+        </div>
+        <AutoRefresh jobId={job.id} intervalMs={5000} client:load />
+      </>
+    )}
+
+    <!-- Cards (shown during generating + when ready) -->
+    {!isChunking && !isError && grouped.map(({ chunk, cards: chunkCards }) => (
+      <section class="space-y-3">
+        {chunk.chapter && (
+          <h2 class="text-xs font-semibold uppercase tracking-widest text-ctp-subtext0">
+            {chunk.chapter}
+          </h2>
+        )}
+        <p class="rounded-lg bg-ctp-surface0 px-4 py-3 text-sm text-ctp-subtext1 leading-relaxed line-clamp-3">
+          {chunk.content}
+        </p>
+        <div class="grid gap-3 sm:grid-cols-3">
+          {chunkCards.map((card) => (
+            <div class="rounded-xl border border-ctp-surface1 bg-ctp-surface0 p-4 space-y-2">
+              <span class={`text-xs font-semibold uppercase tracking-wide ${CARD_TYPE_COLOR[card.cardType] ?? 'text-ctp-subtext0'}`}>
+                {CARD_TYPE_LABEL[card.cardType] ?? card.cardType}
+              </span>
+              <p class="text-sm leading-relaxed text-ctp-text">{card.front}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+    ))}
+
+    {!isChunking && !isGenerating && !isError && grouped.length === 0 && (
+      <p class="text-center text-ctp-subtext0">No cards generated for this document.</p>
+    )}
+  </div>
+</Layout>
+
+<script>
+  document.querySelector('[data-delete-doc]')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget as HTMLElement
+    const docId = btn.dataset.docId
+    if (!confirm('Delete this document and all its cards?')) return
+
+    const res = await fetch(`/api/documents/${docId}`, { method: 'DELETE' })
+    if (res.ok) {
+      window.location.href = '/'
+    } else {
+      alert('Failed to delete document.')
+    }
+  })
+</script>

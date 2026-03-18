@@ -1,0 +1,16 @@
+[package]
+name = "extractor"
+version = "0.1.0"
+edition = "2021"
+description = "EPUB and PDF document extractor for scroll-reader"
+
+[[bin]]
+name = "extractor"
+path = "src/main.rs"
+
+[dependencies]
+epub = "2"
+lopdf = "0.32"
+scraper = "0.21"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"

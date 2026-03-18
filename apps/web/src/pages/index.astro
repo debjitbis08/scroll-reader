@@ -1,0 +1,105 @@
+---
+import Layout from '../layouts/Layout.astro'
+import { Icon } from 'astro-icon/components'
+import { eq, desc } from 'drizzle-orm'
+import { db } from '../lib/db.ts'
+import { documents } from '@scroll-reader/db'
+
+const user = Astro.locals.user
+if (!user) return Astro.redirect('/login')
+
+const docs = await db
+  .select()
+  .from(documents)
+  .where(eq(documents.userId, user.id))
+  .orderBy(desc(documents.createdAt))
+
+const STATUS_BADGE: Record<string, { label: string; color: string }> = {
+  pending: { label: 'Pending', color: 'bg-ctp-yellow/15 text-ctp-yellow' },
+  chunking: { label: 'Chunking', color: 'bg-ctp-blue/15 text-ctp-blue' },
+  generating: { label: 'Generating', color: 'bg-ctp-mauve/15 text-ctp-mauve' },
+  ready: { label: 'Ready', color: 'bg-ctp-green/15 text-ctp-green' },
+  error: { label: 'Error', color: 'bg-ctp-red/15 text-ctp-red' },
+}
+---
+
+<Layout title="Library — Scroll Reader">
+  <main class="min-h-screen">
+    <header class="flex items-center justify-between border-b border-ctp-surface0 px-4 py-3">
+      <div class="flex items-center gap-4">
+        <h1 class="text-lg font-semibold tracking-tight">Scroll Reader</h1>
+        <nav class="flex gap-2 text-sm">
+          <a href="/feed" class="text-ctp-subtext0 hover:text-ctp-text">Feed</a>
+        </nav>
+      </div>
+      <div class="flex items-center gap-2">
+        <a
+          href="/upload"
+          class="flex items-center gap-1.5 rounded-lg bg-ctp-mauve px-3 py-1.5 text-sm font-medium text-ctp-base transition-colors hover:bg-ctp-mauve/80"
+        >
+          <Icon name="mdi:plus" class="size-4" />
+          Upload
+        </a>
+        <form method="POST" action="/api/auth/logout">
+          <button
+            type="submit"
+            class="rounded-md p-2 text-ctp-subtext0 transition-colors hover:bg-ctp-surface0 hover:text-ctp-text"
+            title="Log out"
+          >
+            <Icon name="mdi:logout" class="size-5" />
+          </button>
+        </form>
+        <button
+          data-theme-toggle
+          class="rounded-md p-2 text-ctp-subtext0 transition-colors hover:bg-ctp-surface0 hover:text-ctp-text"
+        >
+          <Icon name="mdi:theme-light-dark" class="size-5" />
+        </button>
+      </div>
+    </header>
+
+    <section class="mx-auto max-w-3xl px-4 py-8">
+      {docs.length === 0 ? (
+        <div class="flex flex-col items-center gap-4 py-20 text-center">
+          <Icon name="mdi:bookshelf" class="size-12 text-ctp-surface2" />
+          <p class="text-ctp-subtext0">No documents yet.</p>
+          <a
+            href="/upload"
+            class="rounded-lg bg-ctp-mauve px-4 py-2 text-sm font-medium text-ctp-base transition-colors hover:bg-ctp-mauve/80"
+          >
+            Upload your first document
+          </a>
+        </div>
+      ) : (
+        <ul class="space-y-3">
+          {docs.map((doc) => {
+            const badge = STATUS_BADGE[doc.processingStatus ?? 'pending']
+            return (
+              <li>
+                <a
+                  href={`/doc/${doc.id}`}
+                  class="flex items-center gap-4 rounded-xl border border-ctp-surface0 bg-ctp-surface0/50 px-5 py-4 transition-colors hover:bg-ctp-surface0"
+                >
+                  <Icon
+                    name={doc.documentType === 'book' ? 'mdi:book-open-variant' : 'mdi:file-document-outline'}
+                    class="size-6 shrink-0 text-ctp-subtext0"
+                  />
+                  <div class="min-w-0 flex-1">
+                    <p class="truncate font-medium">{doc.title}</p>
+                    <p class="mt-0.5 text-xs text-ctp-subtext0">
+                      {doc.author && <span>{doc.author} · </span>}
+                      {doc.cardCount} card{doc.cardCount !== 1 ? 's' : ''} · {doc.chunkCount} passage{doc.chunkCount !== 1 ? 's' : ''}
+                    </p>
+                  </div>
+                  <span class={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${badge.color}`}>
+                    {badge.label}
+                  </span>
+                </a>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </section>
+  </main>
+</Layout>
