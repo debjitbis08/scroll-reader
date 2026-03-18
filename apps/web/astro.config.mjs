@@ -5,6 +5,7 @@ import icon from 'astro-icon'
 import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
+  site: process.env.SITE_URL || undefined,
   output: 'server',
   adapter: node({ mode: 'standalone' }),
   integrations: [
