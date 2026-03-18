@@ -38,8 +38,13 @@ impl Default for ChunkOptions {
     }
 }
 
+/// Minimum words for a segment to be kept. Shorter paragraphs are noise
+/// (page numbers, headers, single-line labels, Roman numeral page refs).
+const MIN_SEGMENT_WORDS: usize = 10;
+
 /// Pass 1: Splits text into raw segments at paragraph and chapter boundaries.
 /// Each paragraph becomes its own segment — no merging, no word-count windows.
+/// Paragraphs below MIN_SEGMENT_WORDS or that look like layout noise are dropped.
 /// This output is designed to be fed to an AI for boundary refinement (Pass 2).
 pub fn segment(text: &str) -> Vec<Segment> {
     let paragraphs = split_paragraphs(text);
@@ -57,6 +62,18 @@ pub fn segment(text: &str) -> Vec<Segment> {
         }
 
         let wc = count_words(para);
+
+        // Drop tiny fragments (page numbers, headers, Roman numerals, labels)
+        if wc < MIN_SEGMENT_WORDS {
+            continue;
+        }
+
+        // Drop layout noise (figure labels, TOC entries, notation tables with
+        // lots of multi-space alignment)
+        if is_layout_noise(para) {
+            continue;
+        }
+
         let is_chapter_start = result.is_empty()
             || result.last().map_or(false, |prev| prev.chapter != current_chapter);
         let language = detect_language(para).to_string();
@@ -214,6 +231,44 @@ fn detect_chapter(para: &str) -> Option<String> {
     None
 }
 
+/// Detects layout noise: text with lots of multi-space alignment gaps,
+/// typical of figures, tables of contents, and notation reference tables
+/// extracted from PDFs via pdftotext -layout.
+fn is_layout_noise(text: &str) -> bool {
+    let word_count = count_words(text);
+    if word_count == 0 {
+        return true;
+    }
+
+    // Count runs of 3+ consecutive spaces — layout alignment gaps.
+    // Real prose has single spaces between words.
+    let multi_space_runs = text
+        .as_bytes()
+        .windows(3)
+        .filter(|w| w == b"   ")
+        .count();
+
+    // Ratio of multi-space runs to words. Prose ≈ 0, layout > 0.3.
+    let gap_ratio = multi_space_runs as f64 / word_count as f64;
+
+    // Lines analysis
+    let lines: Vec<&str> = text.lines().collect();
+    let non_empty: Vec<&&str> = lines.iter().filter(|l| !l.trim().is_empty()).collect();
+    if non_empty.is_empty() {
+        return true;
+    }
+
+    let short_lines = non_empty
+        .iter()
+        .filter(|l| l.trim().split_whitespace().count() <= 3)
+        .count();
+    let short_ratio = short_lines as f64 / non_empty.len() as f64;
+
+    // Layout noise if: heavy multi-space alignment, or mostly short scattered lines
+    (gap_ratio > 0.3 && word_count < 120)
+        || (short_ratio > 0.7 && word_count < 80)
+}
+
 /// Detects the primary language. Returns "sa" if > 15% of non-whitespace
 /// characters are Devanagari (U+0900–U+097F), otherwise "en".
 fn detect_language(text: &str) -> &'static str {
@@ -320,11 +375,17 @@ mod tests {
         assert!(chunks.is_empty());
     }
 
+    // Helper: generates a paragraph with exactly n words of prose-like text.
+    fn prose(n: usize) -> String {
+        let words = "the quick brown fox jumps over the lazy dog and then runs away into the forest";
+        words.split_whitespace().cycle().take(n).collect::<Vec<_>>().join(" ")
+    }
+
     #[test]
     fn small_text_becomes_single_chunk() {
-        let text = "First paragraph.\n\nSecond paragraph.";
+        let text = format!("{}\n\n{}", prose(15), prose(15));
         let opts = ChunkOptions { min_words: 1, max_words: 400 };
-        let chunks = chunk(text, &opts);
+        let chunks = chunk(&text, &opts);
         assert_eq!(chunks.len(), 1);
         assert_eq!(chunks[0].chunk_index, 0);
         assert_eq!(chunks[0].language, "en");
@@ -332,8 +393,7 @@ mod tests {
 
     #[test]
     fn chunks_stay_within_max_words() {
-        // 20 paragraphs × 50 words = 1000 words total
-        let para = "word ".repeat(50);
+        let para = prose(50);
         let text = std::iter::repeat(para.as_str()).take(20).collect::<Vec<_>>().join("\n\n");
         let opts = ChunkOptions { min_words: 200, max_words: 400 };
         let chunks = chunk(&text, &opts);
@@ -349,7 +409,7 @@ mod tests {
 
     #[test]
     fn chunk_indices_are_sequential() {
-        let para = "word ".repeat(50);
+        let para = prose(50);
         let text = std::iter::repeat(para.as_str()).take(20).collect::<Vec<_>>().join("\n\n");
         let opts = ChunkOptions { min_words: 200, max_words: 400 };
         let chunks = chunk(&text, &opts);
@@ -360,9 +420,9 @@ mod tests {
 
     #[test]
     fn markdown_chapter_headings_are_detected() {
-        let text = "# Chapter One\n\nFirst paragraph.\n\n# Chapter Two\n\nSecond paragraph.";
+        let text = format!("# Chapter One\n\n{}\n\n# Chapter Two\n\n{}", prose(20), prose(20));
         let opts = ChunkOptions { min_words: 1, max_words: 400 };
-        let chunks = chunk(text, &opts);
+        let chunks = chunk(&text, &opts);
         assert_eq!(chunks.len(), 2);
         assert_eq!(chunks[0].chapter, Some("Chapter One".to_string()));
         assert_eq!(chunks[1].chapter, Some("Chapter Two".to_string()));
@@ -370,9 +430,9 @@ mod tests {
 
     #[test]
     fn keyword_chapter_headings_are_detected() {
-        let text = "Chapter 1: The Beginning\n\nSome text.\n\nChapter 2: The End\n\nMore text.";
+        let text = format!("Chapter 1: The Beginning\n\n{}\n\nChapter 2: The End\n\n{}", prose(20), prose(20));
         let opts = ChunkOptions { min_words: 1, max_words: 400 };
-        let chunks = chunk(text, &opts);
+        let chunks = chunk(&text, &opts);
         assert_eq!(chunks.len(), 2);
         assert!(chunks[0].chapter.as_deref().unwrap_or("").contains("Chapter 1"));
         assert!(chunks[1].chapter.as_deref().unwrap_or("").contains("Chapter 2"));
@@ -380,17 +440,17 @@ mod tests {
 
     #[test]
     fn all_caps_heading_detected() {
-        let text = "PART ONE\n\nFirst paragraph.\n\nPART TWO\n\nSecond paragraph.";
+        let text = format!("PART ONE\n\n{}\n\nPART TWO\n\n{}", prose(20), prose(20));
         let opts = ChunkOptions { min_words: 1, max_words: 400 };
-        let chunks = chunk(text, &opts);
+        let chunks = chunk(&text, &opts);
         assert_eq!(chunks.len(), 2);
         assert_eq!(chunks[0].chapter, Some("PART ONE".to_string()));
     }
 
     #[test]
     fn devanagari_detected_as_sanskrit() {
-        // Rig Veda first verse
-        let text = "अग्निमीळे पुरोहितं यज्ञस्य देवमृत्विजम्।\nहोतारं रत्नधातमम्॥";
+        // 12 Devanagari words — above minimum threshold
+        let text = "अग्निमीळे पुरोहितं यज्ञस्य देवमृत्विजम् होतारं रत्नधातमम् अग्निः पूर्वेभिः ऋषिभिः ईड्यः नूतनैः उत";
         let opts = ChunkOptions { min_words: 1, max_words: 400 };
         let chunks = chunk(text, &opts);
         assert!(!chunks.is_empty());
@@ -399,16 +459,15 @@ mod tests {
 
     #[test]
     fn english_text_detected_as_english() {
-        let text = "The quick brown fox jumps over the lazy dog.";
+        let text = prose(15);
         let opts = ChunkOptions { min_words: 1, max_words: 400 };
-        let chunks = chunk(text, &opts);
+        let chunks = chunk(&text, &opts);
         assert!(!chunks.is_empty());
         assert_eq!(chunks[0].language, "en");
     }
 
     #[test]
     fn oversized_paragraph_splits_on_sentences() {
-        // Build a paragraph of 500 words from sentences
         let sentence = "The cat sat on the mat and then walked away quickly. ";
         let text = sentence.repeat(50); // ~500 words
         let opts = ChunkOptions { min_words: 200, max_words: 400 };
@@ -428,33 +487,49 @@ mod tests {
 
     #[test]
     fn math_expression_not_detected_as_chapter() {
-        // Short all-caps expressions like "E = MC²" or "DNA" must not be
-        // stripped out as chapter headings — they're content.
-        let text = "E = MC²\n\nThe energy equation shows that mass and energy are equivalent.";
+        // "E = MC²" is short and will be filtered by MIN_SEGMENT_WORDS,
+        // but the important thing is it's not treated as a chapter heading.
+        let text = format!("E = MC² and the energy equation shows that mass and energy are equivalent in this fundamental relationship of physics\n\n{}", prose(20));
         let opts = ChunkOptions { min_words: 1, max_words: 400 };
-        let chunks = chunk(text, &opts);
-        // All content should end up in one chunk; nothing should be silently dropped
-        assert_eq!(chunks.len(), 1);
+        let chunks = chunk(&text, &opts);
+        assert!(!chunks.is_empty());
         assert!(chunks[0].chapter.is_none());
-        assert!(chunks[0].content.contains("E = MC²"));
+        assert!(chunks[0].content.contains("MC²"));
     }
 
     #[test]
     fn single_allcaps_word_not_detected_as_chapter() {
-        let text = "DNA\n\nDeoxyribonucleic acid carries genetic information.";
+        // "DNA" is too short and will be filtered, but it shouldn't be a chapter heading either.
+        // Test with enough words to survive filtering.
+        let text = format!("DNA is the molecule that carries genetic information in all living organisms on the planet earth\n\n{}", prose(15));
         let opts = ChunkOptions { min_words: 1, max_words: 400 };
-        let chunks = chunk(text, &opts);
-        assert_eq!(chunks.len(), 1);
+        let chunks = chunk(&text, &opts);
+        assert!(!chunks.is_empty());
         assert!(chunks[0].chapter.is_none());
     }
 
     #[test]
     fn chapter_before_first_content() {
-        let text = "# Prelude\n\nSome opening text here.";
+        let text = format!("# Prelude\n\n{}", prose(20));
         let opts = ChunkOptions { min_words: 1, max_words: 400 };
-        let chunks = chunk(text, &opts);
+        let chunks = chunk(&text, &opts);
         assert_eq!(chunks.len(), 1);
         assert_eq!(chunks[0].chapter, Some("Prelude".to_string()));
+    }
+
+    #[test]
+    fn short_fragments_are_filtered() {
+        let text = "Page 1\n\nCONTENTS\n\nxiii\n\nNotation";
+        let opts = ChunkOptions { min_words: 1, max_words: 400 };
+        let chunks = chunk(text, &opts);
+        assert!(chunks.is_empty(), "short fragments should be filtered out");
+    }
+
+    #[test]
+    fn layout_noise_is_filtered() {
+        let text = "Output\n\n   CAR       PERSON   ANIMAL\n\n                                    (object identity)\n\n3rd hidden layer\n\n                                     (object parts)";
+        let segs = segment(text);
+        assert!(segs.is_empty(), "layout noise should produce no segments");
     }
 
     // ── Segment tests ─────────────────────────────────────────────────────────
@@ -467,18 +542,21 @@ mod tests {
 
     #[test]
     fn segment_one_paragraph_per_segment() {
-        let text = "First paragraph.\n\nSecond paragraph.\n\nThird paragraph.";
-        let segs = segment(text);
+        let p1 = prose(15);
+        let p2 = prose(12);
+        let p3 = prose(18);
+        let text = format!("{}\n\n{}\n\n{}", p1, p2, p3);
+        let segs = segment(&text);
         assert_eq!(segs.len(), 3);
-        assert_eq!(segs[0].content, "First paragraph.");
-        assert_eq!(segs[1].content, "Second paragraph.");
-        assert_eq!(segs[2].content, "Third paragraph.");
+        assert_eq!(segs[0].content, p1);
+        assert_eq!(segs[1].content, p2);
+        assert_eq!(segs[2].content, p3);
     }
 
     #[test]
     fn segment_indices_are_sequential() {
-        let text = "A.\n\nB.\n\nC.\n\nD.";
-        let segs = segment(text);
+        let text = format!("{}\n\n{}\n\n{}\n\n{}", prose(15), prose(12), prose(18), prose(11));
+        let segs = segment(&text);
         for (i, s) in segs.iter().enumerate() {
             assert_eq!(s.segment_index, i);
         }
@@ -486,8 +564,8 @@ mod tests {
 
     #[test]
     fn segment_chapters_propagate() {
-        let text = "# Intro\n\nPara one.\n\nPara two.\n\n# Methods\n\nPara three.";
-        let segs = segment(text);
+        let text = format!("# Intro\n\n{}\n\n{}\n\n# Methods\n\n{}", prose(15), prose(15), prose(15));
+        let segs = segment(&text);
         assert_eq!(segs.len(), 3);
         assert_eq!(segs[0].chapter, Some("Intro".to_string()));
         assert_eq!(segs[1].chapter, Some("Intro".to_string()));
@@ -496,8 +574,8 @@ mod tests {
 
     #[test]
     fn segment_chapter_start_flag() {
-        let text = "# Intro\n\nPara one.\n\nPara two.\n\n# Methods\n\nPara three.";
-        let segs = segment(text);
+        let text = format!("# Intro\n\n{}\n\n{}\n\n# Methods\n\n{}", prose(15), prose(15), prose(15));
+        let segs = segment(&text);
         assert!(segs[0].is_chapter_start, "first segment after a heading");
         assert!(!segs[1].is_chapter_start, "same chapter, not a start");
         assert!(segs[2].is_chapter_start, "new chapter");
@@ -505,29 +583,45 @@ mod tests {
 
     #[test]
     fn segment_word_counts_are_accurate() {
-        let text = "one two three\n\nfour five";
-        let segs = segment(text);
-        assert_eq!(segs[0].word_count, 3);
-        assert_eq!(segs[1].word_count, 2);
+        let text = format!("{}\n\n{}", prose(15), prose(12));
+        let segs = segment(&text);
+        assert_eq!(segs[0].word_count, 15);
+        assert_eq!(segs[1].word_count, 12);
     }
 
     #[test]
     fn segment_language_per_segment() {
-        let text = "The quick brown fox.\n\nअग्निमीळे पुरोहितं यज्ञस्य देवमृत्विजम्।";
-        let segs = segment(text);
+        let sanskrit = "अग्निमीळे पुरोहितं यज्ञस्य देवमृत्विजम् होतारं रत्नधातमम् अग्निः पूर्वेभिः ऋषिभिः ईड्यः नूतनैः उत";
+        let text = format!("{}\n\n{}", prose(15), sanskrit);
+        let segs = segment(&text);
         assert_eq!(segs[0].language, "en");
         assert_eq!(segs[1].language, "sa");
     }
 
     #[test]
     fn segment_no_content_lost() {
-        let text = "Alpha.\n\nBeta.\n\n# Chapter\n\nGamma.\n\nDelta.";
-        let segs = segment(text);
+        let p1 = prose(15);
+        let p2 = prose(12);
+        let p3 = prose(18);
+        let p4 = prose(11);
+        let text = format!("{}\n\n{}\n\n# Chapter\n\n{}\n\n{}", p1, p2, p3, p4);
+        let segs = segment(&text);
         let all_content: Vec<&str> = segs.iter().map(|s| s.content.as_str()).collect();
-        assert!(all_content.contains(&"Alpha."));
-        assert!(all_content.contains(&"Beta."));
-        assert!(all_content.contains(&"Gamma."));
-        assert!(all_content.contains(&"Delta."));
+        assert!(all_content.contains(&p1.as_str()));
+        assert!(all_content.contains(&p2.as_str()));
+        assert!(all_content.contains(&p3.as_str()));
+        assert!(all_content.contains(&p4.as_str()));
+    }
+
+    #[test]
+    fn segment_drops_short_fragments() {
+        let text = format!("Notation\n\n{}\n\nxiii\n\n{}", prose(20), prose(15));
+        let segs = segment(&text);
+        assert_eq!(segs.len(), 2, "short fragments should be dropped");
+        // "Notation" and "xiii" should not appear
+        for s in &segs {
+            assert!(s.word_count >= MIN_SEGMENT_WORDS);
+        }
     }
 
     #[test]

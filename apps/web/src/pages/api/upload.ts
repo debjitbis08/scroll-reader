@@ -41,35 +41,31 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
   const title = file.name.replace(/\.[^.]+$/, '')
   const userId = locals.user.id
 
-  // Insert document + job rows
+  // Get page count before inserting — fast Rust extraction
+  let totalPages = 1
+  try {
+    totalPages = await getPageCount(tmpPath)
+  } catch (err) {
+    console.error('[upload] preview extraction failed:', err)
+    return redirect('/upload?error=Could+not+read+document')
+  }
+
+  // Insert document already in 'preview' state with page count
   const [doc] = await db
     .insert(documents)
-    .values({ userId, title, source: 'upload', filePath: tmpPath, processingStatus: 'pending' })
+    .values({
+      userId,
+      title,
+      source: 'upload',
+      filePath: tmpPath,
+      processingStatus: 'preview',
+      totalPages,
+      pageStart: 1,
+      pageEnd: totalPages,
+    })
     .returning()
 
   await db.insert(jobs).values({ userId, documentId: doc.id }).returning()
-
-  // Quick extraction to get page count, then show preview
-  setImmediate(async () => {
-    try {
-      const totalPages = await getPageCount(tmpPath)
-      await db
-        .update(documents)
-        .set({
-          totalPages,
-          pageStart: 1,
-          pageEnd: totalPages,
-          processingStatus: 'preview',
-        })
-        .where(eq(documents.id, doc.id))
-    } catch (err) {
-      console.error('[upload] preview extraction failed:', err)
-      await db
-        .update(documents)
-        .set({ processingStatus: 'error' })
-        .where(eq(documents.id, doc.id))
-    }
-  })
 
   return redirect(`/doc/${doc.id}`)
 }

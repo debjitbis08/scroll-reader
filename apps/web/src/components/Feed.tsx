@@ -1,4 +1,5 @@
 import { createSignal, onMount, onCleanup, For, Show } from 'solid-js'
+import LatexText from './LatexText.tsx'
 
 interface FeedCard {
   card: {
@@ -156,9 +157,9 @@ export default function Feed() {
             </p>
 
             <div class="border-t border-ctp-surface1 pt-3">
-              <p class="text-sm leading-relaxed text-ctp-subtext1">{item.card.front}</p>
+              <LatexText text={item.card.front} class="text-sm leading-relaxed text-ctp-subtext1" />
               <Show when={item.card.back}>
-                <p class="mt-1 text-sm leading-relaxed text-ctp-subtext0">{item.card.back}</p>
+                <LatexText text={item.card.back!} class="mt-1 text-sm leading-relaxed text-ctp-subtext0" />
               </Show>
             </div>
 

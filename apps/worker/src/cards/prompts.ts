@@ -1,18 +1,24 @@
 import type { Document, Chunk } from '@scroll-reader/db'
-import type { CardType } from '@scroll-reader/shared-types'
+import type { CardType, CardStrategy } from '@scroll-reader/shared-types'
+
+const CARD_TYPE_DESCRIPTIONS: Record<CardType, string> = {
+  reflect: 'Reflect — an open-ended question connecting the idea to the reader\'s life, beliefs, or experience. 1-2 sentences.',
+  discover: 'Discover — one surprising or illuminating insight from the passage that a reader would find worth sitting with. 2-3 sentences.',
+  raw_commentary: 'Notes — a brief, direct marginal note, the kind a thoughtful reader scribbles in the margin. Specific to the text. 2-3 sentences.',
+  connect: 'Connect — links this passage to ideas from elsewhere in the book or other works.',
+  sanskrit: 'Sanskrit — commentary on Sanskrit/Devanagari source text.',
+}
 
 /**
- * Builds the AI prompt for a given card type.
- *
- * prevChunk is always chunk N-1 from the DB (may be null for the first chunk,
- * or may be an image chunk whose `content` is the alt text).
- * The AI uses it for context only — the main passage is what generates the card.
+ * Builds a single intelligent prompt that asks the AI to analyze the passage
+ * and produce appropriate cards. The strategy is a suggestion, not a mandate —
+ * the AI decides what actually makes sense for the content.
  */
-export function buildPrompt(
-  cardType: CardType,
+export function buildSmartPrompt(
   chunk: Chunk,
   prevChunk: Chunk | null,
   doc: Document,
+  strategy?: CardStrategy | null,
 ): string {
   const docLabel = doc.title ?? 'Untitled'
 
@@ -24,24 +30,37 @@ export function buildPrompt(
 
   const passageBlock = `[Passage from "${docLabel}"]\n${chunk.content}`
 
-  switch (cardType) {
-    case 'reflect':
-      return `${contextBlock}${passageBlock}
+  // Build suggested card types description
+  const suggestedTypes = strategy?.cardTypes ?? ['reflect', 'discover', 'raw_commentary']
+  const typeDescriptions = suggestedTypes
+    .map((t) => `  - ${CARD_TYPE_DESCRIPTIONS[t] ?? t}`)
+    .join('\n')
 
-Write a single reflective question that invites the reader to connect this idea to their own life, beliefs, or experience. The question should be open-ended, personally meaningful, and one to two sentences. Output only the question, no preamble or explanation.`
+  return `${contextBlock}${passageBlock}
 
-    case 'discover':
-      return `${contextBlock}${passageBlock}
+You are a reading companion AI. Analyze the passage above and generate reading cards.
 
-Surface one surprising or illuminating idea from this passage that a thoughtful reader would find unexpected or worth sitting with. Write it as a concise, self-contained insight in two to three sentences. Output only the insight, no preamble.`
+SUGGESTED CARD TYPES (you may adjust based on the content):
+${typeDescriptions}
 
-    case 'raw_commentary':
-      return `${contextBlock}${passageBlock}
+INSTRUCTIONS:
+1. First, understand what kind of content this is (prose, reference table, notation, formula, figure description, etc.).
+2. Decide which card types actually make sense for this content. You may:
+   - Skip card types that don't fit (e.g., don't write a "reflect" card for a symbol table)
+   - Generate fewer cards if the content doesn't warrant all types
+   - Generate no cards at all if the content is not meaningful enough (return empty array)
+3. Format card text appropriately:
+   - Use LaTeX notation (e.g., $x^2$, $\\sum_{i=1}^{n}$) for mathematical content
+   - Use clean formatting for reference material (structured lists, tables)
+   - Use natural prose for narrative content
+4. Each card should be self-contained — a reader should understand it without seeing the original passage.
 
-Write a brief, direct marginal note on this passage — the kind a thoughtful reader would scribble in the margin. Be specific to the text. Two to three sentences. Output only the commentary, no preamble.`
+Respond with ONLY a JSON array. Each element has:
+- "type": one of ${JSON.stringify(suggestedTypes)}
+- "front": the card content (string, may include LaTeX or markdown)
 
-    case 'connect':
-    case 'sanskrit':
-      throw new Error(`Card type "${cardType}" is not handled by buildPrompt in Phase 1`)
-  }
+Example: [{"type":"discover","front":"The key insight is..."},{"type":"reflect","front":"How might you..."}]
+If no cards are appropriate, return: []
+
+JSON:`
 }

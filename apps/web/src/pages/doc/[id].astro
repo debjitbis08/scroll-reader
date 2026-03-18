@@ -8,6 +8,7 @@ import type { CardStrategy } from '@scroll-reader/shared-types'
 import JobPoller from '../../components/JobPoller.tsx'
 import AutoRefresh from '../../components/AutoRefresh.tsx'
 import PageRangeSelector from '../../components/PageRangeSelector.tsx'
+import LatexText from '../../components/LatexText.tsx'
 
 if (!Astro.locals.user) return Astro.redirect('/login')
 
@@ -181,7 +182,7 @@ const CARD_TYPE_COLOR: Record<string, string> = {
             {chunk.chapter}
           </h2>
         )}
-        <p class="rounded-lg bg-ctp-surface0 px-4 py-3 text-sm text-ctp-subtext1 leading-relaxed line-clamp-3">
+        <p class="rounded-lg bg-ctp-surface0 px-4 py-3 text-sm text-ctp-subtext1 leading-relaxed">
           {chunk.content}
         </p>
         <div class="grid gap-3 sm:grid-cols-3">
@@ -190,7 +191,7 @@ const CARD_TYPE_COLOR: Record<string, string> = {
               <span class={`text-xs font-semibold uppercase tracking-wide ${CARD_TYPE_COLOR[card.cardType] ?? 'text-ctp-subtext0'}`}>
                 {CARD_TYPE_LABEL[card.cardType] ?? card.cardType}
               </span>
-              <p class="text-sm leading-relaxed text-ctp-text">{card.front}</p>
+              <LatexText text={card.front} class="text-sm leading-relaxed text-ctp-text" client:load />
             </div>
           ))}
         </div>
