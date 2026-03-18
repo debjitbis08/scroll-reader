@@ -45,6 +45,7 @@ RUN pnpm --filter @scroll-reader/web build
 # Stage 3: Runtime
 FROM node:22-slim AS runtime
 
+RUN apt-get update && apt-get install -y poppler-utils && rm -rf /var/lib/apt/lists/*
 RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 
 WORKDIR /app
