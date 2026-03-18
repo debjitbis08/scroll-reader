@@ -2,7 +2,7 @@ export type CardType = 'reflect' | 'discover' | 'connect' | 'raw_commentary' | '
 
 export type DocumentType = 'book' | 'paper' | 'article' | 'manual' | 'note' | 'scripture' | 'other'
 
-export type ProcessingStatus = 'pending' | 'chunking' | 'generating' | 'ready' | 'error'
+export type ProcessingStatus = 'pending' | 'preview' | 'chunking' | 'generating' | 'ready' | 'error'
 
 export type AIProvider = 'gemini' | 'ollama'
 

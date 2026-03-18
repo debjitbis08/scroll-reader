@@ -16,6 +16,7 @@ const docs = await db
 
 const STATUS_BADGE: Record<string, { label: string; color: string }> = {
   pending: { label: 'Pending', color: 'bg-ctp-yellow/15 text-ctp-yellow' },
+  preview: { label: 'Select pages', color: 'bg-ctp-peach/15 text-ctp-peach' },
   chunking: { label: 'Chunking', color: 'bg-ctp-blue/15 text-ctp-blue' },
   generating: { label: 'Generating', color: 'bg-ctp-mauve/15 text-ctp-mauve' },
   ready: { label: 'Ready', color: 'bg-ctp-green/15 text-ctp-green' },

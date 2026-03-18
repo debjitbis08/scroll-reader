@@ -53,20 +53,32 @@ pub fn extract_epub(path: &str) -> Result<Vec<DocElement>, Box<dyn std::error::E
 pub fn extract_pdf(path: &str) -> Result<Vec<DocElement>, Box<dyn std::error::Error>> {
     let doc = lopdf::Document::load(path)?;
     let mut elements = Vec::new();
+    // Try pdftotext -layout for better spatial layout preservation (math, tables).
+    // Falls back to lopdf per-page extraction if pdftotext is unavailable.
+    let pdftotext_available = std::process::Command::new("pdftotext")
+        .arg("-v")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok();
 
-    // get_pages() returns BTreeMap<u32, ObjectId> sorted by page number.
     for (page_num, page_id) in doc.get_pages() {
         // Emit an Image element for each image XObject on this page.
-        // Images are emitted before the page text — a reasonable approximation
-        // since PDF images are usually at the top or bottom of a page.
         for _ in 0..count_page_images(&doc, page_id) {
             elements.push(DocElement::Image {
                 alt: format!("[image on page {page_num}]"),
             });
         }
 
-        // Extract text for this page; skip on error (e.g. page has no text layer).
-        if let Ok(text) = doc.extract_text(&[page_num]) {
+        // Extract text: prefer pdftotext -layout, fall back to lopdf.
+        let text = if pdftotext_available {
+            extract_page_pdftotext(path, page_num)
+        } else {
+            None
+        };
+        let text = text.or_else(|| doc.extract_text(&[page_num]).ok());
+
+        if let Some(text) = text {
             let text = text.trim().to_string();
             if !text.is_empty() {
                 elements.push(DocElement::Text {
@@ -78,6 +90,31 @@ pub fn extract_pdf(path: &str) -> Result<Vec<DocElement>, Box<dyn std::error::Er
     }
 
     Ok(elements)
+}
+
+/// Extracts text from a single PDF page using `pdftotext -layout`.
+/// Returns None if the command fails or produces no output.
+fn extract_page_pdftotext(path: &str, page_num: u32) -> Option<String> {
+    // pdftotext uses 1-based page numbers; -f first -l last
+    let output = std::process::Command::new("pdftotext")
+        .args([
+            "-layout",
+            "-f", &page_num.to_string(),
+            "-l", &page_num.to_string(),
+            path,
+            "-", // write to stdout
+        ])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let text = String::from_utf8_lossy(&output.stdout).to_string();
+    // pdftotext appends a form-feed (\x0c) per page; strip it.
+    let text = text.trim_end_matches('\x0c').trim().to_string();
+    if text.is_empty() { None } else { Some(text) }
 }
 
 /// Returns the number of image XObjects declared in a page's /Resources.

@@ -5,9 +5,14 @@ import icon from 'astro-icon'
 import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
-  site: process.env.SITE_URL || undefined,
   output: 'server',
   adapter: node({ mode: 'standalone' }),
+  security: {
+    allowedDomains: [
+      { hostname: 'scrollreader.app' },
+      { hostname: 'www.scrollreader.app' },
+    ],
+  },
   integrations: [
     solidJs(),
     icon({
@@ -22,10 +27,11 @@ export default defineConfig({
       DATABASE_URL: envField.string({ context: 'server', access: 'secret' }),
       AI_PROVIDER: envField.string({ context: 'server', access: 'secret', default: 'gemini' }),
       GEMINI_API_KEY: envField.string({ context: 'server', access: 'secret', optional: true }),
-      GEMINI_MODEL: envField.string({ context: 'server', access: 'secret', default: 'gemini-2.0-flash' }),
+      GEMINI_MODEL: envField.string({ context: 'server', access: 'secret', default: 'gemini-2.5-flash' }),
       OLLAMA_BASE_URL: envField.string({ context: 'server', access: 'secret', default: 'http://localhost:11434' }),
       OLLAMA_MODEL: envField.string({ context: 'server', access: 'secret', default: 'mistral:7b' }),
       TRIAL_CHUNK_LIMIT: envField.number({ context: 'server', access: 'secret', default: 25 }),
+      DAILY_CHUNK_LIMIT: envField.number({ context: 'server', access: 'secret', default: 5 }),
       BATCH_SIZE: envField.number({ context: 'server', access: 'secret', default: 5 }),
       CHUNKER_BIN: envField.string({ context: 'server', access: 'secret', optional: true }),
       EXTRACTOR_BIN: envField.string({ context: 'server', access: 'secret', optional: true }),

@@ -4,7 +4,8 @@ import { documents, chunks, cards } from '@scroll-reader/db'
 import type { Document, Chunk } from '@scroll-reader/db'
 import type { AIProvider } from './ai/index.ts'
 import { extractDocument } from './extract.ts'
-import { callChunker } from './chunker.ts'
+import { callSegmenter, callChunker } from './chunker.ts'
+import { aiChunk } from './ai/chunk.ts'
 import { generateCardsForChunk } from './cards/generate.ts'
 import { basename } from 'node:path'
 
@@ -53,6 +54,9 @@ export async function processDocument(filePath: string, userId: string): Promise
 
     const pendingChunks: PendingChunk[] = []
 
+    // Create AI provider early — used for both chunking and card generation
+    const provider = (await import('./ai/index.ts')).createProvider()
+
     for (const el of elements) {
       if (el.type === 'image') {
         pendingChunks.push({
@@ -66,8 +70,16 @@ export async function processDocument(filePath: string, userId: string): Promise
         continue
       }
 
-      // Text element — batch through chunker binary
-      const textChunks = await callChunker(el.content)
+      // Pass 1 (Rust segments) → Pass 2 (AI boundary refinement)
+      let textChunks
+      try {
+        const segments = await callSegmenter(el.content)
+        textChunks = await aiChunk(segments, provider)
+      } catch (err) {
+        console.warn(`[pipeline] AI chunking failed, falling back to mechanical:`, err)
+        textChunks = await callChunker(el.content)
+      }
+
       for (const c of textChunks) {
         pendingChunks.push({
           chunkType: 'text',
@@ -108,7 +120,6 @@ export async function processDocument(filePath: string, userId: string): Promise
     await setStatus(doc.id, 'generating')
     console.log(`[pipeline] Generating cards for ${insertedChunks.length} chunks`)
 
-    const provider = (await import('./ai/index.ts')).createProvider()
     const textChunkRows = insertedChunks.filter((c) => c.chunkType === 'text')
     let totalCards = 0
 
@@ -137,7 +148,7 @@ export async function processDocument(filePath: string, userId: string): Promise
 
 async function setStatus(
   docId: string,
-  status: 'pending' | 'chunking' | 'generating' | 'ready' | 'error',
+  status: 'pending' | 'preview' | 'chunking' | 'generating' | 'ready' | 'error',
 ): Promise<void> {
   await db.update(documents).set({ processingStatus: status }).where(eq(documents.id, docId))
 }

@@ -24,6 +24,71 @@ export async function extractDocument(filePath: string): Promise<DocElement[]> {
   throw new Error(`Unsupported file type: ${ext}`)
 }
 
+/**
+ * Quick extraction to count pages/sections for the preview step.
+ * PDF: counts unique "Page N" labels. EPUB: counts unique chapters.
+ * TXT: returns 1.
+ */
+export async function getPageCount(filePath: string): Promise<number> {
+  const ext = extname(filePath).toLowerCase()
+  if (ext === '.txt') return 1
+
+  const elements = await callExtractor(filePath)
+  return countPages(elements, ext)
+}
+
+/**
+ * Filters extracted elements to only include those within the given page range.
+ * For PDFs, pages are derived from "Page N" chapter labels.
+ * For EPUBs, pages are sequential section numbers.
+ * TXT always returns all content.
+ */
+export function filterByPageRange(
+  elements: DocElement[],
+  ext: string,
+  pageStart: number,
+  pageEnd: number,
+): DocElement[] {
+  if (ext === '.txt') return elements
+  const tagged = tagWithPages(elements, ext)
+  return tagged
+    .filter(({ page }) => page >= pageStart && page <= pageEnd)
+    .map(({ element }) => element)
+}
+
+function countPages(elements: DocElement[], ext: string): number {
+  const tagged = tagWithPages(elements, ext)
+  const pages = new Set(tagged.map(({ page }) => page))
+  return pages.size || 1
+}
+
+function tagWithPages(
+  elements: DocElement[],
+  ext: string,
+): { element: DocElement; page: number }[] {
+  if (ext === '.pdf') {
+    // PDF elements have chapter: "Page N"
+    return elements.map((el) => {
+      const chapter = el.type === 'text' ? el.chapter : undefined
+      const match = chapter?.match(/^Page\s+(\d+)$/i)
+      const page = match ? parseInt(match[1], 10) : 1
+      return { element: el, page }
+    })
+  }
+
+  // EPUB: assign sequential section numbers based on chapter changes
+  let currentPage = 1
+  let lastChapter: string | undefined
+  return elements.map((el) => {
+    const chapter = el.type === 'text' ? el.chapter : undefined
+    if (chapter && chapter !== lastChapter) {
+      if (lastChapter !== undefined) currentPage++
+      lastChapter = chapter
+    }
+    return { element: el, page: currentPage }
+  })
+}
+
 async function callExtractor(filePath: string): Promise<DocElement[]> {
   const binPath = resolveExtractorBin()
 

@@ -7,7 +7,7 @@ export const documentTypeEnum = pgEnum('document_type', [
 ])
 
 export const processingStatusEnum = pgEnum('processing_status', [
-  'pending', 'chunking', 'generating', 'ready', 'error',
+  'pending', 'preview', 'chunking', 'generating', 'ready', 'error',
 ])
 
 export const documentSourceEnum = pgEnum('document_source', [
@@ -51,6 +51,9 @@ export const documents = pgTable('documents', {
   source: documentSourceEnum('source').notNull(),
   filePath: text('file_path'),
   processingStatus: processingStatusEnum('processing_status').default('pending'),
+  totalPages: integer('total_pages'),
+  pageStart: integer('page_start'),
+  pageEnd: integer('page_end'),
   chunkCount: integer('chunk_count').default(0),
   cardCount: integer('card_count').default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),

@@ -1,9 +1,10 @@
 import type { APIRoute } from 'astro'
 import { writeFile } from 'node:fs/promises'
 import { extname } from 'node:path'
+import { eq } from 'drizzle-orm'
 import { db } from '../../lib/db.ts'
 import { documents, jobs } from '@scroll-reader/db'
-import { runPipeline } from '../../lib/pipeline.ts'
+import { getPageCount } from '../../lib/extract.ts'
 
 const ALLOWED_EXTS = new Set(['.epub', '.pdf', '.txt'])
 const MAX_BYTES = 100 * 1024 * 1024 // 100 MB
@@ -46,13 +47,28 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
     .values({ userId, title, source: 'upload', filePath: tmpPath, processingStatus: 'pending' })
     .returning()
 
-  const [job] = await db.insert(jobs).values({ userId, documentId: doc.id }).returning()
+  await db.insert(jobs).values({ userId, documentId: doc.id }).returning()
 
-  // Fire-and-forget: respond immediately, process in background
-  setImmediate(() => {
-    runPipeline(job.id, tmpPath, userId, doc.id).catch((err) => {
-      console.error('[upload] unhandled pipeline error:', err)
-    })
+  // Quick extraction to get page count, then show preview
+  setImmediate(async () => {
+    try {
+      const totalPages = await getPageCount(tmpPath)
+      await db
+        .update(documents)
+        .set({
+          totalPages,
+          pageStart: 1,
+          pageEnd: totalPages,
+          processingStatus: 'preview',
+        })
+        .where(eq(documents.id, doc.id))
+    } catch (err) {
+      console.error('[upload] preview extraction failed:', err)
+      await db
+        .update(documents)
+        .set({ processingStatus: 'error' })
+        .where(eq(documents.id, doc.id))
+    }
   })
 
   return redirect(`/doc/${doc.id}`)

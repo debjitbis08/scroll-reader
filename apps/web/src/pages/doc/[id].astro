@@ -6,6 +6,7 @@ import { db } from '../../lib/db.ts'
 import { documents, chunks, cards, jobs } from '@scroll-reader/db'
 import JobPoller from '../../components/JobPoller.tsx'
 import AutoRefresh from '../../components/AutoRefresh.tsx'
+import PageRangeSelector from '../../components/PageRangeSelector.tsx'
 
 if (!Astro.locals.user) return Astro.redirect('/login')
 
@@ -29,7 +30,9 @@ const [job] = await db
   .orderBy(jobs.createdAt)
   .limit(1)
 
-const isChunking = doc.processingStatus === 'pending' || doc.processingStatus === 'chunking'
+const isPending = doc.processingStatus === 'pending'
+const isPreview = doc.processingStatus === 'preview'
+const isChunking = doc.processingStatus === 'chunking'
 const isGenerating = doc.processingStatus === 'generating'
 const isError = doc.processingStatus === 'error'
 
@@ -39,8 +42,16 @@ type ChunkRow = typeof chunks.$inferSelect
 type GroupedCard = { chunk: ChunkRow; cards: CardRow[] }
 
 let grouped: GroupedCard[] = []
+let chunksWithCards = 0
+let totalTextChunks = 0
 
-if (!isChunking && !isError) {
+if (!isPending && !isPreview && !isChunking && !isError) {
+  // Count text chunks for progress display
+  const textChunkRows = await db
+    .select()
+    .from(chunks)
+    .where(and(eq(chunks.documentId, docId), eq(chunks.userId, userId)))
+  totalTextChunks = textChunkRows.filter((c) => c.chunkType === 'text').length
   const cardRows = await db
     .select()
     .from(cards)
@@ -56,6 +67,7 @@ if (!isChunking && !isError) {
     chunkMap.get(key)!.cards.push(row.cards)
   }
   grouped = Array.from(chunkMap.values())
+  chunksWithCards = chunkMap.size
 }
 
 const CARD_TYPE_LABEL: Record<string, string> = {
@@ -102,6 +114,22 @@ const CARD_TYPE_COLOR: Record<string, string> = {
       </div>
     </div>
 
+    <!-- Pending: extracting page count -->
+    {isPending && (
+      <JobPoller jobId={job?.id ?? ''} client:load />
+    )}
+
+    <!-- Preview: page range selector -->
+    {isPreview && doc.totalPages && (
+      <PageRangeSelector
+        docId={doc.id}
+        totalPages={doc.totalPages}
+        initialStart={doc.pageStart ?? 1}
+        initialEnd={doc.pageEnd ?? doc.totalPages}
+        client:load
+      />
+    )}
+
     <!-- Chunking state: show spinner -->
     {isChunking && job && (
       <JobPoller jobId={job.id} client:load />
@@ -118,21 +146,32 @@ const CARD_TYPE_COLOR: Record<string, string> = {
       </div>
     )}
 
-    <!-- Generating state: show progress + cards so far, auto-refresh to show new cards -->
-    {isGenerating && job && (
-      <>
-        <div class="flex items-center gap-3 rounded-xl bg-ctp-mauve/10 px-6 py-4 text-ctp-mauve">
-          <Icon name="mdi:loading" class="size-5 animate-spin" />
+    <!-- Generating state: show drip progress -->
+    {isGenerating && (
+      <div class="rounded-xl border border-ctp-surface1 bg-ctp-surface0 px-6 py-4 space-y-2">
+        <div class="flex items-center gap-3 text-ctp-mauve">
+          <Icon name="mdi:clock-outline" class="size-5" />
           <p class="text-sm font-medium">
-            Generating cards… {doc.cardCount} so far
+            Processing gradually — {chunksWithCards} of {totalTextChunks} passages complete
           </p>
         </div>
-        <AutoRefresh jobId={job.id} intervalMs={5000} client:load />
-      </>
+        <p class="text-xs text-ctp-subtext0">
+          New cards are generated daily. Check back tomorrow for more.
+        </p>
+        {/* Progress bar */}
+        {totalTextChunks > 0 && (
+          <div class="h-1.5 rounded-full bg-ctp-surface2 overflow-hidden">
+            <div
+              class="h-full rounded-full bg-ctp-mauve transition-all"
+              style={`width: ${Math.round((chunksWithCards / totalTextChunks) * 100)}%`}
+            />
+          </div>
+        )}
+      </div>
     )}
 
     <!-- Cards (shown during generating + when ready) -->
-    {!isChunking && !isError && grouped.map(({ chunk, cards: chunkCards }) => (
+    {!isPending && !isPreview && !isChunking && !isError && grouped.map(({ chunk, cards: chunkCards }) => (
       <section class="space-y-3">
         {chunk.chapter && (
           <h2 class="text-xs font-semibold uppercase tracking-widest text-ctp-subtext0">
@@ -155,7 +194,7 @@ const CARD_TYPE_COLOR: Record<string, string> = {
       </section>
     ))}
 
-    {!isChunking && !isGenerating && !isError && grouped.length === 0 && (
+    {!isPending && !isPreview && !isChunking && !isGenerating && !isError && grouped.length === 0 && (
       <p class="text-center text-ctp-subtext0">No cards generated for this document.</p>
     )}
   </div>

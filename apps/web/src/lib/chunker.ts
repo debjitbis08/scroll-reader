@@ -11,13 +11,22 @@ export interface ChunkerChunk {
   language: string
 }
 
+export interface ChunkerSegment {
+  content: string
+  word_count: number
+  segment_index: number
+  chapter: string | null
+  language: string
+  is_chapter_start: boolean
+}
+
 function resolveChunkerBin(): string {
   if (CHUNKER_BIN) return CHUNKER_BIN
   const here = dirname(fileURLToPath(import.meta.url))
   return join(here, '../../../../packages/chunker/target/debug/chunker')
 }
 
-export async function callChunker(text: string): Promise<ChunkerChunk[]> {
+function callBinary<T>(input: Record<string, unknown>): Promise<T> {
   const binPath = resolveChunkerBin()
 
   return new Promise((resolve, reject) => {
@@ -34,7 +43,7 @@ export async function callChunker(text: string): Promise<ChunkerChunk[]> {
         return
       }
       try {
-        resolve(JSON.parse(stdout) as ChunkerChunk[])
+        resolve(JSON.parse(stdout) as T)
       } catch {
         reject(new Error(`chunker output is not valid JSON: ${stdout.slice(0, 200)}`))
       }
@@ -44,7 +53,15 @@ export async function callChunker(text: string): Promise<ChunkerChunk[]> {
       reject(new Error(`Failed to spawn chunker at "${binPath}": ${err.message}`))
     })
 
-    proc.stdin.write(JSON.stringify({ text }))
+    proc.stdin.write(JSON.stringify(input))
     proc.stdin.end()
   })
+}
+
+export async function callChunker(text: string): Promise<ChunkerChunk[]> {
+  return callBinary<ChunkerChunk[]>({ text })
+}
+
+export async function callSegmenter(text: string): Promise<ChunkerSegment[]> {
+  return callBinary<ChunkerSegment[]>({ text, segment: true })
 }

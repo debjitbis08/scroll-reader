@@ -1,5 +1,19 @@
 use serde::{Deserialize, Serialize};
 
+/// A raw paragraph-level unit produced by Pass 1 (Rust).
+/// Segments preserve every paragraph boundary and carry metadata so that
+/// Pass 2 (AI) can decide which segments to merge, split, or keep as-is.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Segment {
+    pub content: String,
+    pub word_count: usize,
+    pub segment_index: usize,
+    pub chapter: Option<String>,
+    pub language: String,
+    /// True when this segment starts a new chapter/section.
+    pub is_chapter_start: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Chunk {
     pub content: String,
@@ -24,13 +38,12 @@ impl Default for ChunkOptions {
     }
 }
 
-/// Entry point. Splits `text` into semantically coherent chunks respecting
-/// paragraph and chapter boundaries. Never breaks mid-sentence.
-pub fn chunk(text: &str, options: &ChunkOptions) -> Vec<Chunk> {
+/// Pass 1: Splits text into raw segments at paragraph and chapter boundaries.
+/// Each paragraph becomes its own segment — no merging, no word-count windows.
+/// This output is designed to be fed to an AI for boundary refinement (Pass 2).
+pub fn segment(text: &str) -> Vec<Segment> {
     let paragraphs = split_paragraphs(text);
-    let mut result: Vec<Chunk> = Vec::new();
-    let mut buffer: Vec<String> = Vec::new();
-    let mut buffer_words: usize = 0;
+    let mut result: Vec<Segment> = Vec::new();
     let mut current_chapter: Option<String> = None;
 
     for para in paragraphs {
@@ -38,43 +51,82 @@ pub fn chunk(text: &str, options: &ChunkOptions) -> Vec<Chunk> {
             continue;
         }
 
-        // Chapter heading — flush what we have and start a new section
         if let Some(chapter) = detect_chapter(para) {
-            flush_buffer(&mut buffer, &mut buffer_words, &current_chapter, &mut result);
             current_chapter = Some(chapter);
             continue;
         }
 
-        let para_words = count_words(para);
+        let wc = count_words(para);
+        let is_chapter_start = result.is_empty()
+            || result.last().map_or(false, |prev| prev.chapter != current_chapter);
+        let language = detect_language(para).to_string();
 
-        // Paragraph is larger than max_words on its own — split on sentences
+        result.push(Segment {
+            content: para.to_string(),
+            word_count: wc,
+            segment_index: result.len(),
+            chapter: current_chapter.clone(),
+            language,
+            is_chapter_start,
+        });
+    }
+
+    result
+}
+
+/// Mechanical chunking (fallback when AI is unavailable).
+/// Merges segments greedily within the word-count window, respecting chapter
+/// boundaries. Never breaks mid-sentence.
+pub fn chunk(text: &str, options: &ChunkOptions) -> Vec<Chunk> {
+    let segments = segment(text);
+    chunks_from_segments(&segments, options)
+}
+
+/// Merges a slice of segments into chunks using the mechanical word-count
+/// window. Useful both as a fallback and for post-AI assembly.
+pub fn chunks_from_segments(segments: &[Segment], options: &ChunkOptions) -> Vec<Chunk> {
+    let mut result: Vec<Chunk> = Vec::new();
+    let mut buffer: Vec<&str> = Vec::new();
+    let mut buffer_words: usize = 0;
+    let mut current_chapter: Option<String> = None;
+
+    for seg in segments {
+        // Chapter change — flush
+        if seg.is_chapter_start && !buffer.is_empty() {
+            flush_segment_buffer(&mut buffer, &mut buffer_words, &current_chapter, &mut result);
+        }
+        current_chapter = seg.chapter.clone();
+
+        let para_words = seg.word_count;
+
+        // Oversized single segment — split on sentences
         if para_words > options.max_words {
-            flush_buffer(&mut buffer, &mut buffer_words, &current_chapter, &mut result);
-            for sentence_chunk in split_on_sentences(para, options) {
+            flush_segment_buffer(&mut buffer, &mut buffer_words, &current_chapter, &mut result);
+            for sentence_chunk in split_on_sentences(&seg.content, options) {
                 let wc = count_words(&sentence_chunk);
                 result.push(make_chunk(sentence_chunk, wc, result.len(), &current_chapter));
             }
             continue;
         }
 
-        // Adding this paragraph would overflow — flush first
+        // Adding this segment would overflow — flush first
         if buffer_words + para_words > options.max_words && buffer_words >= options.min_words {
-            flush_buffer(&mut buffer, &mut buffer_words, &current_chapter, &mut result);
+            flush_segment_buffer(&mut buffer, &mut buffer_words, &current_chapter, &mut result);
         }
 
-        buffer.push(para.to_string());
+        buffer.push(&seg.content);
         buffer_words += para_words;
     }
 
-    flush_buffer(&mut buffer, &mut buffer_words, &current_chapter, &mut result);
+    flush_segment_buffer(&mut buffer, &mut buffer_words, &current_chapter, &mut result);
 
     result
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-fn flush_buffer(
-    buffer: &mut Vec<String>,
+fn flush_segment_buffer(
+    buffer: &mut Vec<&str>,
     buffer_words: &mut usize,
     chapter: &Option<String>,
     result: &mut Vec<Chunk>,
@@ -403,5 +455,92 @@ mod tests {
         let chunks = chunk(text, &opts);
         assert_eq!(chunks.len(), 1);
         assert_eq!(chunks[0].chapter, Some("Prelude".to_string()));
+    }
+
+    // ── Segment tests ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn segment_empty_input() {
+        let segs = segment("");
+        assert!(segs.is_empty());
+    }
+
+    #[test]
+    fn segment_one_paragraph_per_segment() {
+        let text = "First paragraph.\n\nSecond paragraph.\n\nThird paragraph.";
+        let segs = segment(text);
+        assert_eq!(segs.len(), 3);
+        assert_eq!(segs[0].content, "First paragraph.");
+        assert_eq!(segs[1].content, "Second paragraph.");
+        assert_eq!(segs[2].content, "Third paragraph.");
+    }
+
+    #[test]
+    fn segment_indices_are_sequential() {
+        let text = "A.\n\nB.\n\nC.\n\nD.";
+        let segs = segment(text);
+        for (i, s) in segs.iter().enumerate() {
+            assert_eq!(s.segment_index, i);
+        }
+    }
+
+    #[test]
+    fn segment_chapters_propagate() {
+        let text = "# Intro\n\nPara one.\n\nPara two.\n\n# Methods\n\nPara three.";
+        let segs = segment(text);
+        assert_eq!(segs.len(), 3);
+        assert_eq!(segs[0].chapter, Some("Intro".to_string()));
+        assert_eq!(segs[1].chapter, Some("Intro".to_string()));
+        assert_eq!(segs[2].chapter, Some("Methods".to_string()));
+    }
+
+    #[test]
+    fn segment_chapter_start_flag() {
+        let text = "# Intro\n\nPara one.\n\nPara two.\n\n# Methods\n\nPara three.";
+        let segs = segment(text);
+        assert!(segs[0].is_chapter_start, "first segment after a heading");
+        assert!(!segs[1].is_chapter_start, "same chapter, not a start");
+        assert!(segs[2].is_chapter_start, "new chapter");
+    }
+
+    #[test]
+    fn segment_word_counts_are_accurate() {
+        let text = "one two three\n\nfour five";
+        let segs = segment(text);
+        assert_eq!(segs[0].word_count, 3);
+        assert_eq!(segs[1].word_count, 2);
+    }
+
+    #[test]
+    fn segment_language_per_segment() {
+        let text = "The quick brown fox.\n\nअग्निमीळे पुरोहितं यज्ञस्य देवमृत्विजम्।";
+        let segs = segment(text);
+        assert_eq!(segs[0].language, "en");
+        assert_eq!(segs[1].language, "sa");
+    }
+
+    #[test]
+    fn segment_no_content_lost() {
+        let text = "Alpha.\n\nBeta.\n\n# Chapter\n\nGamma.\n\nDelta.";
+        let segs = segment(text);
+        let all_content: Vec<&str> = segs.iter().map(|s| s.content.as_str()).collect();
+        assert!(all_content.contains(&"Alpha."));
+        assert!(all_content.contains(&"Beta."));
+        assert!(all_content.contains(&"Gamma."));
+        assert!(all_content.contains(&"Delta."));
+    }
+
+    #[test]
+    fn chunks_from_segments_matches_chunk() {
+        let text = "word ".repeat(50);
+        let text = std::iter::repeat(text.as_str()).take(20).collect::<Vec<_>>().join("\n\n");
+        let opts = ChunkOptions { min_words: 200, max_words: 400 };
+        let direct = chunk(&text, &opts);
+        let via_segments = chunks_from_segments(&segment(&text), &opts);
+        assert_eq!(direct.len(), via_segments.len());
+        for (d, v) in direct.iter().zip(via_segments.iter()) {
+            assert_eq!(d.content, v.content);
+            assert_eq!(d.word_count, v.word_count);
+        }
     }
 }
