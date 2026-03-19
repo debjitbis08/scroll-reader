@@ -1,4 +1,7 @@
-import { createSignal, onMount, onCleanup, For, Show } from 'solid-js'
+import { createSignal, onMount, onCleanup, For, Show, type JSX } from 'solid-js'
+import { FaRegularHeart, FaSolidHeart } from 'solid-icons/fa'
+import { FaRegularBookmark, FaSolidBookmark } from 'solid-icons/fa'
+import { FiEyeOff, FiChevronLeft, FiChevronRight } from 'solid-icons/fi'
 import LatexText from './LatexText.tsx'
 
 interface FeedCard {
@@ -45,16 +48,21 @@ function ActionButton(props: {
   cardId: string
   action: string
   active: boolean
-  icon: string
-  activeIcon: string
+  icon: JSX.Element
+  activeIcon: JSX.Element
   activeClass: string
   title: string
+  onToggle?: (active: boolean) => void
 }) {
   const [active, setActive] = createSignal(props.active)
   const [loading, setLoading] = createSignal(false)
 
   async function toggle() {
     if (loading()) return
+    const prev = active()
+    const next = !prev
+    setActive(next)
+    props.onToggle?.(next)
     setLoading(true)
     try {
       const res = await fetch(`/api/cards/${props.cardId}/action`, {
@@ -64,8 +72,17 @@ function ActionButton(props: {
       })
       if (res.ok) {
         const data = await res.json()
-        setActive(data.active)
+        if (data.active !== next) {
+          setActive(data.active)
+          props.onToggle?.(data.active)
+        }
+      } else {
+        setActive(prev)
+        props.onToggle?.(prev)
       }
+    } catch {
+      setActive(prev)
+      props.onToggle?.(prev)
     } finally {
       setLoading(false)
     }
@@ -76,7 +93,7 @@ function ActionButton(props: {
       onClick={toggle}
       disabled={loading()}
       title={props.title}
-      class={`rounded-md p-1.5 text-sm transition-colors ${
+      class={`rounded-md p-1.5 transition-colors ${
         active()
           ? props.activeClass
           : 'text-ctp-subtext0 hover:text-ctp-text hover:bg-ctp-surface1'
@@ -136,76 +153,180 @@ export default function Feed() {
       </Show>
 
       <For each={cards()}>
-        {(item) => (
-          <div class={`rounded-xl border bg-ctp-surface0/50 p-5 space-y-3 ${CARD_TYPE_BG[item.card.cardType] ?? 'border-ctp-surface1'}`}>
-            <div class="flex items-center justify-between gap-2">
-              <span class={`text-xs font-semibold uppercase tracking-wide ${CARD_TYPE_COLOR[item.card.cardType] ?? 'text-ctp-subtext0'}`}>
-                {CARD_TYPE_LABEL[item.card.cardType] ?? item.card.cardType}
-              </span>
-              <a
-                href={`/doc/${item.document.id}`}
-                class="truncate text-xs text-ctp-subtext0 hover:text-ctp-mauve"
-              >
-                {item.document.title}
-                {item.chunk.chapter && ` · ${item.chunk.chapter}`}
-              </a>
-            </div>
+        {(item) => {
+          const [dismissed, setDismissed] = createSignal(item.actions.includes('dismiss'))
 
-            {item.chunk.chunkType === 'code' ? (
-              <div class="relative">
-                {item.chunk.language && (
-                  <span class="absolute right-2 top-2 text-xs text-ctp-subtext0/60 font-mono">
-                    {item.chunk.language}
+          return (
+            <Show when={!dismissed()}>
+              <div class={`rounded-xl border bg-ctp-surface0/50 p-5 space-y-3 ${CARD_TYPE_BG[item.card.cardType] ?? 'border-ctp-surface1'}`}>
+                <div class="flex items-center justify-between gap-2">
+                  <span class={`text-xs font-semibold uppercase tracking-wide ${CARD_TYPE_COLOR[item.card.cardType] ?? 'text-ctp-subtext0'}`}>
+                    {CARD_TYPE_LABEL[item.card.cardType] ?? item.card.cardType}
                   </span>
-                )}
-                <pre class="overflow-x-auto rounded-lg bg-ctp-mantle p-3 text-xs leading-relaxed max-h-48">
-                  <code class="text-ctp-text font-mono whitespace-pre">{item.chunk.content}</code>
-                </pre>
+                  <a
+                    href={`/doc/${item.document.id}`}
+                    class="truncate text-xs text-ctp-subtext0 hover:text-ctp-mauve"
+                  >
+                    {item.document.title}
+                    {item.chunk.chapter && ` · ${item.chunk.chapter}`}
+                  </a>
+                </div>
+
+                <div>
+                  <LatexText text={item.card.front} class="text-sm leading-relaxed text-ctp-text" />
+                  <Show when={item.card.back}>
+                    <LatexText text={item.card.back!} class="mt-1 text-sm leading-relaxed text-ctp-subtext0" />
+                  </Show>
+                </div>
+
+                {(() => {
+                  type ChunkData = {
+                    content: string
+                    chunkType: string
+                    chunkIndex: number
+                    chapter: string | null
+                    language: string | null
+                  }
+                  const [open, setOpen] = createSignal(false)
+                  const [currentChunk, setCurrentChunk] = createSignal<ChunkData>({
+                    content: item.chunk.content,
+                    chunkType: item.chunk.chunkType,
+                    chunkIndex: item.chunk.chunkIndex,
+                    chapter: item.chunk.chapter,
+                    language: item.chunk.language,
+                  })
+                  const [fetching, setFetching] = createSignal(false)
+                  const [atStart, setAtStart] = createSignal(item.chunk.chunkIndex === 0)
+
+                  async function navigate(direction: -1 | 1) {
+                    if (fetching()) return
+                    const nextIndex = currentChunk().chunkIndex + direction
+                    if (nextIndex < 0) return
+                    setFetching(true)
+                    try {
+                      const res = await fetch(
+                        `/api/chunks/adjacent?documentId=${item.document.id}&chunkIndex=${nextIndex}`,
+                      )
+                      if (res.ok) {
+                        const data: ChunkData = await res.json()
+                        setCurrentChunk(data)
+                        setAtStart(data.chunkIndex === 0)
+                      } else if (res.status === 404) {
+                        if (direction === -1) setAtStart(true)
+                      }
+                    } finally {
+                      setFetching(false)
+                    }
+                  }
+
+                  return (
+                    <div>
+                      <button
+                        onClick={() => setOpen(!open())}
+                        class="text-xs text-ctp-subtext0 hover:text-ctp-text transition-colors"
+                      >
+                        source {open() ? '↑' : '↓'}
+                      </button>
+                      <Show when={open()}>
+                        <div class="mt-2 space-y-2">
+                          <Show when={!fetching()} fallback={
+                            <div class="flex justify-center rounded-lg bg-ctp-surface0 px-3 py-6">
+                              <div class="size-5 animate-spin rounded-full border-2 border-ctp-surface2 border-t-ctp-mauve" />
+                            </div>
+                          }>
+                            {(() => {
+                              const c = currentChunk()
+                              return c.chunkType === 'code' ? (
+                                <div class="relative">
+                                  {c.language && (
+                                    <span class="absolute right-2 top-2 text-xs text-ctp-subtext0/60 font-mono">
+                                      {c.language}
+                                    </span>
+                                  )}
+                                  <pre class="overflow-x-auto rounded-lg bg-ctp-mantle p-3 text-xs leading-relaxed max-h-48">
+                                    <code class="text-ctp-text font-mono whitespace-pre">{c.content}</code>
+                                  </pre>
+                                </div>
+                              ) : (
+                                <p class="rounded-lg bg-ctp-surface0 px-3 py-2 text-xs leading-relaxed text-ctp-subtext1">
+                                  {c.content}
+                                </p>
+                              )
+                            })()}
+                          </Show>
+                          <div class="flex items-center justify-between">
+                            <button
+                              onClick={() => navigate(-1)}
+                              disabled={fetching() || atStart()}
+                              class="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-ctp-subtext0 transition-colors hover:text-ctp-text hover:bg-ctp-surface1 disabled:opacity-30 disabled:pointer-events-none"
+                            >
+                              <FiChevronLeft class="size-3.5" /> prev
+                            </button>
+                            <Show when={currentChunk().chunkIndex !== item.chunk.chunkIndex}>
+                              <button
+                                onClick={() => {
+                                  setCurrentChunk({
+                                    content: item.chunk.content,
+                                    chunkType: item.chunk.chunkType,
+                                    chunkIndex: item.chunk.chunkIndex,
+                                    chapter: item.chunk.chapter,
+                                    language: item.chunk.language,
+                                  })
+                                  setAtStart(item.chunk.chunkIndex === 0)
+                                }}
+                                class="text-xs text-ctp-subtext0 hover:text-ctp-text transition-colors"
+                              >
+                                back to source
+                              </button>
+                            </Show>
+                            <button
+                              onClick={() => navigate(1)}
+                              disabled={fetching()}
+                              class="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-ctp-subtext0 transition-colors hover:text-ctp-text hover:bg-ctp-surface1 disabled:opacity-30 disabled:pointer-events-none"
+                            >
+                              next <FiChevronRight class="size-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </Show>
+                    </div>
+                  )
+                })()}
+
+                <div class="flex items-center gap-1 pt-1">
+                  <ActionButton
+                    cardId={item.card.id}
+                    action="like"
+                    active={item.actions.includes('like')}
+                    icon={<FaRegularHeart class="size-4" />}
+                    activeIcon={<FaSolidHeart class="size-4" />}
+                    activeClass="text-ctp-red"
+                    title="Like"
+                  />
+                  <ActionButton
+                    cardId={item.card.id}
+                    action="bookmark"
+                    active={item.actions.includes('bookmark')}
+                    icon={<FaRegularBookmark class="size-4" />}
+                    activeIcon={<FaSolidBookmark class="size-4" />}
+                    activeClass="text-ctp-yellow"
+                    title="Bookmark"
+                  />
+                  <ActionButton
+                    cardId={item.card.id}
+                    action="dismiss"
+                    active={item.actions.includes('dismiss')}
+                    icon={<FiEyeOff class="size-4" />}
+                    activeIcon={<FiEyeOff class="size-4" />}
+                    activeClass="text-ctp-surface2"
+                    title="Dismiss"
+                    onToggle={(active) => { if (active) setDismissed(true) }}
+                  />
+                </div>
               </div>
-            ) : (
-              <p class="text-sm leading-relaxed text-ctp-text line-clamp-6">
-                {item.chunk.content}
-              </p>
-            )}
-
-            <div class="border-t border-ctp-surface1 pt-3">
-              <LatexText text={item.card.front} class="text-sm leading-relaxed text-ctp-subtext1" />
-              <Show when={item.card.back}>
-                <LatexText text={item.card.back!} class="mt-1 text-sm leading-relaxed text-ctp-subtext0" />
-              </Show>
-            </div>
-
-            <div class="flex items-center gap-1 pt-1">
-              <ActionButton
-                cardId={item.card.id}
-                action="like"
-                active={item.actions.includes('like')}
-                icon="♡"
-                activeIcon="♥"
-                activeClass="text-ctp-red"
-                title="Like"
-              />
-              <ActionButton
-                cardId={item.card.id}
-                action="bookmark"
-                active={item.actions.includes('bookmark')}
-                icon="☆"
-                activeIcon="★"
-                activeClass="text-ctp-yellow"
-                title="Bookmark"
-              />
-              <ActionButton
-                cardId={item.card.id}
-                action="dismiss"
-                active={item.actions.includes('dismiss')}
-                icon="✕"
-                activeIcon="✕"
-                activeClass="text-ctp-surface2 line-through"
-                title="Dismiss"
-              />
-            </div>
-          </div>
-        )}
+            </Show>
+          )
+        }}
       </For>
 
       <Show when={cards().length === 0 && !loading() && !error()}>
