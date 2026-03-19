@@ -146,7 +146,7 @@ fn extract_pdf_via_html(path: &str) -> Option<Vec<DocElement>> {
                 .and_then(|t| t.parse().ok())
                 .unwrap_or(0);
             let is_mono = all_mono.contains(font_id);
-            let content: String = text_el.text().collect();
+            let content = collect_pdf_text_formatted(text_el);
             if content.trim().is_empty() {
                 continue;
             }
@@ -259,6 +259,39 @@ fn merge_text_runs(runs: &[(i32, bool, String)]) -> Vec<(i32, bool, String)> {
     merged.push((current_top, is_mono, current_text));
 
     merged
+}
+
+/// Collects text from a pdftohtml XML `<text>` element, preserving <b> and <i>
+/// tags as markdown (**bold** and *italic*).
+fn collect_pdf_text_formatted(el: ElementRef) -> String {
+    use scraper::Node;
+    let mut buf = String::new();
+    for child in el.children() {
+        match child.value() {
+            Node::Text(text) => buf.push_str(text),
+            Node::Element(_) => {
+                if let Some(child_el) = ElementRef::wrap(child) {
+                    match child_el.value().name() {
+                        "b" => {
+                            buf.push_str("**");
+                            for t in child_el.text() { buf.push_str(t); }
+                            buf.push_str("**");
+                        }
+                        "i" => {
+                            buf.push('*');
+                            for t in child_el.text() { buf.push_str(t); }
+                            buf.push('*');
+                        }
+                        _ => {
+                            for t in child_el.text() { buf.push_str(t); }
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    buf
 }
 
 /// Fallback PDF extraction using pdftotext (no code detection).
@@ -538,8 +571,44 @@ impl HtmlExtractor {
                 }
             }
 
-            // Block text elements — collect text, then check for nested images
-            "p" | "li" | "blockquote" | "dd" | "dt" | "caption" | "figcaption" => {
+            // Lists — walk children to handle <li> items with proper markdown prefixes
+            "ul" | "ol" => {
+                self.flush();
+                let li_sel = Selector::parse("li").unwrap();
+                let mut index = 1;
+                for li in el.select(&li_sel) {
+                    // Only process direct children (not nested list items)
+                    if li.parent().map(|p| p.id()) != Some(el.id()) {
+                        continue;
+                    }
+                    let text = collect_text(li);
+                    if !text.is_empty() {
+                        if !self.text_buf.is_empty() {
+                            self.text_buf.push('\n');
+                        }
+                        if el.value().name() == "ol" {
+                            self.text_buf.push_str(&format!("{index}. {text}"));
+                            index += 1;
+                        } else {
+                            self.text_buf.push_str(&format!("- {text}"));
+                        }
+                    }
+                }
+            }
+
+            // Blockquotes — prefix each paragraph with >
+            "blockquote" => {
+                let text = collect_text(el);
+                if !text.is_empty() {
+                    if !self.text_buf.is_empty() {
+                        self.text_buf.push_str("\n\n");
+                    }
+                    self.text_buf.push_str(&format!("> {text}"));
+                }
+            }
+
+            // Block text elements — collect text with formatting, then check for nested images
+            "p" | "li" | "dd" | "dt" | "caption" | "figcaption" => {
                 let text = collect_text(el);
                 if !text.is_empty() {
                     if !self.text_buf.is_empty() {
@@ -548,7 +617,6 @@ impl HtmlExtractor {
                     self.text_buf.push_str(&text);
                 }
                 // Inline images within block elements: emit after the block's text.
-                // Slight ordering inaccuracy accepted for Phase 1.
                 let img_sel = Selector::parse("img").unwrap();
                 for img in el.select(&img_sel) {
                     self.flush();
@@ -580,12 +648,62 @@ impl HtmlExtractor {
     }
 }
 
-/// Collects all text nodes under an element, normalising whitespace.
+/// Collects all text nodes under an element, normalising whitespace but
+/// preserving inline formatting as markdown: **bold**, *italic*, `code`.
 fn collect_text(el: ElementRef) -> String {
-    el.text()
-        .flat_map(|t| t.split_whitespace())
+    let mut buf = String::new();
+    collect_formatted_inner(el, &mut buf);
+    // Normalise whitespace while preserving markdown markers
+    let normalized: String = buf
+        .split_whitespace()
         .collect::<Vec<_>>()
-        .join(" ")
+        .join(" ");
+    normalized
+}
+
+/// Recursively walks child nodes, emitting markdown for inline formatting.
+fn collect_formatted_inner(el: ElementRef, buf: &mut String) {
+    use scraper::Node;
+
+    for child in el.children() {
+        match child.value() {
+            Node::Text(text) => {
+                buf.push_str(text);
+            }
+            Node::Element(_) => {
+                if let Some(child_el) = ElementRef::wrap(child) {
+                    let tag = child_el.value().name();
+                    match tag {
+                        "b" | "strong" => {
+                            buf.push_str("**");
+                            collect_formatted_inner(child_el, buf);
+                            buf.push_str("**");
+                        }
+                        "i" | "em" => {
+                            buf.push('*');
+                            collect_formatted_inner(child_el, buf);
+                            buf.push('*');
+                        }
+                        "code" => {
+                            buf.push('`');
+                            // Code spans: collect raw text, no further formatting
+                            for t in child_el.text() {
+                                buf.push_str(t);
+                            }
+                            buf.push('`');
+                        }
+                        // Skip images, scripts, etc. — don't recurse
+                        "img" | "script" | "style" | "svg" => {}
+                        // For any other inline element (span, a, sub, sup, etc.), recurse
+                        _ => {
+                            collect_formatted_inner(child_el, buf);
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 /// Collects text from a code/pre block, preserving original whitespace and indentation.
@@ -704,6 +822,68 @@ mod tests {
         assert_eq!(els.len(), 1);
         let DocElement::Image { alt } = &els[0] else { panic!() };
         assert_eq!(alt, "");
+    }
+
+    // ── Formatting preservation tests ──────────────────────────────────
+
+    #[test]
+    fn bold_text_becomes_markdown() {
+        let els = extract_html("<html><body><p>This is <b>bold</b> text.</p></body></html>");
+        let DocElement::Text { content, .. } = &els[0] else { panic!() };
+        assert_eq!(content, "This is **bold** text.");
+    }
+
+    #[test]
+    fn italic_text_becomes_markdown() {
+        let els = extract_html("<html><body><p>This is <em>emphasized</em> text.</p></body></html>");
+        let DocElement::Text { content, .. } = &els[0] else { panic!() };
+        assert_eq!(content, "This is *emphasized* text.");
+    }
+
+    #[test]
+    fn strong_and_em_tags_work() {
+        let els = extract_html("<html><body><p><strong>Strong</strong> and <i>italic</i>.</p></body></html>");
+        let DocElement::Text { content, .. } = &els[0] else { panic!() };
+        assert_eq!(content, "**Strong** and *italic*.");
+    }
+
+    #[test]
+    fn inline_code_becomes_backtick() {
+        let els = extract_html("<html><body><p>Use the <code>HashMap</code> type.</p></body></html>");
+        let DocElement::Text { content, .. } = &els[0] else { panic!() };
+        assert_eq!(content, "Use the `HashMap` type.");
+    }
+
+    #[test]
+    fn unordered_list_becomes_markdown() {
+        let els = extract_html("<html><body><ul><li>First item</li><li>Second item</li></ul></body></html>");
+        let DocElement::Text { content, .. } = &els[0] else { panic!() };
+        assert!(content.contains("- First item"), "got: {content}");
+        assert!(content.contains("- Second item"), "got: {content}");
+    }
+
+    #[test]
+    fn ordered_list_becomes_numbered() {
+        let els = extract_html("<html><body><ol><li>Step one</li><li>Step two</li><li>Step three</li></ol></body></html>");
+        let DocElement::Text { content, .. } = &els[0] else { panic!() };
+        assert!(content.contains("1. Step one"), "got: {content}");
+        assert!(content.contains("2. Step two"), "got: {content}");
+        assert!(content.contains("3. Step three"), "got: {content}");
+    }
+
+    #[test]
+    fn blockquote_becomes_markdown() {
+        let els = extract_html("<html><body><blockquote>A famous quote here.</blockquote></body></html>");
+        let DocElement::Text { content, .. } = &els[0] else { panic!() };
+        assert!(content.starts_with("> "), "got: {content}");
+        assert!(content.contains("A famous quote here."));
+    }
+
+    #[test]
+    fn nested_formatting_preserved() {
+        let els = extract_html("<html><body><p>This has <b>bold and <i>bold-italic</i></b> text.</p></body></html>");
+        let DocElement::Text { content, .. } = &els[0] else { panic!() };
+        assert!(content.contains("**bold and *bold-italic***"), "got: {content}");
     }
 
     #[test]

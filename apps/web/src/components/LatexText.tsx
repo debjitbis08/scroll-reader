@@ -41,7 +41,52 @@ function renderLatex(text: string): string {
     }
   })
 
+  // Basic markdown: bold, italic, inline code, blockquotes, lists
+  result = renderMarkdown(result)
+
   return result
+}
+
+function renderMarkdown(html: string): string {
+  // Inline code: `code` → <code>
+  html = html.replace(/`([^`]+)`/g, '<code class="rounded bg-ctp-surface1 px-1 py-0.5 text-[0.85em] font-mono">$1</code>')
+
+  // Bold: **text** → <strong>
+  html = html.replace(/\*\*([^*]+?)\*\*/g, '<strong>$1</strong>')
+
+  // Italic: *text* → <em> (but not inside <strong> tags' asterisks)
+  html = html.replace(/(?<!\*)\*([^*]+?)\*(?!\*)/g, '<em>$1</em>')
+
+  // Process block-level elements within paragraph breaks
+  const blocks = html.split(/\n\n+/)
+  const rendered = blocks.map((block) => {
+    const trimmed = block.trim()
+    if (!trimmed) return ''
+
+    // Blockquote: lines starting with >
+    if (trimmed.startsWith('&gt; ') || trimmed.startsWith('> ')) {
+      const content = trimmed.replace(/^(&gt;|>) /, '')
+      return `<blockquote class="border-l-2 border-ctp-surface2 pl-3 italic text-ctp-subtext0">${content}</blockquote>`
+    }
+
+    // List block: consecutive lines starting with - or N.
+    const lines = trimmed.split('\n')
+    const isUnordered = lines.every((l) => l.trimStart().startsWith('- '))
+    const isOrdered = lines.every((l) => /^\d+\.\s/.test(l.trimStart()))
+
+    if (isUnordered) {
+      const items = lines.map((l) => `<li>${l.trimStart().slice(2)}</li>`).join('')
+      return `<ul class="list-disc pl-5 space-y-0.5">${items}</ul>`
+    }
+    if (isOrdered) {
+      const items = lines.map((l) => `<li>${l.trimStart().replace(/^\d+\.\s/, '')}</li>`).join('')
+      return `<ol class="list-decimal pl-5 space-y-0.5">${items}</ol>`
+    }
+
+    return `<p>${trimmed}</p>`
+  })
+
+  return rendered.filter(Boolean).join('')
 }
 
 function escapeHtml(text: string): string {
