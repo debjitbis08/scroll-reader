@@ -186,10 +186,10 @@ Goal: users can register, upload a document, and get reading cards back.
 
 ### 2.7 Fly.io Deployment
 
-- [ ] `apps/web/Dockerfile` — multi-stage: build Rust binaries (chunker + extractor) → Node.js image
-- [ ] `fly.toml` — web app config, auto-scale to 0
-- [ ] Secrets: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `GEMINI_API_KEY`, `DATABASE_URL`, `TRIAL_CHUNK_LIMIT`
-- [ ] Verify end-to-end: register → upload EPUB → cards appear
+- [x] `apps/web/Dockerfile` — multi-stage: build Rust binaries (chunker + extractor) → Node.js image
+- [x] `fly.toml` — web app config, auto-scale to 0
+- [x] Secrets: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `GEMINI_API_KEY`, `DATABASE_URL`, `TRIAL_CHUNK_LIMIT`
+- [x] Verify end-to-end: register → upload EPUB → cards appear
 
 ---
 

@@ -13,6 +13,8 @@ interface FeedCard {
     content: string
     chapter: string | null
     chunkIndex: number
+    chunkType: string
+    language: string | null
   }
   document: {
     id: string
@@ -152,9 +154,22 @@ export default function Feed() {
               </a>
             </div>
 
-            <p class="text-sm leading-relaxed text-ctp-text line-clamp-6">
-              {item.chunk.content}
-            </p>
+            {item.chunk.chunkType === 'code' ? (
+              <div class="relative">
+                {item.chunk.language && (
+                  <span class="absolute right-2 top-2 text-xs text-ctp-subtext0/60 font-mono">
+                    {item.chunk.language}
+                  </span>
+                )}
+                <pre class="overflow-x-auto rounded-lg bg-ctp-mantle p-3 text-xs leading-relaxed max-h-48">
+                  <code class="text-ctp-text font-mono whitespace-pre">{item.chunk.content}</code>
+                </pre>
+              </div>
+            ) : (
+              <p class="text-sm leading-relaxed text-ctp-text line-clamp-6">
+                {item.chunk.content}
+              </p>
+            )}
 
             <div class="border-t border-ctp-surface1 pt-3">
               <LatexText text={item.card.front} class="text-sm leading-relaxed text-ctp-subtext1" />

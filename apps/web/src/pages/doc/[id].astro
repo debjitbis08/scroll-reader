@@ -53,7 +53,7 @@ if (!isPending && !isPreview && !isChunking && !isError) {
     .select()
     .from(chunks)
     .where(and(eq(chunks.documentId, docId), eq(chunks.userId, userId)))
-  totalTextChunks = textChunkRows.filter((c) => c.chunkType === 'text').length
+  totalTextChunks = textChunkRows.filter((c) => c.chunkType === 'text' || c.chunkType === 'code').length
   const cardRows = await db
     .select()
     .from(cards)
@@ -182,9 +182,20 @@ const CARD_TYPE_COLOR: Record<string, string> = {
             {chunk.chapter}
           </h2>
         )}
-        <p class="rounded-lg bg-ctp-surface0 px-4 py-3 text-sm text-ctp-subtext1 leading-relaxed">
-          {chunk.content}
-        </p>
+        {chunk.chunkType === 'code' ? (
+          <div class="relative rounded-lg bg-ctp-mantle overflow-hidden">
+            {chunk.language && chunk.language !== 'en' && (
+              <span class="absolute right-2 top-2 text-xs text-ctp-subtext0/60 font-mono">
+                {chunk.language}
+              </span>
+            )}
+            <pre class="overflow-x-auto px-4 py-3 text-xs leading-relaxed max-h-64"><code class="text-ctp-text font-mono whitespace-pre">{chunk.content}</code></pre>
+          </div>
+        ) : (
+          <p class="rounded-lg bg-ctp-surface0 px-4 py-3 text-sm text-ctp-subtext1 leading-relaxed">
+            {chunk.content}
+          </p>
+        )}
         <div class="grid gap-3 sm:grid-cols-3">
           {chunkCards.map((card) => (
             <div class="rounded-xl border border-ctp-surface1 bg-ctp-surface0 p-4 space-y-2">

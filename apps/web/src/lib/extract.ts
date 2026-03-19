@@ -6,7 +6,8 @@ import { EXTRACTOR_BIN } from 'astro:env/server'
 
 export interface TextElement { type: 'text'; content: string; chapter?: string }
 export interface ImageElement { type: 'image'; alt: string }
-export type DocElement = TextElement | ImageElement
+export interface CodeElement { type: 'code'; content: string; language?: string; chapter?: string }
+export type DocElement = TextElement | ImageElement | CodeElement
 
 function resolveExtractorBin(): string {
   if (EXTRACTOR_BIN) return EXTRACTOR_BIN
@@ -69,7 +70,7 @@ function tagWithPages(
   if (ext === '.pdf') {
     // PDF elements have chapter: "Page N"
     return elements.map((el) => {
-      const chapter = el.type === 'text' ? el.chapter : undefined
+      const chapter = el.type === 'text' || el.type === 'code' ? el.chapter : undefined
       const match = chapter?.match(/^Page\s+(\d+)$/i)
       const page = match ? parseInt(match[1], 10) : 1
       return { element: el, page }
@@ -80,7 +81,7 @@ function tagWithPages(
   let currentPage = 1
   let lastChapter: string | undefined
   return elements.map((el) => {
-    const chapter = el.type === 'text' ? el.chapter : undefined
+    const chapter = el.type === 'text' || el.type === 'code' ? el.chapter : undefined
     if (chapter && chapter !== lastChapter) {
       if (lastChapter !== undefined) currentPage++
       lastChapter = chapter

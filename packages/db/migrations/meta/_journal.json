@@ -29,6 +29,20 @@
       "when": 1773851674630,
       "tag": "0003_great_scourge",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1773900000000,
+      "tag": "0004_card_strategy",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1774060800000,
+      "tag": "0005_add_code_chunk_type",
+      "breakpoints": true
     }
   ]
 }

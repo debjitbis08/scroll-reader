@@ -20,6 +20,8 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
         content: chunks.content,
         chapter: chunks.chapter,
         chunkIndex: chunks.chunkIndex,
+        chunkType: chunks.chunkType,
+        language: chunks.language,
       },
       document: {
         id: documents.id,

@@ -20,7 +20,7 @@ export const cardTypeEnum = pgEnum('card_type', [
   'reflect', 'discover', 'connect', 'raw_commentary', 'sanskrit',
 ])
 
-export const chunkTypeEnum = pgEnum('chunk_type', ['text', 'image'])
+export const chunkTypeEnum = pgEnum('chunk_type', ['text', 'image', 'code'])
 
 export const feedEventTypeEnum = pgEnum('feed_event_type', [
   'view', 'pause', 'skip', 'engage', 'expand',
@@ -72,6 +72,8 @@ export const chunks = pgTable('chunks', {
   // 'text'  — regular text passage produced by the chunker
   // 'image' — an image encountered during extraction; content = alt text (may be empty)
   //           image chunks never generate cards directly but appear as context for adjacent text chunks
+  // 'code'  — a code block (<pre>/<code>) extracted with preserved whitespace
+  //           language field stores the programming language hint (e.g. "python", "rust")
   chunkType: chunkTypeEnum('chunk_type').default('text').notNull(),
   content: text('content').notNull(), // alt text for image chunks, passage text for text chunks
   encrypted: boolean('encrypted').notNull().default(false),

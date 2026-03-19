@@ -44,7 +44,7 @@ export async function processDocument(filePath: string, userId: string): Promise
     // Both are merged in document order and assigned a sequential chunkIndex.
 
     type PendingChunk = {
-      chunkType: 'text' | 'image'
+      chunkType: 'text' | 'image' | 'code'
       content: string
       chapter: string | null
       wordCount: number
@@ -65,6 +65,18 @@ export async function processDocument(filePath: string, userId: string): Promise
           chapter: null,
           wordCount: 0,
           language: 'en',
+          chunkIndex: pendingChunks.length,
+        })
+        continue
+      }
+
+      if (el.type === 'code') {
+        pendingChunks.push({
+          chunkType: 'code',
+          content: el.content,
+          chapter: el.chapter ?? null,
+          wordCount: el.content.split(/\s+/).filter(Boolean).length,
+          language: el.language ?? 'en',
           chunkIndex: pendingChunks.length,
         })
         continue
@@ -120,11 +132,12 @@ export async function processDocument(filePath: string, userId: string): Promise
     await setStatus(doc.id, 'generating')
     console.log(`[pipeline] Generating cards for ${insertedChunks.length} chunks`)
 
-    const textChunkRows = insertedChunks.filter((c) => c.chunkType === 'text')
+    // Generate cards for text and code chunks (skip image-only chunks)
+    const cardChunkRows = insertedChunks.filter((c) => c.chunkType === 'text' || c.chunkType === 'code')
     let totalCards = 0
 
-    for (let i = 0; i < textChunkRows.length; i++) {
-      const chunk = textChunkRows[i]
+    for (let i = 0; i < cardChunkRows.length; i++) {
+      const chunk = cardChunkRows[i]
       // Fetch chunk N-1 regardless of type — image chunks provide alt text context
       const prevChunk: Chunk | null = insertedChunks[insertedChunks.indexOf(chunk) - 1] ?? null
 

@@ -13,7 +13,7 @@ import type { CardType, CardStrategy } from '@scroll-reader/shared-types'
 import { TRIAL_CHUNK_LIMIT, DAILY_CHUNK_LIMIT, BATCH_SIZE } from 'astro:env/server'
 
 type PendingChunk = {
-  chunkType: 'text' | 'image'
+  chunkType: 'text' | 'image' | 'code'
   content: string
   chapter: string | null
   wordCount: number
@@ -73,6 +73,20 @@ export async function runPipeline(
           language: 'en',
           chunkIndex: pendingChunks.length,
         })
+        continue
+      }
+
+      if (el.type === 'code') {
+        if (textsSeen >= TRIAL_CHUNK_LIMIT) break
+        pendingChunks.push({
+          chunkType: 'code',
+          content: el.content,
+          chapter: el.chapter ?? null,
+          wordCount: el.content.split(/\s+/).filter(Boolean).length,
+          language: el.language ?? 'en',
+          chunkIndex: pendingChunks.length,
+        })
+        textsSeen++
         continue
       }
 
@@ -166,7 +180,7 @@ async function generateDailyBatch(
   strategy?: CardStrategy | null,
 ): Promise<void> {
   const provider = createProvider()
-  const allTextChunks = allChunks.filter((c) => c.chunkType === 'text')
+  const allTextChunks = allChunks.filter((c) => c.chunkType === 'text' || c.chunkType === 'code')
 
   // Apply chunk interval filter — only every Nth text chunk gets cards
   const interval = strategy?.chunkInterval ?? 1
