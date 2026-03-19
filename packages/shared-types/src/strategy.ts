@@ -5,23 +5,23 @@ type StrategyKey = `${DocumentType}:${ReadingGoal}`
 const STRATEGY_MAP: Record<string, CardStrategy> = {
   // Fiction
   'fiction:casual':     { cardTypes: [],                                    chunkInterval: 1 },
-  'fiction:reflective': { cardTypes: ['reflect'],                           chunkInterval: 3 },
-  'fiction:study':      { cardTypes: ['reflect', 'discover'],               chunkInterval: 2 },
+  'fiction:reflective': { cardTypes: ['discover'],                          chunkInterval: 3 },
+  'fiction:study':      { cardTypes: ['discover'],                          chunkInterval: 2 },
 
   // Spiritual / scripture
-  'scripture:casual':     { cardTypes: ['reflect'],                         chunkInterval: 3 },
-  'scripture:reflective': { cardTypes: ['reflect'],                         chunkInterval: 1 },
-  'scripture:study':      { cardTypes: ['reflect', 'raw_commentary'],       chunkInterval: 1 },
+  'scripture:casual':     { cardTypes: ['discover'],                        chunkInterval: 3 },
+  'scripture:reflective': { cardTypes: ['discover', 'raw_commentary'],      chunkInterval: 1 },
+  'scripture:study':      { cardTypes: ['discover', 'raw_commentary'],      chunkInterval: 1 },
 
   // Non-fiction (book, article, paper, note, other)
-  'book:casual':     { cardTypes: ['reflect'],                              chunkInterval: 3 },
-  'book:reflective': { cardTypes: ['reflect', 'discover'],                  chunkInterval: 2 },
-  'book:study':      { cardTypes: ['reflect', 'discover', 'raw_commentary'], chunkInterval: 1 },
+  'book:casual':     { cardTypes: ['discover'],                             chunkInterval: 3 },
+  'book:reflective': { cardTypes: ['discover'],                             chunkInterval: 2 },
+  'book:study':      { cardTypes: ['discover', 'raw_commentary'],           chunkInterval: 1 },
 
   // Textbook / technical / manual
-  'manual:casual':     { cardTypes: ['reflect', 'discover'],               chunkInterval: 2 },
-  'manual:reflective': { cardTypes: ['reflect', 'discover'],               chunkInterval: 1 },
-  'manual:study':      { cardTypes: ['reflect', 'discover', 'raw_commentary'], chunkInterval: 1 },
+  'manual:casual':     { cardTypes: ['discover'],                           chunkInterval: 2 },
+  'manual:reflective': { cardTypes: ['discover'],                           chunkInterval: 1 },
+  'manual:study':      { cardTypes: ['discover', 'raw_commentary'],         chunkInterval: 1 },
 }
 
 // Document types that map to 'book' strategy (general non-fiction)
@@ -33,7 +33,7 @@ export function resolveCardStrategy(
 ): CardStrategy {
   const effectiveType = NON_FICTION_ALIASES.includes(documentType) ? 'book' : documentType
   const key: StrategyKey = `${effectiveType}:${readingGoal}`
-  return STRATEGY_MAP[key] ?? { cardTypes: ['reflect', 'discover', 'raw_commentary'], chunkInterval: 1 }
+  return STRATEGY_MAP[key] ?? { cardTypes: ['discover', 'raw_commentary'], chunkInterval: 1 }
 }
 
 /** Human-readable summary for the UI preview */
@@ -41,7 +41,6 @@ export function describeStrategy(strategy: CardStrategy): string {
   if (strategy.cardTypes.length === 0) return 'No cards — reading mode only'
 
   const LABELS: Record<CardType, string> = {
-    reflect: 'Reflect',
     discover: 'Discover',
     raw_commentary: 'Notes',
     connect: 'Connect',

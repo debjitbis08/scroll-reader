@@ -25,19 +25,16 @@ interface FeedCard {
 }
 
 const CARD_TYPE_LABEL: Record<string, string> = {
-  reflect: 'Reflect',
   discover: 'Discover',
   raw_commentary: 'Notes',
 }
 
 const CARD_TYPE_COLOR: Record<string, string> = {
-  reflect: 'text-ctp-mauve',
   discover: 'text-ctp-blue',
   raw_commentary: 'text-ctp-green',
 }
 
 const CARD_TYPE_BG: Record<string, string> = {
-  reflect: 'border-ctp-mauve/30',
   discover: 'border-ctp-blue/30',
   raw_commentary: 'border-ctp-green/30',
 }

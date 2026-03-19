@@ -17,7 +17,7 @@ export const documentSourceEnum = pgEnum('document_source', [
 ])
 
 export const cardTypeEnum = pgEnum('card_type', [
-  'reflect', 'discover', 'connect', 'raw_commentary', 'sanskrit',
+  'discover', 'connect', 'raw_commentary', 'sanskrit',
 ])
 
 export const chunkTypeEnum = pgEnum('chunk_type', ['text', 'image', 'code'])

@@ -1,4 +1,4 @@
-export type CardType = 'reflect' | 'discover' | 'connect' | 'raw_commentary' | 'sanskrit'
+export type CardType = 'discover' | 'connect' | 'raw_commentary' | 'sanskrit'
 
 export type DocumentType = 'book' | 'paper' | 'article' | 'manual' | 'note' | 'scripture' | 'other' | 'fiction'
 

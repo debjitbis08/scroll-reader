@@ -2,7 +2,6 @@ import type { Document, Chunk } from '@scroll-reader/db'
 import type { CardType, CardStrategy } from '@scroll-reader/shared-types'
 
 const CARD_TYPE_DESCRIPTIONS: Record<CardType, string> = {
-  reflect: 'Reflect — an open-ended question connecting the idea to the reader\'s life, beliefs, or experience. 1-2 sentences.',
   discover: 'Discover — one surprising or illuminating insight from the passage that a reader would find worth sitting with. 2-3 sentences.',
   raw_commentary: 'Notes — a brief, direct marginal note, the kind a thoughtful reader scribbles in the margin. Specific to the text. 2-3 sentences.',
   connect: 'Connect — links this passage to ideas from elsewhere in the book or other works.',
@@ -36,7 +35,7 @@ export function buildSmartPrompt(
     : `[Passage from "${docLabel}"]\n${chunk.content}`
 
   // Build suggested card types description
-  const suggestedTypes = strategy?.cardTypes ?? ['reflect', 'discover', 'raw_commentary']
+  const suggestedTypes = strategy?.cardTypes ?? ['discover', 'raw_commentary']
   const typeDescriptions = suggestedTypes
     .map((t) => `  - ${CARD_TYPE_DESCRIPTIONS[t] ?? t}`)
     .join('\n')
@@ -46,7 +45,6 @@ export function buildSmartPrompt(
 CODE-SPECIFIC INSTRUCTIONS:
 - This is a code sample, not prose. Focus on what the code does, key patterns, and concepts.
 - For "discover" cards: highlight what technique or pattern the code demonstrates.
-- For "reflect" cards: ask about when/why to use this approach, trade-offs, or alternatives.
 - For "raw_commentary" cards: explain what the code does in plain language, note any gotchas.
 - Include short inline code snippets in card text using backticks where helpful.
 - Do NOT reproduce the entire code block in the card — summarize and reference key parts.
@@ -63,7 +61,7 @@ ${codeInstructions}
 INSTRUCTIONS:
 1. First, understand what kind of content this is (prose, reference table, notation, formula, code sample, etc.).
 2. Decide which card types actually make sense for this content. You may:
-   - Skip card types that don't fit (e.g., don't write a "reflect" card for a symbol table)
+   - Skip card types that don't fit (e.g., don't write a "discover" card for a symbol table)
    - Generate fewer cards if the content doesn't warrant all types
    - Generate no cards at all if the content is not meaningful enough (return empty array)
 3. Format card text appropriately:
@@ -77,7 +75,7 @@ Respond with ONLY a JSON array. Each element has:
 - "type": one of ${JSON.stringify(suggestedTypes)}
 - "front": the card content (string, may include LaTeX or markdown)
 
-Example: [{"type":"discover","front":"The key insight is..."},{"type":"reflect","front":"How might you..."}]
+Example: [{"type":"discover","front":"The key insight is..."},{"type":"raw_commentary","front":"The author argues..."}]
 If no cards are appropriate, return: []
 
 JSON:`

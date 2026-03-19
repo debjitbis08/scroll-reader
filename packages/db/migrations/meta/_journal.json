@@ -43,6 +43,13 @@
       "when": 1774060800000,
       "tag": "0005_add_code_chunk_type",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1773903302309,
+      "tag": "0006_youthful_nightshade",
+      "breakpoints": true
     }
   ]
 }
