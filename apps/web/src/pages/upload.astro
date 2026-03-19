@@ -10,21 +10,11 @@ const error = Astro.url.searchParams.get('error')
 <Layout title="Upload — Scroll Reader">
   <main class="flex min-h-screen items-center justify-center p-6">
     <div class="w-full max-w-lg space-y-6">
-      <div class="flex items-center justify-between">
-        <div>
-          <h1 class="text-2xl font-bold">Upload a document</h1>
-          <p class="mt-1 text-sm text-ctp-subtext0">
-            We'll generate reading cards from the first few chapters.
-          </p>
-        </div>
-        <button
-          data-theme-toggle
-          class="rounded-md p-2 text-ctp-subtext0 transition-colors hover:bg-ctp-surface0 hover:text-ctp-text"
-        >
-          <Icon name="fa6-solid:sun" class="size-5 theme-icon" data-theme-icon="latte" />
-          <Icon name="fa6-solid:moon" class="size-5 theme-icon hidden" data-theme-icon="mocha" />
-          <Icon name="fa6-solid:desktop" class="size-5 theme-icon hidden" data-theme-icon="auto" />
-        </button>
+      <div>
+        <h1 class="text-2xl font-bold">Upload a document</h1>
+        <p class="mt-1 text-sm text-ctp-subtext0">
+          We'll generate reading cards from the first few chapters.
+        </p>
       </div>
 
       {error && (

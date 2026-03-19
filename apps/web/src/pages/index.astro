@@ -1,6 +1,5 @@
 ---
 import Layout from '../layouts/Layout.astro'
-import { Icon } from 'astro-icon/components'
 import Feed from '../components/Feed.tsx'
 
 const user = Astro.locals.user
@@ -9,33 +8,6 @@ if (!user) return Astro.redirect('/login')
 
 <Layout title="Scroll Reader">
   <main class="min-h-screen">
-    <header class="flex items-center justify-between border-b border-ctp-surface0 px-4 py-3">
-      <div class="flex items-center gap-4">
-        <div class="flex items-center gap-2">
-          <Icon name="fa6-solid:scroll" class="size-5 text-ctp-mauve" />
-          <h1 class="text-lg font-semibold tracking-tight">Scroll Reader</h1>
-        </div>
-      </div>
-      <div class="flex items-center gap-2">
-        <a href="/library" class="text-sm text-ctp-subtext0 hover:text-ctp-text">Library</a>
-        <a
-          href="/upload"
-          class="flex items-center gap-1.5 rounded-lg bg-ctp-mauve px-3 py-1.5 text-sm font-medium text-ctp-base transition-colors hover:bg-ctp-mauve/80"
-        >
-          <Icon name="mdi:plus" class="size-4" />
-          Upload
-        </a>
-        <button
-          data-theme-toggle
-          class="rounded-md p-2 text-ctp-subtext0 transition-colors hover:bg-ctp-surface0 hover:text-ctp-text"
-        >
-          <Icon name="fa6-solid:sun" class="size-5 theme-icon" data-theme-icon="latte" />
-          <Icon name="fa6-solid:moon" class="size-5 theme-icon hidden" data-theme-icon="mocha" />
-          <Icon name="fa6-solid:desktop" class="size-5 theme-icon hidden" data-theme-icon="auto" />
-        </button>
-      </div>
-    </header>
-
     <section class="mx-auto max-w-2xl px-4 py-8">
       <Feed client:load />
     </section>

@@ -1,6 +1,7 @@
 ---
 import '../styles/global.css'
 import 'katex/dist/katex.min.css'
+import Header from '../components/Header.astro'
 
 interface Props {
   title?: string
@@ -28,6 +29,7 @@ const { title = 'Scroll Reader' } = Astro.props
     </script>
   </head>
   <body class="min-h-screen bg-ctp-base text-ctp-text antialiased">
+    <Header />
     <slot />
   </body>
 </html>
@@ -54,10 +56,9 @@ const { title = 'Scroll Reader' } = Astro.props
       el.dataset.currentTheme = theme
       el.setAttribute('aria-label', `Theme: ${theme}`)
     })
-    // Show icon matching the NEXT theme (what clicking will switch to)
-    const next = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length]
+    // Show icon matching the CURRENT theme
     document.querySelectorAll<HTMLElement>('[data-theme-icon]').forEach((icon) => {
-      icon.classList.toggle('hidden', icon.dataset.themeIcon !== next)
+      icon.classList.toggle('hidden', icon.dataset.themeIcon !== theme)
     })
   }
 

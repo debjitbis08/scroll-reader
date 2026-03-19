@@ -1,6 +1,5 @@
 ---
 import Layout from '../layouts/Layout.astro'
-import { Icon } from 'astro-icon/components'
 
 if (Astro.locals.user) return Astro.redirect('/')
 
@@ -10,17 +9,7 @@ const error = Astro.url.searchParams.get('error')
 <Layout title="Sign in — Scroll Reader">
   <main class="flex min-h-screen items-center justify-center">
     <div class="w-full max-w-sm space-y-6 p-6">
-      <div class="flex items-center justify-between">
-        <h1 class="text-2xl font-bold">Sign in</h1>
-        <button
-          data-theme-toggle
-          class="rounded-md p-2 text-ctp-subtext0 transition-colors hover:bg-ctp-surface0 hover:text-ctp-text"
-        >
-          <Icon name="fa6-solid:sun" class="size-5 theme-icon" data-theme-icon="latte" />
-          <Icon name="fa6-solid:moon" class="size-5 theme-icon hidden" data-theme-icon="mocha" />
-          <Icon name="fa6-solid:desktop" class="size-5 theme-icon hidden" data-theme-icon="auto" />
-        </button>
-      </div>
+      <h1 class="text-2xl font-bold">Sign in</h1>
 
       {error && (
         <p class="rounded-lg bg-ctp-red/10 px-4 py-2 text-sm text-ctp-red">

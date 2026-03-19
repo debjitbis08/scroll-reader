@@ -2,6 +2,7 @@
 import Layout from '../layouts/Layout.astro'
 import { Icon } from 'astro-icon/components'
 import { eq, desc } from 'drizzle-orm'
+// Icon import kept for document type icons below
 import { db } from '../lib/db.ts'
 import { documents } from '@scroll-reader/db'
 
@@ -26,42 +27,6 @@ const STATUS_BADGE: Record<string, { label: string; color: string }> = {
 
 <Layout title="Library — Scroll Reader">
   <main class="min-h-screen">
-    <header class="flex items-center justify-between border-b border-ctp-surface0 px-4 py-3">
-      <div class="flex items-center gap-4">
-        <a href="/" class="flex items-center gap-2">
-          <Icon name="fa6-solid:scroll" class="size-5 text-ctp-mauve" />
-          <span class="text-lg font-semibold tracking-tight">Scroll Reader</span>
-        </a>
-      </div>
-      <div class="flex items-center gap-2">
-        <a href="/library" class="text-sm font-medium text-ctp-text">Library</a>
-        <a
-          href="/upload"
-          class="flex items-center gap-1.5 rounded-lg bg-ctp-mauve px-3 py-1.5 text-sm font-medium text-ctp-base transition-colors hover:bg-ctp-mauve/80"
-        >
-          <Icon name="mdi:plus" class="size-4" />
-          Upload
-        </a>
-        <form method="POST" action="/api/auth/logout">
-          <button
-            type="submit"
-            class="rounded-md p-2 text-ctp-subtext0 transition-colors hover:bg-ctp-surface0 hover:text-ctp-text"
-            title="Log out"
-          >
-            <Icon name="mdi:logout" class="size-5" />
-          </button>
-        </form>
-        <button
-          data-theme-toggle
-          class="rounded-md p-2 text-ctp-subtext0 transition-colors hover:bg-ctp-surface0 hover:text-ctp-text"
-        >
-          <Icon name="fa6-solid:sun" class="size-5 theme-icon" data-theme-icon="latte" />
-          <Icon name="fa6-solid:moon" class="size-5 theme-icon hidden" data-theme-icon="mocha" />
-          <Icon name="fa6-solid:desktop" class="size-5 theme-icon hidden" data-theme-icon="auto" />
-        </button>
-      </div>
-    </header>
-
     <section class="mx-auto max-w-3xl px-4 py-8">
       {docs.length === 0 ? (
         <div class="flex flex-col items-center gap-4 py-20 text-center">
