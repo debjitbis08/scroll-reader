@@ -22,7 +22,7 @@ const [doc] = await db
   .where(and(eq(documents.id, docId), eq(documents.userId, userId)))
   .limit(1)
 
-if (!doc) return Astro.redirect('/')
+if (!doc) return Astro.redirect('/library')
 
 // Load most recent job for this document
 const [job] = await db
@@ -87,7 +87,7 @@ const CARD_TYPE_COLOR: Record<string, string> = {
     <!-- Header -->
     <div class="flex items-start justify-between gap-4">
       <div>
-        <a href="/" class="text-sm text-ctp-subtext0 hover:text-ctp-mauve">← Library</a>
+        <a href="/library" class="text-sm text-ctp-subtext0 hover:text-ctp-mauve">← Library</a>
         <h1 class="mt-2 text-2xl font-bold">{doc.title}</h1>
         {doc.processingStatus === 'ready' && (
           <p class="mt-1 text-sm text-ctp-subtext0">
@@ -111,7 +111,9 @@ const CARD_TYPE_COLOR: Record<string, string> = {
           data-theme-toggle
           class="rounded-md p-2 text-ctp-subtext0 transition-colors hover:bg-ctp-surface0 hover:text-ctp-text"
         >
-          <Icon name="mdi:theme-light-dark" class="size-5" />
+          <Icon name="fa6-solid:sun" class="size-5 theme-icon" data-theme-icon="latte" />
+          <Icon name="fa6-solid:moon" class="size-5 theme-icon hidden" data-theme-icon="mocha" />
+          <Icon name="fa6-solid:desktop" class="size-5 theme-icon hidden" data-theme-icon="auto" />
         </button>
       </div>
     </div>
@@ -230,7 +232,7 @@ const CARD_TYPE_COLOR: Record<string, string> = {
 
     const res = await fetch(`/api/documents/${docId}`, { method: 'DELETE' })
     if (res.ok) {
-      window.location.href = '/'
+      window.location.href = '/library'
     } else {
       alert('Failed to delete document.')
     }

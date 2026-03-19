@@ -21,8 +21,9 @@ const { title = 'Scroll Reader' } = Astro.props
     -->
     <script is:inline>
       ;(function () {
-        var t = localStorage.getItem('ctp-theme')
+        var t = localStorage.getItem('ctp-theme') || 'auto'
         if (t === 'mocha' || t === 'latte') document.documentElement.classList.add(t)
+        document.documentElement.dataset.theme = t
       })()
     </script>
   </head>
@@ -52,6 +53,11 @@ const { title = 'Scroll Reader' } = Astro.props
     document.querySelectorAll<HTMLElement>('[data-theme-toggle]').forEach((el) => {
       el.dataset.currentTheme = theme
       el.setAttribute('aria-label', `Theme: ${theme}`)
+    })
+    // Show icon matching the NEXT theme (what clicking will switch to)
+    const next = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length]
+    document.querySelectorAll<HTMLElement>('[data-theme-icon]').forEach((icon) => {
+      icon.classList.toggle('hidden', icon.dataset.themeIcon !== next)
     })
   }
 
