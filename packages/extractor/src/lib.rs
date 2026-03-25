@@ -57,6 +57,7 @@ fn ext_from_mime(mime: &str) -> &str {
         "image/svg+xml" => ".svg",
         "image/bmp" => ".bmp",
         "image/tiff" => ".tiff",
+        "image/jp2" | "image/jpeg2000" => ".jp2",
         _ => ".bin",
     }
 }
@@ -71,6 +72,7 @@ fn mime_from_ext(ext: &str) -> &str {
         "svg" => "image/svg+xml",
         "bmp" => "image/bmp",
         "tiff" | "tif" => "image/tiff",
+        "jp2" | "j2k" | "jpx" => "image/jp2",
         _ => "application/octet-stream",
     }
 }
@@ -619,8 +621,21 @@ fn extract_page_pdftotext(path: &str, page_num: u32) -> Option<String> {
     if text.is_empty() { None } else { Some(text) }
 }
 
+/// Returns the single filter name from a PDF stream's /Filter entry, if it has
+/// exactly one filter (either a Name or a single-element Array).
+fn single_filter_name(filter_obj: &lopdf::Object) -> Option<&[u8]> {
+    match filter_obj {
+        lopdf::Object::Name(n) => Some(n.as_slice()),
+        lopdf::Object::Array(arr) if arr.len() == 1 => {
+            if let lopdf::Object::Name(n) = &arr[0] { Some(n.as_slice()) } else { None }
+        }
+        _ => None,
+    }
+}
+
 /// Extracts image XObjects from a PDF page.
-/// For JPEG images (DCTDecode filter), writes the raw bytes to output_dir.
+/// Supports JPEG (DCTDecode) and JPEG2000 (JPXDecode) — both store valid
+/// image file data directly in the stream content.
 /// For other formats, emits a placeholder element with alt text only.
 fn extract_page_images(
     doc: &lopdf::Document,
@@ -648,7 +663,7 @@ fn extract_page_images(
             continue;
         }
 
-        // Try to get the stream for JPEG extraction
+        // Try to get the stream
         let stream = match obj {
             lopdf::Object::Stream(s) => Some(s),
             lopdf::Object::Reference(id) => {
@@ -663,27 +678,25 @@ fn extract_page_images(
         let alt = format!("[image on page {page_num}]");
 
         if let Some(stream) = stream {
-            // Check the /Filter to see if it's a JPEG (DCTDecode)
             let filter = stream.dict.get(b"Filter").ok();
-            let is_jpeg = filter.map(|f| match f {
-                lopdf::Object::Name(n) => n == b"DCTDecode",
-                lopdf::Object::Array(arr) => {
-                    arr.len() == 1 && matches!(&arr[0], lopdf::Object::Name(n) if n == b"DCTDecode")
-                }
-                _ => false,
-            }).unwrap_or(false);
+            let filter_name = filter.and_then(single_filter_name);
 
-            if is_jpeg {
-                // DCTDecode: raw stream content is valid JPEG data
-                let jpeg_data = &stream.content;
-                if let Some((fp, mime)) = write_image_file(output_dir, jpeg_data, "image/jpeg", seen) {
-                    images.push(DocElement::Image { alt, file: Some(fp), mime: Some(mime) });
+            // DCTDecode → JPEG, JPXDecode → JPEG2000: raw stream is valid image data
+            let extractable = filter_name.and_then(|name| match name {
+                b"DCTDecode" => Some("image/jpeg"),
+                b"JPXDecode" => Some("image/jp2"),
+                _ => None,
+            });
+
+            if let Some(mime) = extractable {
+                if let Some((fp, m)) = write_image_file(output_dir, &stream.content, mime, seen) {
+                    images.push(DocElement::Image { alt, file: Some(fp), mime: Some(m) });
                     continue;
                 }
             }
         }
 
-        // Non-JPEG or extraction failed: emit placeholder
+        // Unsupported filter or extraction failed: emit placeholder
         images.push(DocElement::Image { alt, file: None, mime: None });
     }
 
