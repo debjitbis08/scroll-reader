@@ -9,6 +9,12 @@ import JobPoller from '../../components/JobPoller.tsx'
 import AutoRefresh from '../../components/AutoRefresh.tsx'
 import PageRangeSelector from '../../components/PageRangeSelector.tsx'
 import LatexText from '../../components/LatexText.tsx'
+import FlashcardRenderer from '../../components/cards/FlashcardRenderer.tsx'
+import QuizRenderer from '../../components/cards/QuizRenderer.tsx'
+import GlossaryRenderer from '../../components/cards/GlossaryRenderer.tsx'
+import ContrastRenderer from '../../components/cards/ContrastRenderer.tsx'
+import PassageRenderer from '../../components/cards/PassageRenderer.tsx'
+import type { BodyContent, FlashcardContent, QuizContent, GlossaryContent, ContrastContent, PassageContent } from '@scroll-reader/shared-types'
 
 if (!Astro.locals.user) return Astro.redirect('/login')
 
@@ -75,10 +81,20 @@ if (!isPending && !isPreview && !isChunking && !isError) {
 const CARD_TYPE_LABEL: Record<string, string> = {
   discover: 'Discover',
   raw_commentary: 'Notes',
+  flashcard: 'Flashcard',
+  quiz: 'Quiz',
+  glossary: 'Glossary',
+  contrast: 'Contrast',
+  passage: 'Passage',
 }
 const CARD_TYPE_COLOR: Record<string, string> = {
   discover: 'text-ctp-blue',
   raw_commentary: 'text-ctp-green',
+  flashcard: 'text-ctp-peach',
+  quiz: 'text-ctp-mauve',
+  glossary: 'text-ctp-yellow',
+  contrast: 'text-ctp-teal',
+  passage: 'text-ctp-flamingo',
 }
 ---
 
@@ -191,7 +207,19 @@ const CARD_TYPE_COLOR: Record<string, string> = {
               <span class={`text-xs font-semibold uppercase tracking-wide ${CARD_TYPE_COLOR[card.cardType] ?? 'text-ctp-subtext0'}`}>
                 {CARD_TYPE_LABEL[card.cardType] ?? card.cardType}
               </span>
-              <LatexText text={card.front} class="text-sm leading-relaxed text-ctp-text" client:load />
+              {card.cardType === 'flashcard' ? (
+                <FlashcardRenderer content={card.content as FlashcardContent} client:load />
+              ) : card.cardType === 'quiz' ? (
+                <QuizRenderer content={card.content as QuizContent} client:load />
+              ) : card.cardType === 'glossary' ? (
+                <GlossaryRenderer content={card.content as GlossaryContent} client:load />
+              ) : card.cardType === 'contrast' ? (
+                <ContrastRenderer content={card.content as ContrastContent} client:load />
+              ) : card.cardType === 'passage' ? (
+                <PassageRenderer content={card.content as PassageContent} client:load />
+              ) : (
+                <LatexText text={(card.content as BodyContent).body ?? ''} class="text-sm leading-relaxed text-ctp-text" client:load />
+              )}
             </div>
           ))}
         </div>

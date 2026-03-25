@@ -1,15 +1,20 @@
-import { createSignal, onMount, onCleanup, For, Show, type JSX } from 'solid-js'
+import { createSignal, onMount, onCleanup, For, Show, Switch, Match, type JSX } from 'solid-js'
 import { FaRegularHeart, FaSolidHeart } from 'solid-icons/fa'
 import { FaRegularBookmark, FaSolidBookmark } from 'solid-icons/fa'
 import { FiEyeOff, FiChevronLeft, FiChevronRight } from 'solid-icons/fi'
 import LatexText from './LatexText.tsx'
+import FlashcardRenderer from './cards/FlashcardRenderer.tsx'
+import QuizRenderer from './cards/QuizRenderer.tsx'
+import GlossaryRenderer from './cards/GlossaryRenderer.tsx'
+import ContrastRenderer from './cards/ContrastRenderer.tsx'
+import PassageRenderer from './cards/PassageRenderer.tsx'
+import type { CardContent, BodyContent, FlashcardContent, QuizContent, GlossaryContent, ContrastContent, PassageContent } from '@scroll-reader/shared-types'
 
 interface FeedCard {
   card: {
     id: string
     cardType: string
-    front: string
-    back: string | null
+    content: CardContent
   }
   chunk: {
     id: string
@@ -30,16 +35,31 @@ interface FeedCard {
 const CARD_TYPE_LABEL: Record<string, string> = {
   discover: 'Discover',
   raw_commentary: 'Notes',
+  flashcard: 'Flashcard',
+  quiz: 'Quiz',
+  glossary: 'Glossary',
+  contrast: 'Contrast',
+  passage: 'Passage',
 }
 
 const CARD_TYPE_COLOR: Record<string, string> = {
   discover: 'text-ctp-blue',
   raw_commentary: 'text-ctp-green',
+  flashcard: 'text-ctp-peach',
+  quiz: 'text-ctp-mauve',
+  glossary: 'text-ctp-yellow',
+  contrast: 'text-ctp-teal',
+  passage: 'text-ctp-flamingo',
 }
 
 const CARD_TYPE_BG: Record<string, string> = {
   discover: 'border-ctp-blue/30',
   raw_commentary: 'border-ctp-green/30',
+  flashcard: 'border-ctp-peach/30',
+  quiz: 'border-ctp-mauve/30',
+  glossary: 'border-ctp-yellow/30',
+  contrast: 'border-ctp-teal/30',
+  passage: 'border-ctp-flamingo/30',
 }
 
 const BATCH_SIZE = 10
@@ -173,10 +193,25 @@ export default function Feed() {
                 </div>
 
                 <div>
-                  <LatexText text={item.card.front} class="text-sm leading-relaxed text-ctp-text" />
-                  <Show when={item.card.back}>
-                    <LatexText text={item.card.back!} class="mt-1 text-sm leading-relaxed text-ctp-subtext0" />
-                  </Show>
+                  <Switch fallback={
+                    <LatexText text={(item.card.content as BodyContent).body ?? ''} class="text-sm leading-relaxed text-ctp-text" />
+                  }>
+                    <Match when={item.card.cardType === 'flashcard'}>
+                      <FlashcardRenderer content={item.card.content as FlashcardContent} />
+                    </Match>
+                    <Match when={item.card.cardType === 'quiz'}>
+                      <QuizRenderer content={item.card.content as QuizContent} />
+                    </Match>
+                    <Match when={item.card.cardType === 'glossary'}>
+                      <GlossaryRenderer content={item.card.content as GlossaryContent} />
+                    </Match>
+                    <Match when={item.card.cardType === 'contrast'}>
+                      <ContrastRenderer content={item.card.content as ContrastContent} />
+                    </Match>
+                    <Match when={item.card.cardType === 'passage'}>
+                      <PassageRenderer content={item.card.content as PassageContent} />
+                    </Match>
+                  </Switch>
                 </div>
 
                 {(() => {

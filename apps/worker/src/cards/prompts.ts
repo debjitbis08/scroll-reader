@@ -5,7 +5,11 @@ const CARD_TYPE_DESCRIPTIONS: Record<CardType, string> = {
   discover: 'Discover — one surprising or illuminating insight from the passage that a reader would find worth sitting with. 2-3 sentences.',
   raw_commentary: 'Notes — a brief, direct marginal note, the kind a thoughtful reader scribbles in the margin. Specific to the text. 2-3 sentences.',
   connect: 'Connect — links this passage to ideas from elsewhere in the book or other works.',
-  sanskrit: 'Sanskrit — commentary on Sanskrit/Devanagari source text.',
+  flashcard: 'Flashcard — a question testing a key concept from the passage, with a concise answer. Question should be specific and answerable. Answer should be 1-3 sentences.',
+  quiz: 'Quiz — a multiple choice question with exactly 4 options (A-D), one correct answer (0-indexed), and a brief explanation for each option explaining why it is correct or incorrect.',
+  glossary: 'Glossary — a key term from the passage with its definition as used in this text, optional etymology or origin, and optionally related terms.',
+  contrast: 'Contrast — an "X vs Y" comparison of two concepts, methods, or ideas mentioned or implied in the passage. Present 2-4 key dimensions of difference.',
+  passage: 'Passage — select the most beautiful, significant, or thought-provoking excerpt from the passage. Reproduce it verbatim. Add only a brief (1 sentence) note on why it matters.',
 }
 
 /**
@@ -71,11 +75,27 @@ INSTRUCTIONS:
    - Use backtick code spans for inline code references
 4. Each card should be self-contained — a reader should understand it without seeing the original passage.
 
-Respond with ONLY a JSON array. Each element has:
-- "type": one of ${JSON.stringify(suggestedTypes)}
-- "front": the card content (string, may include LaTeX or markdown)
+Respond with ONLY a JSON array. Each element has "type" and "content" (an object whose shape depends on the type):
 
-Example: [{"type":"discover","front":"The key insight is..."},{"type":"raw_commentary","front":"The author argues..."}]
+For "discover", "raw_commentary", "connect":
+  {"type":"discover", "content": {"body":"The key insight is..."}}
+
+For "flashcard":
+  {"type":"flashcard", "content": {"question":"What is...?", "answer":"It is..."}}
+
+For "quiz":
+  {"type":"quiz", "content": {"question":"Which of the following...?", "options":["A...","B...","C...","D..."], "correct":0, "explanations":["Why A...","Why B...","Why C...","Why D..."]}}
+
+For "glossary":
+  {"type":"glossary", "content": {"term":"Term", "definition":"Definition as used here", "etymology":"Optional origin", "related":["related1","related2"]}}
+
+For "contrast":
+  {"type":"contrast", "content": {"itemA":"Concept A", "itemB":"Concept B", "dimensions":["dim1","dim2","dim3"], "dimensionA":["A trait1","A trait2","A trait3"], "dimensionB":["B trait1","B trait2","B trait3"]}}
+
+For "passage":
+  {"type":"passage", "content": {"excerpt":"The verbatim excerpt...", "commentary":"Why this matters."}}
+
+Allowed types: ${JSON.stringify(suggestedTypes)}
 If no cards are appropriate, return: []
 
 JSON:`

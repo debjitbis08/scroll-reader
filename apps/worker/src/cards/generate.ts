@@ -1,11 +1,11 @@
 import type { AIProvider } from '../ai/index.ts'
 import type { Document, Chunk, InsertCard } from '@scroll-reader/db'
-import type { CardType, CardStrategy } from '@scroll-reader/shared-types'
+import type { CardType, CardStrategy, CardContent } from '@scroll-reader/shared-types'
 import { buildSmartPrompt } from './prompts.ts'
 
 interface AICard {
   type: CardType
-  front: string
+  content: CardContent
 }
 
 /**
@@ -35,7 +35,7 @@ export async function generateCardsForChunk(
     userId: chunk.userId,
     chunkId: chunk.id,
     cardType: card.type,
-    front: card.front,
+    content: card.content,
     encrypted: false,
     aiProvider: provider.name,
     aiModel: provider.model,
@@ -51,7 +51,7 @@ function parseAIResponse(
     .replace(/```\s*/g, '')
     .trim()
 
-  let cards: AICard[]
+  let cards: unknown[]
 
   try {
     cards = JSON.parse(cleaned)
@@ -72,14 +72,14 @@ function parseAIResponse(
   if (!Array.isArray(cards)) return []
 
   const validTypes = new Set<string>(
-    strategy?.cardTypes ?? ['reflect', 'discover', 'raw_commentary'],
+    strategy?.cardTypes ?? ['discover', 'raw_commentary'],
   )
 
   return cards.filter((card): card is AICard => {
     if (!card || typeof card !== 'object') return false
-    if (typeof card.type !== 'string' || typeof card.front !== 'string') return false
-    if (!validTypes.has(card.type)) return false
-    if (card.front.trim().length === 0) return false
+    const c = card as Record<string, unknown>
+    if (typeof c.type !== 'string' || !validTypes.has(c.type)) return false
+    if (!c.content || typeof c.content !== 'object') return false
     return true
   })
 }

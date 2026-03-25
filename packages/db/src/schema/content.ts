@@ -17,7 +17,7 @@ export const documentSourceEnum = pgEnum('document_source', [
 ])
 
 export const cardTypeEnum = pgEnum('card_type', [
-  'discover', 'connect', 'raw_commentary', 'sanskrit',
+  'discover', 'connect', 'raw_commentary', 'flashcard', 'quiz', 'glossary', 'contrast', 'passage',
 ])
 
 export const chunkTypeEnum = pgEnum('chunk_type', ['text', 'image', 'code'])
@@ -113,8 +113,7 @@ export const cards = pgTable('cards', {
     .notNull(),
   chunkId: uuid('chunk_id').references(() => chunks.id, { onDelete: 'cascade' }),
   cardType: cardTypeEnum('card_type').notNull(),
-  front: text('front').notNull(),
-  back: text('back'),
+  content: jsonb('content').$type<Record<string, unknown>>().notNull(),
   encrypted: boolean('encrypted').notNull().default(false),
   secondaryChunkId: uuid('secondary_chunk_id').references(() => chunks.id),
   aiProvider: text('ai_provider'),
