@@ -50,6 +50,13 @@
       "when": 1773903302309,
       "tag": "0006_youthful_nightshade",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1774441601210,
+      "tag": "0007_free_jetstream",
+      "breakpoints": true
     }
   ]
 }

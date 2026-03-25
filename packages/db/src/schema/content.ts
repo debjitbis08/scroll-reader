@@ -22,6 +22,8 @@ export const cardTypeEnum = pgEnum('card_type', [
 
 export const chunkTypeEnum = pgEnum('chunk_type', ['text', 'image', 'code'])
 
+export const tierEnum = pgEnum('tier', ['free', 'plus'])
+
 export const feedEventTypeEnum = pgEnum('feed_event_type', [
   'view', 'pause', 'skip', 'engage', 'expand',
 ])
@@ -37,6 +39,7 @@ export const profiles = pgTable('profiles', {
   aiKeyHint: text('ai_key_hint'), // last 4 chars, display only
   aiModel: text('ai_model'),
   ollamaBaseUrl: text('ollama_base_url'),
+  tier: tierEnum('tier').default('free').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 })
 
@@ -52,10 +55,13 @@ export const documents = pgTable('documents', {
   isRead: boolean('is_read').default(false),
   source: documentSourceEnum('source').notNull(),
   filePath: text('file_path'),
+  fileSize: integer('file_size'), // bytes
   processingStatus: processingStatusEnum('processing_status').default('pending'),
   totalPages: integer('total_pages'),
   pageStart: integer('page_start'),
   pageEnd: integer('page_end'),
+  totalElements: integer('total_elements'), // total extracted elements (set after first extraction)
+  elementsProcessed: integer('elements_processed').default(0), // how many elements have been chunked so far
   chunkCount: integer('chunk_count').default(0),
   cardCount: integer('card_count').default(0),
   readingGoal: readingGoalEnum('reading_goal'),

@@ -10,6 +10,7 @@ export {
   cardTypeEnum,
   chunkTypeEnum,
   readingGoalEnum,
+  tierEnum,
   feedEventTypeEnum,
   profiles,
   documents,

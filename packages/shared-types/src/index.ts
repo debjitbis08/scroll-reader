@@ -10,6 +10,24 @@ export type DocumentSource = 'desktop' | 'upload' | 'server'
 
 export type ChunkType = 'text' | 'image'
 
+export type Tier = 'free' | 'plus'
+
+export type TierLimits = {
+  storageBytes: number
+  cardsPerDay: number
+}
+
+export const TIER_LIMITS: Record<Tier, TierLimits> = {
+  free: {
+    storageBytes: 500 * 1024 * 1024, // 500 MB
+    cardsPerDay: 100,
+  },
+  plus: {
+    storageBytes: 5 * 1024 * 1024 * 1024, // 5 GB
+    cardsPerDay: 500,
+  },
+}
+
 export type FeedEventType = 'view' | 'pause' | 'skip' | 'engage' | 'expand'
 
 export type ReadingGoal = 'casual' | 'reflective' | 'study'

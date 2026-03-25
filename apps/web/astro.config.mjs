@@ -30,8 +30,6 @@ export default defineConfig({
       GEMINI_MODEL: envField.string({ context: 'server', access: 'secret', default: 'gemini-2.5-flash' }),
       OLLAMA_BASE_URL: envField.string({ context: 'server', access: 'secret', default: 'http://localhost:11434' }),
       OLLAMA_MODEL: envField.string({ context: 'server', access: 'secret', default: 'mistral:7b' }),
-      TRIAL_CHUNK_LIMIT: envField.number({ context: 'server', access: 'secret', default: 25 }),
-      DAILY_CHUNK_LIMIT: envField.number({ context: 'server', access: 'secret', default: 5 }),
       BATCH_SIZE: envField.number({ context: 'server', access: 'secret', default: 5 }),
       CHUNKER_BIN: envField.string({ context: 'server', access: 'secret', optional: true }),
       EXTRACTOR_BIN: envField.string({ context: 'server', access: 'secret', optional: true }),

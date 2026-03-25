@@ -1,11 +1,13 @@
 import type { APIRoute } from 'astro'
 import { writeFile, unlink } from 'node:fs/promises'
 import { extname } from 'node:path'
-import { eq } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import { db } from '../../lib/db.ts'
-import { documents, jobs } from '@scroll-reader/db'
+import { documents, profiles, jobs } from '@scroll-reader/db'
 import { getPageCount } from '../../lib/extract.ts'
 import { uploadDocument } from '../../lib/storage.ts'
+import { TIER_LIMITS } from '@scroll-reader/shared-types'
+import type { Tier } from '@scroll-reader/shared-types'
 
 const ALLOWED_EXTS = new Set(['.epub', '.pdf', '.txt'])
 const MAX_BYTES = 100 * 1024 * 1024 // 100 MB
@@ -34,13 +36,34 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
     return redirect('/upload?error=File+too+large+%28max+100+MB%29')
   }
 
+  const userId = locals.user.id
+
+  // Check storage quota
+  const [profile] = await db
+    .select({ tier: profiles.tier })
+    .from(profiles)
+    .where(eq(profiles.id, userId))
+    .limit(1)
+
+  const tier = (profile?.tier ?? 'free') as Tier
+  const limit = TIER_LIMITS[tier].storageBytes
+
+  const [usage] = await db
+    .select({ total: sql<number>`coalesce(sum(file_size), 0)::int` })
+    .from(documents)
+    .where(eq(documents.userId, userId))
+
+  if ((usage?.total ?? 0) + file.size > limit) {
+    const limitMB = Math.round(limit / (1024 * 1024))
+    return redirect(`/upload?error=Storage+limit+reached+%28${limitMB}+MB%29`)
+  }
+
   // Save to temp dir for page-count extraction
   const tmpPath = `/tmp/scroll-${crypto.randomUUID()}${ext}`
   const buffer = Buffer.from(await file.arrayBuffer())
   await writeFile(tmpPath, buffer)
 
   const title = file.name.replace(/\.[^.]+$/, '')
-  const userId = locals.user.id
 
   // Get page count before inserting — fast Rust extraction
   let totalPages = 1
@@ -61,7 +84,8 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
       userId,
       title,
       source: 'upload',
-      filePath: '', // placeholder — set after upload
+      filePath: '',
+      fileSize: file.size,
       processingStatus: 'preview',
       totalPages,
       pageStart: 1,

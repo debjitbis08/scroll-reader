@@ -1,10 +1,10 @@
 import type { APIRoute } from 'astro'
 import { eq, and } from 'drizzle-orm'
 import { db } from '../../../../lib/db.ts'
-import { documents, jobs } from '@scroll-reader/db'
+import { documents, profiles } from '@scroll-reader/db'
 import { resolveCardStrategy } from '@scroll-reader/shared-types'
-import type { DocumentType, ReadingGoal } from '@scroll-reader/shared-types'
-import { runPipeline } from '../../../../lib/pipeline.ts'
+import type { DocumentType, ReadingGoal, Tier } from '@scroll-reader/shared-types'
+import { processUser } from '../../../../lib/pipeline.ts'
 
 const VALID_DOC_TYPES: DocumentType[] = ['book', 'paper', 'article', 'manual', 'note', 'scripture', 'other', 'fiction']
 const VALID_GOALS: ReadingGoal[] = ['casual', 'reflective', 'study']
@@ -66,23 +66,21 @@ export const POST: APIRoute = async ({ request, locals, params }) => {
     })
     .where(eq(documents.id, docId))
 
-  // Get the existing job row
-  const [job] = await db
-    .select()
-    .from(jobs)
-    .where(and(eq(jobs.documentId, docId), eq(jobs.userId, userId)))
-    .orderBy(jobs.createdAt)
-    .limit(1)
+  // Fire first batch immediately so the user sees cards right away.
+  // The cron handles the rest over subsequent runs.
+  setImmediate(async () => {
+    try {
+      const [profile] = await db
+        .select({ tier: profiles.tier })
+        .from(profiles)
+        .where(eq(profiles.id, userId))
+        .limit(1)
 
-  const jobId = job?.id ?? (
-    await db.insert(jobs).values({ userId, documentId: docId }).returning()
-  )[0].id
-
-  // Fire pipeline in background
-  setImmediate(() => {
-    runPipeline(jobId, doc.filePath!, userId, docId).catch((err) => {
-      console.error('[configure] unhandled pipeline error:', err)
-    })
+      const tier = (profile?.tier ?? 'free') as Tier
+      await processUser(userId, tier)
+    } catch (err) {
+      console.error('[configure] background processing error:', err)
+    }
   })
 
   return new Response('OK', { status: 200 })
