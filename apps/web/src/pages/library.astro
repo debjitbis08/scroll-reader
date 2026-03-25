@@ -1,10 +1,10 @@
 ---
 import Layout from '../layouts/Layout.astro'
 import { Icon } from 'astro-icon/components'
-import { eq, desc } from 'drizzle-orm'
+import { eq, desc, sql } from 'drizzle-orm'
 // Icon import kept for document type icons below
 import { db } from '../lib/db.ts'
-import { documents } from '@scroll-reader/db'
+import { documents, cards, chunks } from '@scroll-reader/db'
 
 const user = Astro.locals.user
 if (!user) return Astro.redirect('/login')
@@ -14,6 +14,19 @@ const docs = await db
   .from(documents)
   .where(eq(documents.userId, user.id))
   .orderBy(desc(documents.createdAt))
+
+// Live card counts from DB (document.cardCount may lag behind)
+const cardCounts = await db
+  .select({
+    documentId: chunks.documentId,
+    count: sql<number>`count(${cards.id})::int`,
+  })
+  .from(cards)
+  .innerJoin(chunks, eq(cards.chunkId, chunks.id))
+  .where(eq(cards.userId, user.id))
+  .groupBy(chunks.documentId)
+
+const cardCountMap = new Map(cardCounts.map((r) => [r.documentId, r.count]))
 
 const STATUS_BADGE: Record<string, { label: string; color: string }> = {
   pending: { label: 'Pending', color: 'bg-ctp-yellow/15 text-ctp-yellow' },
@@ -57,8 +70,16 @@ const STATUS_BADGE: Record<string, { label: string; color: string }> = {
                     <p class="truncate font-medium">{doc.title}</p>
                     <p class="mt-0.5 text-xs text-ctp-subtext0">
                       {doc.author && <span>{doc.author} · </span>}
-                      {doc.cardCount} card{doc.cardCount !== 1 ? 's' : ''} · {doc.chunkCount} passage{doc.chunkCount !== 1 ? 's' : ''}
+                      {cardCountMap.get(doc.id) ?? 0} card{(cardCountMap.get(doc.id) ?? 0) !== 1 ? 's' : ''} · {doc.chunkCount} passage{doc.chunkCount !== 1 ? 's' : ''}
                     </p>
+                    {(doc.processingStatus === 'chunking' || doc.processingStatus === 'generating') && doc.chunkCount != null && doc.chunkCount > 0 && (
+                      <div class="mt-1.5 h-1 rounded-full bg-ctp-surface2 overflow-hidden">
+                        <div
+                          class="h-full rounded-full bg-ctp-mauve"
+                          style={`width: ${doc.totalElements ? Math.round(((doc.elementsProcessed ?? 0) / doc.totalElements) * 100) : 0}%`}
+                        />
+                      </div>
+                    )}
                   </div>
                   <span class={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${badge.color}`}>
                     {badge.label}

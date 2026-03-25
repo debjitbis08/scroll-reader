@@ -5,8 +5,8 @@ const CARD_TYPE_DESCRIPTIONS: Record<CardType, string> = {
   discover: 'Discover — one surprising or illuminating insight from the passage that a reader would find worth sitting with. 2-3 sentences.',
   raw_commentary: 'Notes — a brief, direct marginal note, the kind a thoughtful reader scribbles in the margin. Specific to the text. 2-3 sentences.',
   connect: 'Connect — links this passage to ideas from elsewhere in the book or other works.',
-  flashcard: 'Flashcard — a question testing a key concept from the passage, with a concise answer. Question should be specific and answerable. Answer should be 1-3 sentences.',
-  quiz: 'Quiz — a multiple choice question with exactly 4 options (A-D), one correct answer (0-indexed), and a brief explanation for each option explaining why it is correct or incorrect.',
+  flashcard: 'Flashcard — a question about the transferable concept or principle illustrated in the passage, NOT about specific datasets, examples, or named entities used to explain it. Ask about the underlying idea ("What is the purpose of principal components?") not the example ("What did they do with the NCI60 dataset?"). Answer should be 1-3 sentences.',
+  quiz: 'Quiz — a multiple choice question about a transferable concept or principle, with exactly 4 options (A-D), one correct answer (0-indexed), and a brief explanation for each option. Frame questions around the general idea, not specific examples or datasets from the text.',
   glossary: 'Glossary — a key term from the passage with its definition as used in this text, optional etymology or origin, and optionally related terms.',
   contrast: 'Contrast — an "X vs Y" comparison of two concepts, methods, or ideas mentioned or implied in the passage. Present 2-4 key dimensions of difference.',
   passage: 'Passage — select the most beautiful, significant, or thought-provoking excerpt from the passage. Reproduce it verbatim. Add only a brief (1 sentence) note on why it matters.',
@@ -64,16 +64,14 @@ ${typeDescriptions}
 ${codeInstructions}
 INSTRUCTIONS:
 1. First, understand what kind of content this is (prose, reference table, notation, formula, code sample, etc.).
-2. Decide which card types actually make sense for this content. You may:
-   - Skip card types that don't fit (e.g., don't write a "discover" card for a symbol table)
-   - Generate fewer cards if the content doesn't warrant all types
-   - Generate no cards at all if the content is not meaningful enough (return empty array)
-3. Format card text appropriately:
+2. ALWAYS generate a "discover" card first if it is in the suggested types — it is the primary card type. Then add other types only if the content warrants them.
+3. You may skip non-discover card types that don't fit, generate fewer cards, or return an empty array if the content is not meaningful enough.
+4. Format card text appropriately:
    - Use LaTeX notation (e.g., $x^2$, $\\sum_{i=1}^{n}$) for mathematical content
    - Use clean formatting for reference material (structured lists, tables)
    - Use natural prose for narrative content
    - Use backtick code spans for inline code references
-4. Each card should be self-contained — a reader should understand it without seeing the original passage.
+5. CRITICAL — every card MUST be completely self-contained. The reader will see the card WITHOUT the source passage. Never write "the passage", "the text", "the author", "according to the passage", or "this section". Instead, name the specific concept, book, author, or idea directly. Include enough context that the card makes sense on its own.
 
 Respond with ONLY a JSON array. Each element has "type" and "content" (an object whose shape depends on the type):
 

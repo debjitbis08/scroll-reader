@@ -41,7 +41,7 @@ export default function QuizRenderer(props: Props) {
                 class={`w-full text-left rounded-lg border px-3 py-2 text-sm transition-colors ${borderColor()}`}
               >
                 <span class="font-medium text-ctp-subtext0 mr-2">{OPTION_LABELS[i()]}.</span>
-                <LatexText text={option} class="inline text-ctp-text" />
+                <LatexText text={option.replace(/^[A-Da-d][).]\s*/, '')} class="inline text-ctp-text" />
                 <Show when={isAnswered() && (isSelected() || isCorrect()) && props.content.explanations?.[i()]}>
                   <p class="mt-1.5 text-xs text-ctp-subtext0 leading-relaxed">
                     {props.content.explanations[i()]}

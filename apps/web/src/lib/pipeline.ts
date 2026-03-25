@@ -129,10 +129,10 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
           .where(eq(chunks.documentId, doc.id))
         let nextIndex = (maxRow?.max ?? -1) + 1
 
-        // Chunk elements until we've built up enough to fill the card budget.
-        // Rough estimate: ~2 cards per text chunk, so chunk ~budget/2 text elements.
-        // But always process at least a few elements to make progress.
-        const targetChunks = Math.max(10, Math.ceil(cardBudget / 2))
+        // Chunk enough elements to fill the card budget.
+        // With multiple card types, each chunk may produce ~3-5 cards.
+        const cardsPerChunk = Math.max(1, strategy?.cardTypes?.length ?? 2)
+        const targetChunks = Math.max(10, Math.ceil(cardBudget / cardsPerChunk))
         let textChunksSeen = 0
         let elementsThisBatch = 0
 

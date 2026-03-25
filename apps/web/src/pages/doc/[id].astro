@@ -53,7 +53,7 @@ let grouped: GroupedCard[] = []
 let chunksWithCards = 0
 let totalTextChunks = 0
 
-if (!isPending && !isPreview && !isChunking && !isError) {
+if (!isPending && !isPreview && !isError) {
   // Count text chunks for progress display
   const textChunkRows = await db
     .select()
@@ -139,9 +139,27 @@ const CARD_TYPE_COLOR: Record<string, string> = {
       />
     )}
 
-    <!-- Chunking state: show spinner -->
-    {isChunking && job && (
-      <JobPoller jobId={job.id} client:load />
+    <!-- Chunking/generating progress -->
+    {(isChunking || isGenerating) && (
+      <div class="rounded-xl border border-ctp-surface1 bg-ctp-surface0 px-6 py-4 space-y-2">
+        <div class="flex items-center gap-3 text-ctp-mauve">
+          <Icon name="mdi:clock-outline" class="size-5" />
+          <p class="text-sm font-medium">
+            Processing gradually — {chunksWithCards} of {totalTextChunks} passages complete
+          </p>
+        </div>
+        <p class="text-xs text-ctp-subtext0">
+          New cards are generated daily. Check back tomorrow for more.
+        </p>
+        {totalTextChunks > 0 && (
+          <div class="h-1.5 rounded-full bg-ctp-surface2 overflow-hidden">
+            <div
+              class="h-full rounded-full bg-ctp-mauve transition-all"
+              style={`width: ${Math.round((chunksWithCards / totalTextChunks) * 100)}%`}
+            />
+          </div>
+        )}
+      </div>
     )}
 
     <!-- Error state -->
@@ -155,32 +173,8 @@ const CARD_TYPE_COLOR: Record<string, string> = {
       </div>
     )}
 
-    <!-- Generating state: show drip progress -->
-    {isGenerating && (
-      <div class="rounded-xl border border-ctp-surface1 bg-ctp-surface0 px-6 py-4 space-y-2">
-        <div class="flex items-center gap-3 text-ctp-mauve">
-          <Icon name="mdi:clock-outline" class="size-5" />
-          <p class="text-sm font-medium">
-            Processing gradually — {chunksWithCards} of {totalTextChunks} passages complete
-          </p>
-        </div>
-        <p class="text-xs text-ctp-subtext0">
-          New cards are generated daily. Check back tomorrow for more.
-        </p>
-        {/* Progress bar */}
-        {totalTextChunks > 0 && (
-          <div class="h-1.5 rounded-full bg-ctp-surface2 overflow-hidden">
-            <div
-              class="h-full rounded-full bg-ctp-mauve transition-all"
-              style={`width: ${Math.round((chunksWithCards / totalTextChunks) * 100)}%`}
-            />
-          </div>
-        )}
-      </div>
-    )}
-
-    <!-- Cards (shown during generating + when ready) -->
-    {!isPending && !isPreview && !isChunking && !isError && grouped.map(({ chunk, cards: chunkCards }) => (
+    <!-- Cards (shown during chunking, generating, and ready) -->
+    {!isPending && !isPreview && !isError && grouped.map(({ chunk, cards: chunkCards }) => (
       <section class="space-y-3">
         {chunk.chapter && (
           <h2 class="text-xs font-semibold uppercase tracking-widest text-ctp-subtext0">
