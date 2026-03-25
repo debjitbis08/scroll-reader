@@ -1,10 +1,11 @@
 import type { APIRoute } from 'astro'
-import { writeFile } from 'node:fs/promises'
+import { writeFile, unlink } from 'node:fs/promises'
 import { extname } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { db } from '../../lib/db.ts'
 import { documents, jobs } from '@scroll-reader/db'
 import { getPageCount } from '../../lib/extract.ts'
+import { uploadDocument } from '../../lib/storage.ts'
 
 const ALLOWED_EXTS = new Set(['.epub', '.pdf', '.txt'])
 const MAX_BYTES = 100 * 1024 * 1024 // 100 MB
@@ -33,10 +34,10 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
     return redirect('/upload?error=File+too+large+%28max+100+MB%29')
   }
 
-  // Save to temp dir
+  // Save to temp dir for page-count extraction
   const tmpPath = `/tmp/scroll-${crypto.randomUUID()}${ext}`
-  const bytes = await file.arrayBuffer()
-  await writeFile(tmpPath, Buffer.from(bytes))
+  const buffer = Buffer.from(await file.arrayBuffer())
+  await writeFile(tmpPath, buffer)
 
   const title = file.name.replace(/\.[^.]+$/, '')
   const userId = locals.user.id
@@ -47,23 +48,36 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
     totalPages = await getPageCount(tmpPath)
   } catch (err) {
     console.error('[upload] preview extraction failed:', err)
+    await unlink(tmpPath).catch(() => {})
     return redirect('/upload?error=Could+not+read+document')
   }
 
-  // Insert document already in 'preview' state with page count
+  await unlink(tmpPath).catch(() => {})
+
+  // Insert document to get an ID for the storage path
   const [doc] = await db
     .insert(documents)
     .values({
       userId,
       title,
       source: 'upload',
-      filePath: tmpPath,
+      filePath: '', // placeholder — set after upload
       processingStatus: 'preview',
       totalPages,
       pageStart: 1,
       pageEnd: totalPages,
     })
     .returning()
+
+  // Upload to Supabase Storage: {userId}/{docId}/original.epub
+  try {
+    const path = await uploadDocument(userId, doc.id, ext, buffer)
+    await db.update(documents).set({ filePath: path }).where(eq(documents.id, doc.id))
+  } catch (err) {
+    console.error('[upload] storage upload failed:', err)
+    await db.delete(documents).where(eq(documents.id, doc.id))
+    return redirect('/upload?error=Could+not+store+document')
+  }
 
   await db.insert(jobs).values({ userId, documentId: doc.id }).returning()
 

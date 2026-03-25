@@ -1,5 +1,5 @@
 import { eq, and } from 'drizzle-orm'
-import { unlink } from 'node:fs/promises'
+import { writeFile, unlink } from 'node:fs/promises'
 import { extname } from 'node:path'
 import { db } from './db.ts'
 import { documents, chunks, cards, jobs } from '@scroll-reader/db'
@@ -11,6 +11,7 @@ import { aiChunk } from './ai/chunk.ts'
 import { generateCardsForChunk } from './cards/generate.ts'
 import type { CardType, CardStrategy } from '@scroll-reader/shared-types'
 import { TRIAL_CHUNK_LIMIT, DAILY_CHUNK_LIMIT, BATCH_SIZE } from 'astro:env/server'
+import { downloadDocument, deleteDocument } from './storage.ts'
 
 type PendingChunk = {
   chunkType: 'text' | 'image' | 'code'
@@ -37,7 +38,15 @@ export async function runPipeline(
 ): Promise<void> {
   await db.update(jobs).set({ status: 'processing', startedAt: new Date() }).where(eq(jobs.id, jobId))
 
+  // filePath is a Supabase Storage path — download to a temp file for extraction
+  const ext = extname(filePath).toLowerCase()
+  const tmpPath = `/tmp/scroll-${crypto.randomUUID()}${ext}`
+
   try {
+    // --- Download from storage ---
+    const fileBuffer = await downloadDocument(filePath)
+    await writeFile(tmpPath, fileBuffer)
+
     // --- Extract ---
     await db.update(documents).set({ processingStatus: 'chunking' }).where(eq(documents.id, documentId))
 
@@ -48,11 +57,10 @@ export async function runPipeline(
       .where(eq(documents.id, documentId))
       .limit(1)
 
-    let elements = await extractDocument(filePath)
+    let elements = await extractDocument(tmpPath)
 
     // Filter to selected page range
     if (doc.pageStart && doc.pageEnd) {
-      const ext = extname(filePath).toLowerCase()
       elements = filterByPageRange(elements, ext, doc.pageStart, doc.pageEnd)
     }
 
@@ -140,8 +148,9 @@ export async function runPipeline(
       .set({ chunkCount: insertedChunks.length, processingStatus: 'generating' })
       .where(eq(documents.id, documentId))
 
-    // Clean up temp file now — we no longer need it
-    await unlink(filePath).catch(() => {})
+    // Clean up: temp file + remote storage (content is now in chunks/cards)
+    await unlink(tmpPath).catch(() => {})
+    await deleteDocument(filePath).catch(() => {})
 
     // --- Generate cards for today's batch ---
     const strategy = doc.cardStrategy as CardStrategy | null
@@ -163,7 +172,8 @@ export async function runPipeline(
     console.error(`[pipeline] error: job=${jobId}`, err)
     await db.update(jobs).set({ status: 'failed', error: message, finishedAt: new Date() }).where(eq(jobs.id, jobId))
     await db.update(documents).set({ processingStatus: 'error' }).where(eq(documents.id, documentId))
-    await unlink(filePath).catch(() => {})
+    await unlink(tmpPath).catch(() => {})
+    await deleteDocument(filePath).catch(() => {})
   }
 }
 
