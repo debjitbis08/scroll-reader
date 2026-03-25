@@ -1,5 +1,8 @@
 use scraper::{ElementRef, Html, Selector};
 use serde::Serialize;
+use sha2::{Sha256, Digest};
+use std::collections::HashSet;
+use std::path::{Path, PathBuf};
 
 // ── Output types ──────────────────────────────────────────────────────────────
 
@@ -15,6 +18,12 @@ pub enum DocElement {
     },
     Image {
         alt: String,
+        /// Path to the extracted image file on disk (temp dir).
+        #[serde(skip_serializing_if = "Option::is_none")]
+        file: Option<String>,
+        /// MIME type (e.g. "image/png", "image/jpeg").
+        #[serde(skip_serializing_if = "Option::is_none")]
+        mime: Option<String>,
     },
     Code {
         content: String,
@@ -25,24 +34,128 @@ pub enum DocElement {
     },
 }
 
+// ── Shared constants ─────────────────────────────────────────────────────────
+
+/// Maximum image size to extract (10 MB). Larger images are skipped.
+const MAX_IMAGE_BYTES: usize = 10 * 1024 * 1024;
+
+/// Compute a short hex hash (first 16 chars of SHA-256) for deduplication.
+fn short_hash(data: &[u8]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(data);
+    let result = hasher.finalize();
+    result[..8].iter().map(|b| format!("{b:02x}")).collect::<String>() // 8 bytes = 16 hex chars
+}
+
+/// Derive file extension from MIME type.
+fn ext_from_mime(mime: &str) -> &str {
+    match mime {
+        "image/png" => ".png",
+        "image/jpeg" | "image/jpg" => ".jpg",
+        "image/gif" => ".gif",
+        "image/webp" => ".webp",
+        "image/svg+xml" => ".svg",
+        "image/bmp" => ".bmp",
+        "image/tiff" => ".tiff",
+        _ => ".bin",
+    }
+}
+
+/// Guess MIME type from file extension.
+fn mime_from_ext(ext: &str) -> &str {
+    match ext.to_lowercase().as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "svg" => "image/svg+xml",
+        "bmp" => "image/bmp",
+        "tiff" | "tif" => "image/tiff",
+        _ => "application/octet-stream",
+    }
+}
+
+/// Write image bytes to the output directory, returning (file_path, mime).
+/// Returns None if the image is too large or the output_dir is None.
+fn write_image_file(
+    output_dir: Option<&Path>,
+    data: &[u8],
+    mime: &str,
+    seen: &mut HashSet<String>,
+) -> Option<(String, String)> {
+    let output_dir = output_dir?;
+    if data.len() > MAX_IMAGE_BYTES {
+        eprintln!("extractor: skipping image ({} bytes > {} max)", data.len(), MAX_IMAGE_BYTES);
+        return None;
+    }
+    let hash = short_hash(data);
+    if !seen.insert(hash.clone()) {
+        return None; // duplicate image
+    }
+    let ext = ext_from_mime(mime);
+    let filename = format!("{hash}{ext}");
+    let file_path = output_dir.join(&filename);
+    if let Err(e) = std::fs::write(&file_path, data) {
+        eprintln!("extractor: failed to write image {}: {e}", file_path.display());
+        return None;
+    }
+    Some((file_path.to_string_lossy().to_string(), mime.to_string()))
+}
+
 // ── EPUB extraction ───────────────────────────────────────────────────────────
 
 pub fn extract_epub(path: &str) -> Result<Vec<DocElement>, Box<dyn std::error::Error>> {
+    extract_epub_with_images(path, None)
+}
+
+pub fn extract_epub_with_images(
+    path: &str,
+    output_dir: Option<&Path>,
+) -> Result<Vec<DocElement>, Box<dyn std::error::Error>> {
     use epub::doc::EpubDoc;
 
     let mut doc = EpubDoc::new(path)?;
     let mut all_elements: Vec<DocElement> = Vec::new();
-    // Chapter context carries forward across spine items so that the first
-    // paragraphs after a heading-only spine item get the right chapter label.
     let mut carry_chapter: Option<String> = None;
+    let mut seen_images: HashSet<String> = HashSet::new();
+
+    if let Some(dir) = output_dir {
+        std::fs::create_dir_all(dir)?;
+    }
 
     loop {
+        // Capture the current spine item's path before processing
+        let spine_path = doc.get_current_path();
+
         if let Some((html_content, mime)) = doc.get_current_str() {
             let is_html = mime.contains("html") || mime.contains("xhtml") || mime.contains("xml");
             if is_html && !html_content.trim().is_empty() {
                 let mut extractor = HtmlExtractor::new(carry_chapter.clone());
                 extractor.process(&html_content);
                 carry_chapter = extractor.last_chapter.or(carry_chapter);
+
+                // Resolve image references from the HTML
+                for el in &mut extractor.elements {
+                    if let DocElement::Image { file, mime: img_mime, .. } = el {
+                        // The HtmlExtractor stores the src in file temporarily
+                        if let Some(src) = file.take() {
+                            if let Some(ref sp) = spine_path {
+                                let resolved = resolve_epub_image_path(sp, &src);
+                                // Try to get the resource by resolved path
+                                if let Some((data, resource_mime)) = get_epub_resource(&mut doc, &resolved) {
+                                    if let Some((fp, m)) = write_image_file(
+                                        output_dir, &data, &resource_mime, &mut seen_images,
+                                    ) {
+                                        *file = Some(fp);
+                                        *img_mime = Some(m);
+                                    }
+                                }
+                            }
+                        }
+                        // If file is still None, alt text is preserved as-is
+                    }
+                }
+
                 all_elements.extend(extractor.elements);
             }
         }
@@ -55,24 +168,68 @@ pub fn extract_epub(path: &str) -> Result<Vec<DocElement>, Box<dyn std::error::E
     Ok(all_elements)
 }
 
+/// Resolve a relative image src against the spine item's directory path.
+fn resolve_epub_image_path(spine_path: &PathBuf, src: &str) -> String {
+    let base_dir = spine_path.parent().unwrap_or(Path::new(""));
+    let resolved = base_dir.join(src);
+    // Normalise path (remove ../), then convert to string
+    let mut parts: Vec<&str> = Vec::new();
+    for component in resolved.components() {
+        match component {
+            std::path::Component::ParentDir => { parts.pop(); }
+            std::path::Component::Normal(p) => { parts.push(p.to_str().unwrap_or("")); }
+            _ => {}
+        }
+    }
+    parts.join("/")
+}
+
+/// Try to get a resource from the EPUB by path.
+/// Returns (bytes, mime_type) if found.
+fn get_epub_resource(doc: &mut epub::doc::EpubDoc<std::io::BufReader<std::fs::File>>, path: &str) -> Option<(Vec<u8>, String)> {
+    let data = doc.get_resource_by_path(path)?;
+
+    // Try to get MIME from the manifest, fall back to extension-based detection
+    let mime = doc.get_resource_mime_by_path(path)
+        .unwrap_or_else(|| {
+            let ext = Path::new(path)
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("");
+            mime_from_ext(ext).to_string()
+        });
+
+    Some((data, mime))
+}
+
 // ── PDF extraction ────────────────────────────────────────────────────────────
 
 pub fn extract_pdf(path: &str) -> Result<Vec<DocElement>, Box<dyn std::error::Error>> {
+    extract_pdf_with_images(path, None)
+}
+
+pub fn extract_pdf_with_images(
+    path: &str,
+    output_dir: Option<&Path>,
+) -> Result<Vec<DocElement>, Box<dyn std::error::Error>> {
+    if let Some(dir) = output_dir {
+        std::fs::create_dir_all(dir)?;
+    }
     // Try pdftohtml first — it gives us font info to distinguish code from prose.
     // Falls back to pdftotext (no code detection) if pdftohtml is unavailable.
-    if let Some(elements) = extract_pdf_via_html(path) {
+    if let Some(elements) = extract_pdf_via_html(path, output_dir) {
         if !elements.is_empty() {
             return Ok(elements);
         }
     }
-    extract_pdf_via_text(path)
+    extract_pdf_via_text(path, output_dir)
 }
 
 /// Primary PDF extraction: uses `pdftohtml -xml` to get XML with font metadata.
 /// Each page declares `<fontspec>` elements with font family info, and each
 /// `<text>` element references a font ID. We identify monospace fonts and group
 /// consecutive monospace text runs into Code blocks.
-fn extract_pdf_via_html(path: &str) -> Option<Vec<DocElement>> {
+fn extract_pdf_via_html(path: &str, output_dir: Option<&Path>) -> Option<Vec<DocElement>> {
     let output = std::process::Command::new("pdftohtml")
         .args([
             "-stdout",
@@ -93,8 +250,9 @@ fn extract_pdf_via_html(path: &str) -> Option<Vec<DocElement>> {
         return None;
     }
 
-    // Load lopdf for image counting
+    // Load lopdf for image extraction
     let pdf_doc = lopdf::Document::load(path).ok();
+    let mut seen_images: HashSet<String> = HashSet::new();
 
     let document = Html::parse_document(&xml);
     let mut elements = Vec::new();
@@ -121,14 +279,11 @@ fn extract_pdf_via_html(path: &str) -> Option<Vec<DocElement>> {
 
         let chapter = format!("Page {page_num}");
 
-        // Emit Image elements for this page (from lopdf)
+        // Extract images for this page (from lopdf)
         if let Some(ref doc) = pdf_doc {
             if let Some(&page_id) = doc.get_pages().get(&page_num) {
-                for _ in 0..count_page_images(doc, page_id) {
-                    elements.push(DocElement::Image {
-                        alt: format!("[image on page {page_num}]"),
-                    });
-                }
+                let page_images = extract_page_images(doc, page_id, page_num, output_dir, &mut seen_images);
+                elements.extend(page_images);
             }
         }
 
@@ -295,9 +450,10 @@ fn collect_pdf_text_formatted(el: ElementRef) -> String {
 }
 
 /// Fallback PDF extraction using pdftotext (no code detection).
-fn extract_pdf_via_text(path: &str) -> Result<Vec<DocElement>, Box<dyn std::error::Error>> {
+fn extract_pdf_via_text(path: &str, output_dir: Option<&Path>) -> Result<Vec<DocElement>, Box<dyn std::error::Error>> {
     let doc = lopdf::Document::load(path)?;
     let mut elements = Vec::new();
+    let mut seen_images: HashSet<String> = HashSet::new();
     let pdftotext_available = std::process::Command::new("pdftotext")
         .arg("-v")
         .stdout(std::process::Stdio::null())
@@ -306,11 +462,8 @@ fn extract_pdf_via_text(path: &str) -> Result<Vec<DocElement>, Box<dyn std::erro
         .is_ok();
 
     for (page_num, page_id) in doc.get_pages() {
-        for _ in 0..count_page_images(&doc, page_id) {
-            elements.push(DocElement::Image {
-                alt: format!("[image on page {page_num}]"),
-            });
-        }
+        let page_images = extract_page_images(&doc, page_id, page_num, output_dir, &mut seen_images);
+        elements.extend(page_images);
 
         let text = if pdftotext_available {
             extract_page_pdftotext(path, page_num)
@@ -466,24 +619,75 @@ fn extract_page_pdftotext(path: &str, page_num: u32) -> Option<String> {
     if text.is_empty() { None } else { Some(text) }
 }
 
-/// Returns the number of image XObjects declared in a page's /Resources.
-fn count_page_images(doc: &lopdf::Document, page_id: lopdf::ObjectId) -> usize {
-    let Ok(page_obj) = doc.get_object(page_id) else { return 0 };
-    let Ok(page_dict) = page_obj.as_dict() else { return 0 };
-    let Ok(resources_obj) = page_dict.get(b"Resources") else { return 0 };
-    let Some(resources) = resolve_dict(doc, resources_obj) else { return 0 };
-    let Ok(xobjects_obj) = resources.get(b"XObject") else { return 0 };
-    let Some(xobjects) = resolve_dict(doc, xobjects_obj) else { return 0 };
+/// Extracts image XObjects from a PDF page.
+/// For JPEG images (DCTDecode filter), writes the raw bytes to output_dir.
+/// For other formats, emits a placeholder element with alt text only.
+fn extract_page_images(
+    doc: &lopdf::Document,
+    page_id: lopdf::ObjectId,
+    page_num: u32,
+    output_dir: Option<&Path>,
+    seen: &mut HashSet<String>,
+) -> Vec<DocElement> {
+    let mut images = Vec::new();
 
-    xobjects
-        .iter()
-        .filter(|(_, obj)| {
-            resolve_dict(doc, obj)
-                .and_then(|d| d.get(b"Subtype").ok())
-                .map(|s| matches!(s, lopdf::Object::Name(n) if n == b"Image"))
-                .unwrap_or(false)
-        })
-        .count()
+    let Ok(page_obj) = doc.get_object(page_id) else { return images };
+    let Ok(page_dict) = page_obj.as_dict() else { return images };
+    let Ok(resources_obj) = page_dict.get(b"Resources") else { return images };
+    let Some(resources) = resolve_dict(doc, resources_obj) else { return images };
+    let Ok(xobjects_obj) = resources.get(b"XObject") else { return images };
+    let Some(xobjects) = resolve_dict(doc, xobjects_obj) else { return images };
+
+    for (_, obj) in xobjects.iter() {
+        // Check if this XObject is an Image
+        let is_image = resolve_dict(doc, obj)
+            .and_then(|d| d.get(b"Subtype").ok())
+            .map(|s| matches!(s, lopdf::Object::Name(n) if n == b"Image"))
+            .unwrap_or(false);
+        if !is_image {
+            continue;
+        }
+
+        // Try to get the stream for JPEG extraction
+        let stream = match obj {
+            lopdf::Object::Stream(s) => Some(s),
+            lopdf::Object::Reference(id) => {
+                doc.get_object(*id).ok().and_then(|o| match o {
+                    lopdf::Object::Stream(s) => Some(s),
+                    _ => None,
+                })
+            }
+            _ => None,
+        };
+
+        let alt = format!("[image on page {page_num}]");
+
+        if let Some(stream) = stream {
+            // Check the /Filter to see if it's a JPEG (DCTDecode)
+            let filter = stream.dict.get(b"Filter").ok();
+            let is_jpeg = filter.map(|f| match f {
+                lopdf::Object::Name(n) => n == b"DCTDecode",
+                lopdf::Object::Array(arr) => {
+                    arr.len() == 1 && matches!(&arr[0], lopdf::Object::Name(n) if n == b"DCTDecode")
+                }
+                _ => false,
+            }).unwrap_or(false);
+
+            if is_jpeg {
+                // DCTDecode: raw stream content is valid JPEG data
+                let jpeg_data = &stream.content;
+                if let Some((fp, mime)) = write_image_file(output_dir, jpeg_data, "image/jpeg", seen) {
+                    images.push(DocElement::Image { alt, file: Some(fp), mime: Some(mime) });
+                    continue;
+                }
+            }
+        }
+
+        // Non-JPEG or extraction failed: emit placeholder
+        images.push(DocElement::Image { alt, file: None, mime: None });
+    }
+
+    images
 }
 
 /// Resolves an Object (inline dict, stream, or indirect reference) to a &Dictionary.
@@ -549,11 +753,16 @@ impl HtmlExtractor {
                 }
             }
 
-            // Images — emit immediately
+            // Images — emit immediately, storing src for later resolution
             "img" => {
                 self.flush();
                 let alt = el.value().attr("alt").unwrap_or("").trim().to_string();
-                self.elements.push(DocElement::Image { alt });
+                let src = el.value().attr("src").map(|s| s.to_string());
+                self.elements.push(DocElement::Image {
+                    alt,
+                    file: src, // temporarily holds src; resolved by extract_epub_with_images
+                    mime: None,
+                });
             }
 
             // Code blocks — <pre> elements (often containing <code>)
@@ -621,7 +830,12 @@ impl HtmlExtractor {
                 for img in el.select(&img_sel) {
                     self.flush();
                     let alt = img.value().attr("alt").unwrap_or("").trim().to_string();
-                    self.elements.push(DocElement::Image { alt });
+                    let src = img.value().attr("src").map(|s| s.to_string());
+                    self.elements.push(DocElement::Image {
+                        alt,
+                        file: src,
+                        mime: None,
+                    });
                 }
             }
 
@@ -812,7 +1026,7 @@ mod tests {
             .collect();
         assert!(types.contains(&"image"), "expected an image element, got: {:?}", types);
         let img = els.iter().find(|e| matches!(e, DocElement::Image { .. })).unwrap();
-        let DocElement::Image { alt } = img else { panic!() };
+        let DocElement::Image { alt, .. } = img else { panic!() };
         assert_eq!(alt, "A diagram");
     }
 
@@ -820,7 +1034,7 @@ mod tests {
     fn image_without_alt_has_empty_string() {
         let els = extract_html("<html><body><img src=\"x.png\"/></body></html>");
         assert_eq!(els.len(), 1);
-        let DocElement::Image { alt } = &els[0] else { panic!() };
+        let DocElement::Image { alt, .. } = &els[0] else { panic!() };
         assert_eq!(alt, "");
     }
 

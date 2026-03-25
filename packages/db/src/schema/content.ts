@@ -1,4 +1,4 @@
-import { pgTable, pgEnum, text, boolean, integer, timestamp, uuid, unique, jsonb } from 'drizzle-orm/pg-core'
+import { pgTable, pgEnum, text, boolean, integer, timestamp, uuid, unique, jsonb, index } from 'drizzle-orm/pg-core'
 
 export const aiProviderEnum = pgEnum('ai_provider_enum', ['gemini', 'ollama'])
 
@@ -91,6 +91,20 @@ export const chunks = pgTable('chunks', {
   language: text('language').default('en'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 })
+
+export const chunkImages = pgTable('chunk_images', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  chunkId: uuid('chunk_id')
+    .references(() => chunks.id, { onDelete: 'cascade' })
+    .notNull(),
+  storagePath: text('storage_path').notNull(),
+  mimeType: text('mime_type').notNull(),
+  altText: text('alt_text').default('').notNull(),
+  position: integer('position').default(0).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  index('idx_chunk_images_chunk_id').on(t.chunkId),
+])
 
 export const cards = pgTable('cards', {
   id: uuid('id').primaryKey().defaultRandom(),

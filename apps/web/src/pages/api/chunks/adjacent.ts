@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro'
-import { eq, and } from 'drizzle-orm'
+import { eq, and, asc } from 'drizzle-orm'
 import { db } from '../../../lib/db.ts'
-import { chunks, documents } from '@scroll-reader/db'
+import { chunks, chunkImages, documents } from '@scroll-reader/db'
 import { createSupabaseServer } from '../../../lib/supabase.ts'
 
 export const GET: APIRoute = async ({ request, cookies, url }) => {
@@ -44,7 +44,21 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
 
   if (!chunk) return new Response(null, { status: 404 })
 
-  return new Response(JSON.stringify(chunk), {
+  // Include images for image chunks
+  let images: { storagePath: string; altText: string; position: number }[] = []
+  if (chunk.chunkType === 'image') {
+    images = await db
+      .select({
+        storagePath: chunkImages.storagePath,
+        altText: chunkImages.altText,
+        position: chunkImages.position,
+      })
+      .from(chunkImages)
+      .where(eq(chunkImages.chunkId, chunk.id))
+      .orderBy(asc(chunkImages.position))
+  }
+
+  return new Response(JSON.stringify({ ...chunk, images }), {
     headers: { 'Content-Type': 'application/json' },
   })
 }

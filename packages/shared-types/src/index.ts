@@ -8,7 +8,7 @@ export type AIProvider = 'gemini' | 'ollama'
 
 export type DocumentSource = 'desktop' | 'upload' | 'server'
 
-export type ChunkType = 'text' | 'image'
+export type ChunkType = 'text' | 'image' | 'code'
 
 export type Tier = 'free' | 'plus'
 

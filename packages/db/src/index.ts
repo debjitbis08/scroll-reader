@@ -15,6 +15,7 @@ export {
   profiles,
   documents,
   chunks,
+  chunkImages,
   cards,
   cardActionEnum,
   cardActions,
@@ -26,7 +27,7 @@ export {
 // Inferred row types — use these in apps instead of writing the types by hand
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm'
 import type { users, sessions } from './schema/auth.ts'
-import type { profiles, documents, chunks, cards, cardActions, feedEvents, jobs } from './schema/content.ts'
+import type { profiles, documents, chunks, chunkImages, cards, cardActions, feedEvents, jobs } from './schema/content.ts'
 
 // Self-hosted auth types
 export type User = InferSelectModel<typeof users>
@@ -37,6 +38,7 @@ export type Session = InferSelectModel<typeof sessions>
 export type Profile = InferSelectModel<typeof profiles>
 export type Document = InferSelectModel<typeof documents>
 export type Chunk = InferSelectModel<typeof chunks>
+export type ChunkImage = InferSelectModel<typeof chunkImages>
 export type Card = InferSelectModel<typeof cards>
 export type CardAction = InferSelectModel<typeof cardActions>
 export type FeedEvent = InferSelectModel<typeof feedEvents>
@@ -44,5 +46,6 @@ export type Job = InferSelectModel<typeof jobs>
 
 export type InsertDocument = InferInsertModel<typeof documents>
 export type InsertChunk = InferInsertModel<typeof chunks>
+export type InsertChunkImage = InferInsertModel<typeof chunkImages>
 export type InsertCard = InferInsertModel<typeof cards>
 export type InsertJob = InferInsertModel<typeof jobs>

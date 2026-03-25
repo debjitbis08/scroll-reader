@@ -1,10 +1,11 @@
 import { eq, and, sql, gte, inArray } from 'drizzle-orm'
-import { writeFile, unlink } from 'node:fs/promises'
-import { extname } from 'node:path'
+import { readFile, writeFile, unlink, rm, mkdir } from 'node:fs/promises'
+import { extname, basename } from 'node:path'
 import { db } from './db.ts'
-import { documents, chunks, cards, jobs, profiles } from '@scroll-reader/db'
+import { documents, chunks, chunkImages, cards, jobs, profiles } from '@scroll-reader/db'
 import type { Document, Chunk } from '@scroll-reader/db'
 import { extractDocument, filterByPageRange } from './extract.ts'
+import type { ImageElement } from './extract.ts'
 import { callSegmenter, callChunker } from './chunker.ts'
 import { createProvider } from './ai/index.ts'
 import { aiChunk } from './ai/chunk.ts'
@@ -12,7 +13,13 @@ import { generateCardsForChunk } from './cards/generate.ts'
 import type { CardType, CardStrategy, Tier } from '@scroll-reader/shared-types'
 import { TIER_LIMITS } from '@scroll-reader/shared-types'
 import { BATCH_SIZE } from 'astro:env/server'
-import { downloadDocument, deleteDocument } from './storage.ts'
+import { downloadDocument, deleteDocument, uploadImage } from './storage.ts'
+
+type PendingImage = {
+  file: string    // path on disk
+  mime: string
+  alt: string
+}
 
 type PendingChunk = {
   chunkType: 'text' | 'image' | 'code'
@@ -20,6 +27,7 @@ type PendingChunk = {
   chapter: string | null
   wordCount: number
   language: string
+  images?: PendingImage[]  // images to upload after chunk is inserted
 }
 
 // ── Helpers ─────────────────────────────────────────────────
@@ -50,7 +58,9 @@ async function cardsGeneratedToday(userId: string): Promise<number> {
 export async function processDocument(doc: Document, cardBudget: number): Promise<number> {
   const filePath = doc.filePath!
   const ext = extname(filePath).toLowerCase()
-  const tmpPath = `/tmp/scroll-${crypto.randomUUID()}${ext}`
+  const docUuid = crypto.randomUUID()
+  const tmpPath = `/tmp/scroll-${docUuid}${ext}`
+  const imageDir = `/tmp/scroll-${docUuid}-images`
   const strategy = doc.cardStrategy as CardStrategy | null
 
   // If strategy says no cards, finish immediately
@@ -88,7 +98,7 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
       const fileBuffer = await downloadDocument(filePath)
       await writeFile(tmpPath, fileBuffer)
 
-      let elements = await extractDocument(tmpPath)
+      let elements = await extractDocument(tmpPath, imageDir)
       if (doc.pageStart && doc.pageEnd) {
         elements = filterByPageRange(elements, ext, doc.pageStart, doc.pageEnd)
       }
@@ -130,12 +140,18 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
           if (textChunksSeen >= targetChunks) break
 
           if (el.type === 'image') {
+            const imgEl = el as ImageElement
+            const images: PendingImage[] = []
+            if (imgEl.file && imgEl.mime) {
+              images.push({ file: imgEl.file, mime: imgEl.mime, alt: imgEl.alt })
+            }
             pendingChunks.push({
               chunkType: 'image',
-              content: el.alt,
+              content: imgEl.alt || '',
               chapter: null,
               wordCount: 0,
               language: 'en',
+              images: images.length > 0 ? images : undefined,
             })
             elementsThisBatch++
             continue
@@ -177,7 +193,7 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
         }
 
         if (pendingChunks.length > 0) {
-          await db
+          const insertedChunks = await db
             .insert(chunks)
             .values(
               pendingChunks.map((c) => ({
@@ -192,6 +208,32 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
                 encrypted: false,
               })),
             )
+            .returning({ id: chunks.id })
+
+          // Upload images and create chunk_images rows
+          for (let ci = 0; ci < pendingChunks.length; ci++) {
+            const pending = pendingChunks[ci]
+            if (!pending.images || pending.images.length === 0) continue
+
+            const chunkId = insertedChunks[ci].id
+            for (let pos = 0; pos < pending.images.length; pos++) {
+              const img = pending.images[pos]
+              try {
+                const buffer = await readFile(img.file)
+                const filename = basename(img.file)
+                const storagePath = await uploadImage(doc.userId, doc.id, filename, buffer, img.mime)
+                await db.insert(chunkImages).values({
+                  chunkId,
+                  storagePath,
+                  mimeType: img.mime,
+                  altText: img.alt,
+                  position: pos,
+                })
+              } catch (err) {
+                console.warn(`[pipeline] image upload failed for ${img.file}:`, err)
+              }
+            }
+          }
         }
 
         const newProcessed = elementsProcessed + elementsThisBatch
@@ -212,6 +254,9 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
             ...(fullyChunkedNow ? { processingStatus: 'generating' as const } : {}),
           })
           .where(eq(documents.id, doc.id))
+
+        // Clean up temp image directory
+        await rm(imageDir, { recursive: true, force: true }).catch(() => {})
 
         // Delete storage file only when fully chunked
         if (fullyChunkedNow) {
@@ -325,6 +370,7 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
     await db.update(jobs).set({ status: 'failed', error: message, finishedAt: new Date() }).where(eq(jobs.id, jobId))
     await db.update(documents).set({ processingStatus: 'error' }).where(eq(documents.id, doc.id))
     await unlink(tmpPath).catch(() => {})
+    await rm(imageDir, { recursive: true, force: true }).catch(() => {})
     return 0
   }
 }

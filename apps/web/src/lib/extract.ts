@@ -5,7 +5,12 @@ import { spawn } from 'node:child_process'
 import { EXTRACTOR_BIN } from 'astro:env/server'
 
 export interface TextElement { type: 'text'; content: string; chapter?: string }
-export interface ImageElement { type: 'image'; alt: string }
+export interface ImageElement {
+  type: 'image'
+  alt: string
+  file?: string  // path to extracted image on disk (temp dir)
+  mime?: string  // e.g. "image/png", "image/jpeg"
+}
 export interface CodeElement { type: 'code'; content: string; language?: string; chapter?: string }
 export type DocElement = TextElement | ImageElement | CodeElement
 
@@ -15,13 +20,13 @@ function resolveExtractorBin(): string {
   return join(here, '../../../../packages/extractor/target/debug/extractor')
 }
 
-export async function extractDocument(filePath: string): Promise<DocElement[]> {
+export async function extractDocument(filePath: string, outputDir?: string): Promise<DocElement[]> {
   const ext = extname(filePath).toLowerCase()
   if (ext === '.txt') {
     const content = await readFile(filePath, 'utf-8')
     return [{ type: 'text', content }]
   }
-  if (ext === '.epub' || ext === '.pdf') return callExtractor(filePath)
+  if (ext === '.epub' || ext === '.pdf') return callExtractor(filePath, outputDir)
   throw new Error(`Unsupported file type: ${ext}`)
 }
 
@@ -90,7 +95,7 @@ function tagWithPages(
   })
 }
 
-async function callExtractor(filePath: string): Promise<DocElement[]> {
+async function callExtractor(filePath: string, outputDir?: string): Promise<DocElement[]> {
   const binPath = resolveExtractorBin()
 
   return new Promise((resolve, reject) => {
@@ -117,7 +122,9 @@ async function callExtractor(filePath: string): Promise<DocElement[]> {
       reject(new Error(`Failed to spawn extractor at "${binPath}": ${err.message}`))
     })
 
-    proc.stdin.write(JSON.stringify({ file_path: filePath }))
+    const input: Record<string, string> = { file_path: filePath }
+    if (outputDir) input.output_dir = outputDir
+    proc.stdin.write(JSON.stringify(input))
     proc.stdin.end()
   })
 }

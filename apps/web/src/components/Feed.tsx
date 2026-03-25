@@ -180,12 +180,18 @@ export default function Feed() {
                 </div>
 
                 {(() => {
+                  type ChunkImage = {
+                    storagePath: string
+                    altText: string
+                    position: number
+                  }
                   type ChunkData = {
                     content: string
                     chunkType: string
                     chunkIndex: number
                     chapter: string | null
                     language: string | null
+                    images?: ChunkImage[]
                   }
                   const [open, setOpen] = createSignal(false)
                   const [currentChunk, setCurrentChunk] = createSignal<ChunkData>({
@@ -236,18 +242,40 @@ export default function Feed() {
                           }>
                             {(() => {
                               const c = currentChunk()
-                              return c.chunkType === 'code' ? (
-                                <div class="relative">
-                                  {c.language && (
-                                    <span class="absolute right-2 top-2 text-xs text-ctp-subtext0/60 font-mono">
-                                      {c.language}
-                                    </span>
-                                  )}
-                                  <pre class="overflow-x-auto rounded-lg bg-ctp-mantle p-3 text-xs leading-relaxed max-h-48">
-                                    <code class="text-ctp-text font-mono whitespace-pre">{c.content}</code>
-                                  </pre>
-                                </div>
-                              ) : (
+                              if (c.chunkType === 'code') {
+                                return (
+                                  <div class="relative">
+                                    {c.language && (
+                                      <span class="absolute right-2 top-2 text-xs text-ctp-subtext0/60 font-mono">
+                                        {c.language}
+                                      </span>
+                                    )}
+                                    <pre class="overflow-x-auto rounded-lg bg-ctp-mantle p-3 text-xs leading-relaxed max-h-48">
+                                      <code class="text-ctp-text font-mono whitespace-pre">{c.content}</code>
+                                    </pre>
+                                  </div>
+                                )
+                              }
+                              if (c.chunkType === 'image' && c.images && c.images.length > 0) {
+                                return (
+                                  <div class="space-y-2 rounded-lg bg-ctp-surface0 px-3 py-2">
+                                    <For each={c.images}>
+                                      {(img) => (
+                                        <img
+                                          src={`/api/images/${img.storagePath}`}
+                                          alt={img.altText || c.content || 'Document image'}
+                                          class="max-w-full rounded-lg"
+                                          loading="lazy"
+                                        />
+                                      )}
+                                    </For>
+                                    <Show when={c.content}>
+                                      <p class="text-xs text-ctp-subtext0">{c.content}</p>
+                                    </Show>
+                                  </div>
+                                )
+                              }
+                              return (
                                 <p class="rounded-lg bg-ctp-surface0 px-3 py-2 text-xs leading-relaxed text-ctp-subtext1">
                                   {c.content}
                                 </p>
