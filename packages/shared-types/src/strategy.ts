@@ -14,14 +14,14 @@ const STRATEGY_MAP: Record<string, CardStrategy> = {
   'scripture:study':      { cardTypes: ['discover', 'passage', 'raw_commentary', 'glossary'],     chunkInterval: 1 },
 
   // Non-fiction (book, article, paper, note, other)
-  'book:casual':     { cardTypes: ['discover', 'flashcard'],                                      chunkInterval: 3 },
-  'book:reflective': { cardTypes: ['discover', 'flashcard'],                                      chunkInterval: 2 },
-  'book:study':      { cardTypes: ['discover', 'flashcard', 'glossary', 'contrast'],              chunkInterval: 1 },
+  'book:casual':     { cardTypes: ['discover', 'raw_commentary', 'flashcard'],                     chunkInterval: 3 },
+  'book:reflective': { cardTypes: ['discover', 'raw_commentary', 'flashcard'],                    chunkInterval: 2 },
+  'book:study':      { cardTypes: ['discover', 'raw_commentary', 'flashcard', 'glossary', 'contrast'], chunkInterval: 1 },
 
   // Textbook / technical / manual
-  'manual:casual':     { cardTypes: ['discover', 'flashcard'],                                    chunkInterval: 2 },
-  'manual:reflective': { cardTypes: ['discover', 'flashcard', 'quiz'],                            chunkInterval: 1 },
-  'manual:study':      { cardTypes: ['discover', 'flashcard', 'quiz', 'glossary', 'contrast'],    chunkInterval: 1 },
+  'manual:casual':     { cardTypes: ['discover', 'raw_commentary', 'flashcard'],                  chunkInterval: 2 },
+  'manual:reflective': { cardTypes: ['discover', 'raw_commentary', 'flashcard', 'quiz'],          chunkInterval: 1 },
+  'manual:study':      { cardTypes: ['discover', 'raw_commentary', 'flashcard', 'quiz', 'glossary', 'contrast'], chunkInterval: 1 },
 }
 
 // Document types that map to 'book' strategy (general non-fiction)
