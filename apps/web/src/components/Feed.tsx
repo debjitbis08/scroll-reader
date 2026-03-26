@@ -196,11 +196,19 @@ export default function Feed() {
     if (loading() || !hasMore()) return
     setLoading(true)
     try {
-      const res = await fetch(`/api/feed?limit=${BATCH_SIZE}&offset=${cards().length}`)
+      const existingIds = cards().map((c) => c.card.id)
+      // Send only the most recent 100 IDs to keep the URL reasonable
+      const excludeIds = existingIds.slice(-100)
+      const excludeParam = excludeIds.length > 0 ? `&exclude=${excludeIds.join(',')}` : ''
+      const res = await fetch(`/api/feed?limit=${BATCH_SIZE}${excludeParam}`)
       if (!res.ok) throw new Error(`Failed to load feed: ${res.status}`)
       const batch: FeedCard[] = await res.json()
       if (batch.length < BATCH_SIZE) setHasMore(false)
-      setCards((prev) => [...prev, ...batch])
+      // Deduplicate in case of any overlap
+      const existingSet = new Set(existingIds)
+      const newCards = batch.filter((c) => !existingSet.has(c.card.id))
+      if (newCards.length === 0 && batch.length > 0) setHasMore(false)
+      setCards((prev) => [...prev, ...newCards])
       setError(null)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load feed')

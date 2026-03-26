@@ -25,6 +25,13 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
   const limit = Math.min(parseInt(url.searchParams.get('limit') ?? '10'), 50)
   const now = new Date()
 
+  // Client sends IDs of cards already loaded so we can exclude them
+  const clientExcludeParam = url.searchParams.get('exclude') ?? ''
+  const clientExcludeIds = clientExcludeParam
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+
   // --- 1. User context ---
 
   // Cold start: how many distinct cards has the user seen?
@@ -58,8 +65,8 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
     .where(and(eq(cardActions.userId, user.id), eq(cardActions.action, 'dismiss')))
   const dismissedIds = dismissedRows.map((r) => r.cardId)
 
-  // Combined exclusion set
-  const excludeIds = [...new Set([...recentCardIds, ...dismissedIds])]
+  // Combined exclusion set (server-side recent + dismissed + client-side loaded)
+  const excludeIds = [...new Set([...recentCardIds, ...dismissedIds, ...clientExcludeIds])]
 
   // Type affinity: engagement ratio per card type
   const affinityRows = await db
