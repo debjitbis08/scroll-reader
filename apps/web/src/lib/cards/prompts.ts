@@ -72,6 +72,7 @@ INSTRUCTIONS:
    - Use natural prose for narrative content
    - Use backtick code spans for inline code references
 5. CRITICAL — every card MUST be completely self-contained. The reader will see the card WITHOUT the source passage. Never write "the passage", "the text", "the author", "according to the passage", or "this section". Instead, name the specific concept, book, author, or idea directly. Include enough context that the card makes sense on its own.
+6. NEVER reference figures, charts, tables, or diagrams (e.g., "as shown in Figure 1.2", "see Table 3.1") — the reader cannot see them. Instead, describe the key finding or pattern the figure illustrates in words.
 
 Respond with ONLY a JSON array. Each element has "type" and "content" (an object whose shape depends on the type):
 

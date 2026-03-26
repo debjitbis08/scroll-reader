@@ -2,7 +2,7 @@ import type { Document, Chunk } from '@scroll-reader/db'
 import type { CardType, CardStrategy } from '@scroll-reader/shared-types'
 
 const CARD_TYPE_DESCRIPTIONS: Record<CardType, string> = {
-  discover: 'Discover — one surprising or illuminating insight from the passage that a reader would find worth sitting with. 2-3 sentences.',
+  discover: 'Discover — one surprising or illuminating insight from the passage that a reader would find worth sitting with. 2-3 sentences. Optionally include a short, evocative title (3-6 words) if the insight lends itself to a headline.',
   raw_commentary: 'Notes — a brief, direct marginal note, the kind a thoughtful reader scribbles in the margin. Specific to the text. 2-3 sentences.',
   connect: 'Connect — links this passage to ideas from elsewhere in the book or other works.',
   flashcard: 'Flashcard — a question about the transferable concept or principle illustrated in the passage, NOT about specific datasets, examples, or named entities used to explain it. Ask about the underlying idea ("What is the purpose of principal components?") not the example ("What did they do with the NCI60 dataset?"). Answer should be 1-3 sentences.',
@@ -72,11 +72,12 @@ INSTRUCTIONS:
    - Use natural prose for narrative content
    - Use backtick code spans for inline code references
 5. CRITICAL — every card MUST be completely self-contained. The reader will see the card WITHOUT the source passage. Never write "the passage", "the text", "the author", "according to the passage", or "this section". Instead, name the specific concept, book, author, or idea directly. Include enough context that the card makes sense on its own.
+6. NEVER reference figures, charts, tables, or diagrams (e.g., "as shown in Figure 1.2", "see Table 3.1") — the reader cannot see them. Instead, describe the key finding or pattern the figure illustrates in words.
 
 Respond with ONLY a JSON array. Each element has "type" and "content" (an object whose shape depends on the type):
 
 For "discover", "raw_commentary", "connect":
-  {"type":"discover", "content": {"body":"The key insight is..."}}
+  {"type":"discover", "content": {"title":"Optional Short Title", "body":"The key insight is..."}}
 
 For "flashcard":
   {"type":"flashcard", "content": {"question":"What is...?", "answer":"It is..."}}

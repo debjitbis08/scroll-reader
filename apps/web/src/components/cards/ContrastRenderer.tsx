@@ -8,33 +8,37 @@ interface Props {
 
 export default function ContrastRenderer(props: Props) {
   return (
-    <div class="space-y-2">
-      {/* Header: A vs B */}
-      <div class="flex items-center gap-2 text-sm font-semibold">
-        <span class="text-ctp-teal">{props.content.itemA}</span>
-        <span class="text-ctp-subtext0 text-xs">vs</span>
-        <span class="text-ctp-teal">{props.content.itemB}</span>
-      </div>
+    <div class="space-y-4">
+      {/* Title */}
+      <h3 class="font-display text-xl font-normal text-ed-on-surface">
+        {props.content.itemA} <span class="font-body text-sm text-ed-on-surface-muted">vs.</span> {props.content.itemB}
+      </h3>
 
-      {/* Dimension rows */}
-      <div class="space-y-1.5">
-        <For each={props.content.dimensions}>
-          {(dim, i) => (
-            <div class="rounded-lg bg-ctp-surface0 px-3 py-2">
-              <p class="text-xs font-medium text-ctp-subtext0 mb-1">{dim}</p>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                <LatexText
-                  text={props.content.dimensionA[i()]}
-                  class="text-xs leading-relaxed text-ctp-text"
-                />
-                <LatexText
-                  text={props.content.dimensionB[i()]}
-                  class="text-xs leading-relaxed text-ctp-subtext1"
-                />
-              </div>
-            </div>
-          )}
-        </For>
+      {/* Items with accent borders */}
+      <div class="space-y-3">
+        <div class="border-l-2 border-ed-primary pl-4 py-1">
+          <p class="font-body text-xs font-semibold italic text-ed-on-surface mb-1">{props.content.itemA}</p>
+          <For each={props.content.dimensions}>
+            {(dim, i) => (
+              <LatexText
+                text={props.content.dimensionA[i()]}
+                class="font-body text-sm leading-relaxed text-ed-on-surface-dim"
+              />
+            )}
+          </For>
+        </div>
+
+        <div class="border-l-2 border-ed-on-surface-muted pl-4 py-1">
+          <p class="font-body text-xs font-semibold italic text-ed-on-surface mb-1">{props.content.itemB}</p>
+          <For each={props.content.dimensions}>
+            {(dim, i) => (
+              <LatexText
+                text={props.content.dimensionB[i()]}
+                class="font-body text-sm leading-relaxed text-ed-on-surface-dim"
+              />
+            )}
+          </For>
+        </div>
       </div>
     </div>
   )

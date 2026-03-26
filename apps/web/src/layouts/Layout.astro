@@ -15,6 +15,12 @@ const { title = 'Scroll Reader' } = Astro.props
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,600;1,6..72,300;1,6..72,400&family=Inter:wght@300;400;500;600&display=swap"
+      rel="stylesheet"
+    />
     <!--
       Prevent flash of wrong theme: runs synchronously before first paint.
       Reads `ctp-theme` from localStorage and adds the flavor class to <html>.
@@ -24,11 +30,12 @@ const { title = 'Scroll Reader' } = Astro.props
       ;(function () {
         var t = localStorage.getItem('ctp-theme') || 'auto'
         if (t === 'mocha' || t === 'latte') document.documentElement.classList.add(t)
-        document.documentElement.dataset.theme = t
+        document.documentElement.dataset.theme =
+          t === 'latte' ? 'light' : t === 'mocha' ? 'dark' : 'auto'
       })()
     </script>
   </head>
-  <body class="min-h-screen bg-ctp-base text-ctp-text antialiased">
+  <body class="min-h-screen bg-ed-surface text-ed-on-surface antialiased">
     <Header />
     <slot />
   </body>
@@ -48,6 +55,8 @@ const { title = 'Scroll Reader' } = Astro.props
     html.classList.remove('latte', 'mocha')
     if (theme !== 'auto') html.classList.add(theme)
     localStorage.setItem('ctp-theme', theme)
+    html.dataset.theme =
+      theme === 'latte' ? 'light' : theme === 'mocha' ? 'dark' : 'auto'
     updateToggles(theme)
   }
 

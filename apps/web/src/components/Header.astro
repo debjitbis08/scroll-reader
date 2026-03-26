@@ -4,19 +4,19 @@ import { Icon } from 'astro-icon/components'
 const user = Astro.locals.user
 ---
 
-<header class="sticky top-0 z-50 border-b border-ctp-surface0/50 bg-ctp-base/80 backdrop-blur-lg">
+<header class="sticky top-0 z-50 bg-ed-surface/80 backdrop-blur-lg">
   <div class="flex items-center justify-between px-4 py-3">
     <a href="/" class="flex items-center gap-2">
-      <Icon name="fa6-solid:scroll" class="size-5 text-ctp-mauve" />
-      <span class="text-lg font-semibold tracking-tight">Scroll Reader</span>
+      <Icon name="fa6-solid:scroll" class="size-5 text-ed-primary" />
+      <span class="font-display text-lg tracking-tight text-ed-on-surface">Scroll Reader</span>
     </a>
     <div class="flex items-center gap-2">
       {user && (
         <>
-          <a href="/library" class="text-sm text-ctp-subtext0 hover:text-ctp-text">Library</a>
+          <a href="/library" class="font-body text-sm text-ed-on-surface-muted hover:text-ed-on-surface transition-colors">Library</a>
           <a
             href="/upload"
-            class="flex items-center gap-1.5 rounded-lg bg-ctp-mauve px-3 py-1.5 text-sm font-medium text-ctp-base transition-colors hover:bg-ctp-mauve/80"
+            class="flex items-center gap-1.5 rounded bg-ed-primary px-3 py-1.5 font-body text-sm font-medium text-ed-on-primary transition-colors hover:bg-ed-primary/80"
           >
             <Icon name="mdi:plus" class="size-4" />
             Upload
@@ -24,7 +24,7 @@ const user = Astro.locals.user
           <form method="POST" action="/api/auth/logout">
             <button
               type="submit"
-              class="rounded-md p-2 text-ctp-subtext0 transition-colors hover:bg-ctp-surface0 hover:text-ctp-text"
+              class="rounded p-2 text-ed-on-surface-muted transition-colors hover:text-ed-on-surface"
               title="Log out"
             >
               <Icon name="mdi:logout" class="size-5" />
@@ -34,7 +34,7 @@ const user = Astro.locals.user
       )}
       <button
         data-theme-toggle
-        class="rounded-md p-2 text-ctp-subtext0 transition-colors hover:bg-ctp-surface0 hover:text-ctp-text"
+        class="rounded p-2 text-ed-on-surface-muted transition-colors hover:text-ed-on-surface"
       >
         <Icon name="fa6-solid:sun" class="size-5 theme-icon hidden" data-theme-icon="latte" />
         <Icon name="fa6-solid:moon" class="size-5 theme-icon hidden" data-theme-icon="mocha" />

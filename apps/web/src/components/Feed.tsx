@@ -63,10 +63,12 @@ function bufferImpression(cardId: string, durationMs: number, wasSrDue: boolean)
 function flushImpressions() {
   if (impressionState.buffer.length === 0) return
   const batch = impressionState.buffer.splice(0)
-  navigator.sendBeacon(
-    '/api/impressions/batch',
-    JSON.stringify({ impressions: batch }),
-  )
+  fetch('/api/feed-sync', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ impressions: batch }),
+    keepalive: true,
+  }).catch(() => {})
 }
 
 function flushCurrentAndBuffer() {
@@ -111,33 +113,13 @@ function throttle<T extends (...args: unknown[]) => void>(fn: T, ms: number): T 
 // --- Card type constants ---
 
 const CARD_TYPE_LABEL: Record<string, string> = {
-  discover: 'Discover',
+  discover: 'Discovery',
   raw_commentary: 'Notes',
-  flashcard: 'Flashcard',
+  flashcard: 'Active Recall',
   quiz: 'Quiz',
   glossary: 'Glossary',
   contrast: 'Contrast',
   passage: 'Passage',
-}
-
-const CARD_TYPE_COLOR: Record<string, string> = {
-  discover: 'text-ctp-blue',
-  raw_commentary: 'text-ctp-green',
-  flashcard: 'text-ctp-peach',
-  quiz: 'text-ctp-mauve',
-  glossary: 'text-ctp-yellow',
-  contrast: 'text-ctp-teal',
-  passage: 'text-ctp-flamingo',
-}
-
-const CARD_TYPE_BG: Record<string, string> = {
-  discover: 'border-ctp-blue/30',
-  raw_commentary: 'border-ctp-green/30',
-  flashcard: 'border-ctp-peach/30',
-  quiz: 'border-ctp-mauve/30',
-  glossary: 'border-ctp-yellow/30',
-  contrast: 'border-ctp-teal/30',
-  passage: 'border-ctp-flamingo/30',
 }
 
 const BATCH_SIZE = 10
@@ -191,10 +173,10 @@ function ActionButton(props: {
       onClick={toggle}
       disabled={loading()}
       title={props.title}
-      class={`rounded-md p-1.5 transition-colors ${
+      class={`rounded p-1.5 transition-colors ${
         active()
           ? props.activeClass
-          : 'text-ctp-subtext0 hover:text-ctp-text hover:bg-ctp-surface1'
+          : 'text-ed-on-surface-muted hover:text-ed-on-surface-dim'
       }`}
     >
       {active() ? props.activeIcon : props.icon}
@@ -236,7 +218,6 @@ export default function Feed() {
 
     const cardId = (owner as HTMLElement).dataset.cardId!
     if (cardId !== impressionState.currentCardId) {
-      // Transfer ownership — flush previous card's impression
       if (impressionState.currentCardId && impressionState.startTime) {
         const duration = Date.now() - impressionState.startTime
         bufferImpression(impressionState.currentCardId, duration, impressionState.currentSrDue)
@@ -259,7 +240,6 @@ export default function Feed() {
 
     if (sentinelRef) observer.observe(sentinelRef)
 
-    // Impression tracking
     window.addEventListener('scroll', handleScroll, { passive: true })
     const flushInterval = setInterval(flushImpressions, FLUSH_INTERVAL_MS)
     document.addEventListener('visibilitychange', onVisibilityChange)
@@ -280,9 +260,9 @@ export default function Feed() {
   }
 
   return (
-    <div class="space-y-6">
+    <div class="flex flex-col gap-10">
       <Show when={error()}>
-        <div class="rounded-xl bg-ctp-red/10 px-6 py-4 text-sm text-ctp-red">
+        <div class="rounded bg-ctp-red/10 px-6 py-4 font-body text-sm text-ctp-red">
           {error()}
         </div>
       </Show>
@@ -296,25 +276,31 @@ export default function Feed() {
               <div
                 data-card-id={item.card.id}
                 data-sr-due={item.isSrDue ? 'true' : 'false'}
-                class={`rounded-xl border bg-ctp-surface0/50 p-5 space-y-3 ${CARD_TYPE_BG[item.card.cardType] ?? 'border-ctp-surface1'}`}
               >
-                <div class="flex items-center justify-between gap-2">
-                  <span class={`text-xs font-semibold uppercase tracking-wide ${CARD_TYPE_COLOR[item.card.cardType] ?? 'text-ctp-subtext0'}`}>
+                {/* Card type label — outside the box */}
+                <div class="mb-2">
+                  <span class="font-body text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-ed-primary">
                     {CARD_TYPE_LABEL[item.card.cardType] ?? item.card.cardType}
                   </span>
-                  <a
-                    href={`/doc/${item.document.id}`}
-                    class="truncate text-xs text-ctp-subtext0 hover:text-ctp-mauve"
-                  >
-                    {item.document.title}
-                    {item.chunk.chapter && ` · ${item.chunk.chapter}`}
-                  </a>
                 </div>
 
-                <div>
-                  <Switch fallback={
-                    <LatexText text={(item.card.content as BodyContent).body ?? ''} class="text-sm leading-relaxed text-ctp-text" />
-                  }>
+                {/* Card box */}
+                <div class={`rounded p-6 ${item.card.cardType === 'flashcard' ? 'bg-ed-surface-dim' : 'bg-ed-surface-high'}`}>
+                  {/* Card body */}
+                  <div>
+                    <Switch fallback={
+                      <LatexText text={(item.card.content as BodyContent).body ?? ''} class="font-display text-[0.95rem] leading-relaxed text-ed-on-surface" />
+                    }>
+                    <Match when={item.card.cardType === 'discover'}>
+                      <div class="space-y-3">
+                        <Show when={(item.card.content as BodyContent).title}>
+                          <h3 class="font-display text-xl leading-snug text-ed-on-surface">
+                            {(item.card.content as BodyContent).title}
+                          </h3>
+                        </Show>
+                        <LatexText text={(item.card.content as BodyContent).body ?? ''} class="font-body text-sm leading-relaxed text-ed-on-surface-dim" />
+                      </div>
+                    </Match>
                     <Match when={item.card.cardType === 'flashcard'}>
                       <FlashcardRenderer content={item.card.content as FlashcardContent} />
                     </Match>
@@ -331,8 +317,23 @@ export default function Feed() {
                       <PassageRenderer content={item.card.content as PassageContent} />
                     </Match>
                   </Switch>
+                  </div>
+
+                {/* Source */}
+                <div class="mt-4 flex items-center gap-1.5 text-ed-on-surface-muted">
+                  <svg class="size-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                  </svg>
+                  <a
+                    href={`/doc/${item.document.id}`}
+                    class="truncate font-body text-[0.65rem] tracking-wide hover:text-ed-primary transition-colors"
+                  >
+                    {item.document.title}
+                    {item.chunk.chapter && ` · ${item.chunk.chapter}`}
+                  </a>
                 </div>
 
+                {/* Source chunk toggle */}
                 {(() => {
                   type ChunkImage = {
                     storagePath: string
@@ -380,18 +381,18 @@ export default function Feed() {
                   }
 
                   return (
-                    <div>
+                    <div class="mt-2">
                       <button
                         onClick={() => setOpen(!open())}
-                        class="text-xs text-ctp-subtext0 hover:text-ctp-text transition-colors"
+                        class="font-body text-[0.65rem] text-ed-on-surface-muted hover:text-ed-on-surface-dim transition-colors"
                       >
-                        source {open() ? '↑' : '↓'}
+                        source {open() ? '\u2191' : '\u2193'}
                       </button>
                       <Show when={open()}>
                         <div class="mt-2 space-y-2">
                           <Show when={!fetching()} fallback={
-                            <div class="flex justify-center rounded-lg bg-ctp-surface0 px-3 py-6">
-                              <div class="size-5 animate-spin rounded-full border-2 border-ctp-surface2 border-t-ctp-mauve" />
+                            <div class="flex justify-center rounded bg-ed-surface-container px-3 py-6">
+                              <div class="size-5 animate-spin rounded-full border-2 border-ed-outline border-t-ed-primary" />
                             </div>
                           }>
                             {(() => {
@@ -400,37 +401,37 @@ export default function Feed() {
                                 return (
                                   <div class="relative">
                                     {c.language && (
-                                      <span class="absolute right-2 top-2 text-xs text-ctp-subtext0/60 font-mono">
+                                      <span class="absolute right-2 top-2 font-body text-[0.65rem] text-ed-on-surface-muted">
                                         {c.language}
                                       </span>
                                     )}
-                                    <pre class="overflow-x-auto rounded-lg bg-ctp-mantle p-3 text-xs leading-relaxed max-h-48">
-                                      <code class="text-ctp-text font-mono whitespace-pre">{c.content}</code>
+                                    <pre class="overflow-x-auto rounded bg-ed-surface px-3 py-2 font-body text-xs leading-relaxed max-h-48">
+                                      <code class="text-ed-on-surface whitespace-pre">{c.content}</code>
                                     </pre>
                                   </div>
                                 )
                               }
                               if (c.chunkType === 'image' && c.images && c.images.length > 0) {
                                 return (
-                                  <div class="space-y-2 rounded-lg bg-ctp-surface0 px-3 py-2">
+                                  <div class="space-y-2 rounded bg-ed-surface-container px-3 py-2">
                                     <For each={c.images}>
                                       {(img) => (
                                         <img
                                           src={`/api/images/${img.storagePath}`}
                                           alt={img.altText || c.content || 'Document image'}
-                                          class="max-w-full rounded-lg"
+                                          class="max-w-full rounded"
                                           loading="lazy"
                                         />
                                       )}
                                     </For>
                                     <Show when={c.content}>
-                                      <p class="text-xs text-ctp-subtext0">{c.content}</p>
+                                      <p class="font-body text-xs text-ed-on-surface-dim">{c.content}</p>
                                     </Show>
                                   </div>
                                 )
                               }
                               return (
-                                <p class="rounded-lg bg-ctp-surface0 px-3 py-2 text-xs leading-relaxed text-ctp-subtext1">
+                                <p class="rounded bg-ed-surface-container px-3 py-2 font-body text-xs leading-relaxed text-ed-on-surface-dim">
                                   {c.content}
                                 </p>
                               )
@@ -440,7 +441,7 @@ export default function Feed() {
                             <button
                               onClick={() => navigate(-1)}
                               disabled={fetching() || atStart()}
-                              class="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-ctp-subtext0 transition-colors hover:text-ctp-text hover:bg-ctp-surface1 disabled:opacity-30 disabled:pointer-events-none"
+                              class="flex items-center gap-1 rounded px-2 py-1 font-body text-[0.65rem] text-ed-on-surface-muted transition-colors hover:text-ed-on-surface-dim disabled:opacity-30 disabled:pointer-events-none"
                             >
                               <FiChevronLeft class="size-3.5" /> prev
                             </button>
@@ -456,7 +457,7 @@ export default function Feed() {
                                   })
                                   setAtStart(item.chunk.chunkIndex === 0)
                                 }}
-                                class="text-xs text-ctp-subtext0 hover:text-ctp-text transition-colors"
+                                class="font-body text-[0.65rem] text-ed-on-surface-muted hover:text-ed-on-surface-dim transition-colors"
                               >
                                 back to source
                               </button>
@@ -464,7 +465,7 @@ export default function Feed() {
                             <button
                               onClick={() => navigate(1)}
                               disabled={fetching()}
-                              class="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-ctp-subtext0 transition-colors hover:text-ctp-text hover:bg-ctp-surface1 disabled:opacity-30 disabled:pointer-events-none"
+                              class="flex items-center gap-1 rounded px-2 py-1 font-body text-[0.65rem] text-ed-on-surface-muted transition-colors hover:text-ed-on-surface-dim disabled:opacity-30 disabled:pointer-events-none"
                             >
                               next <FiChevronRight class="size-3.5" />
                             </button>
@@ -475,13 +476,14 @@ export default function Feed() {
                   )
                 })()}
 
-                <div class="flex items-center gap-1 pt-1">
+                {/* Actions */}
+                <div class="flex items-center gap-1 mt-3 pt-3 border-t border-ed-outline-dim">
                   <ActionButton
                     cardId={item.card.id}
                     action="like"
                     active={item.actions.includes('like')}
-                    icon={<FaRegularHeart class="size-4" />}
-                    activeIcon={<FaSolidHeart class="size-4" />}
+                    icon={<FaRegularHeart class="size-3.5" />}
+                    activeIcon={<FaSolidHeart class="size-3.5" />}
                     activeClass="text-ctp-red"
                     title="Like"
                   />
@@ -489,21 +491,22 @@ export default function Feed() {
                     cardId={item.card.id}
                     action="bookmark"
                     active={item.actions.includes('bookmark')}
-                    icon={<FaRegularBookmark class="size-4" />}
-                    activeIcon={<FaSolidBookmark class="size-4" />}
-                    activeClass="text-ctp-yellow"
+                    icon={<FaRegularBookmark class="size-3.5" />}
+                    activeIcon={<FaSolidBookmark class="size-3.5" />}
+                    activeClass="text-ed-primary"
                     title="Bookmark"
                   />
                   <ActionButton
                     cardId={item.card.id}
                     action="dismiss"
                     active={item.actions.includes('dismiss')}
-                    icon={<FiEyeOff class="size-4" />}
-                    activeIcon={<FiEyeOff class="size-4" />}
-                    activeClass="text-ctp-surface2"
+                    icon={<FiEyeOff class="size-3.5" />}
+                    activeIcon={<FiEyeOff class="size-3.5" />}
+                    activeClass="text-ed-on-surface-muted"
                     title="Dismiss"
                     onToggle={(active) => { if (active) setDismissed(true) }}
                   />
+                </div>
                 </div>
               </div>
             </Show>
@@ -512,31 +515,22 @@ export default function Feed() {
       </For>
 
       <Show when={cards().length === 0 && !loading() && !error()}>
-        <div class="flex flex-col items-center gap-3 py-20 text-center">
-          <p class="text-ctp-subtext0">No cards in your feed yet.</p>
+        <div class="flex flex-col items-center gap-4 py-20 text-center">
+          <p class="font-display text-lg text-ed-on-surface-dim">No cards in your feed yet.</p>
           <a
             href="/upload"
-            class="rounded-lg bg-ctp-mauve px-4 py-2 text-sm font-medium text-ctp-base transition-colors hover:bg-ctp-mauve/80"
+            class="rounded bg-ed-primary px-5 py-2.5 font-body text-sm font-medium text-ed-on-primary transition-colors hover:bg-ed-primary/80"
           >
             Upload a document
           </a>
         </div>
       </Show>
 
-      {/* Sentinel for infinite scroll */}
       <div ref={sentinelRef} class="h-1" />
 
       <Show when={loading()}>
         <div class="flex justify-center py-6">
-          <svg
-            class="size-6 animate-spin text-ctp-mauve"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-          </svg>
+          <div class="size-5 animate-spin rounded-full border-2 border-ed-outline border-t-ed-primary" />
         </div>
       </Show>
     </div>

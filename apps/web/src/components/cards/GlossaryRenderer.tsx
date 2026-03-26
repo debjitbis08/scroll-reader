@@ -8,21 +8,28 @@ interface Props {
 
 export default function GlossaryRenderer(props: Props) {
   return (
-    <div class="space-y-2">
-      <LatexText text={props.content.term} class="text-base font-bold text-ctp-text" />
-      <LatexText text={props.content.definition} class="text-sm leading-relaxed text-ctp-text" />
+    <div class="space-y-3">
+      {/* Term — large serif */}
+      <h3 class="font-display text-2xl font-normal text-ed-on-surface">
+        {props.content.term}
+      </h3>
 
+      {/* Definition */}
+      <LatexText text={props.content.definition} class="font-body text-sm leading-relaxed text-ed-on-surface-dim" />
+
+      {/* Etymology */}
       <Show when={props.content.etymology}>
-        <p class="text-xs italic text-ctp-subtext0">
+        <p class="font-body text-xs italic text-ed-on-surface-muted">
           Origin: {props.content.etymology}
         </p>
       </Show>
 
+      {/* Related terms as chips */}
       <Show when={props.content.related && props.content.related.length > 0}>
         <div class="flex flex-wrap gap-1.5 pt-1">
           <For each={props.content.related}>
             {(term) => (
-              <span class="rounded-full bg-ctp-surface1 px-2 py-0.5 text-xs text-ctp-subtext1">
+              <span class="rounded bg-ed-surface-highest px-2.5 py-1 font-body text-[0.65rem] uppercase tracking-wider text-ed-on-surface-muted">
                 {term}
               </span>
             )}

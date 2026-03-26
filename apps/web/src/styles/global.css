@@ -1,2 +1,95 @@
 @import "tailwindcss";
 @import "@catppuccin/tailwindcss/mocha.css";
+
+/* Editorial Design System — Fonts (DESIGN.md) */
+@theme {
+  --font-display: 'Newsreader', Georgia, serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+
+  /* Theme-aware colors via CSS variables */
+  --color-ed-primary: var(--ed-primary);
+  --color-ed-primary-container: var(--ed-primary-container);
+  --color-ed-on-primary: var(--ed-on-primary);
+  --color-ed-surface: var(--ed-surface);
+  --color-ed-surface-dim: var(--ed-surface-dim);
+  --color-ed-surface-container: var(--ed-surface-container);
+  --color-ed-surface-high: var(--ed-surface-high);
+  --color-ed-surface-highest: var(--ed-surface-highest);
+  --color-ed-on-surface: var(--ed-on-surface);
+  --color-ed-on-surface-dim: var(--ed-on-surface-dim);
+  --color-ed-on-surface-muted: var(--ed-on-surface-muted);
+  --color-ed-outline: var(--ed-outline);
+  --color-ed-outline-dim: var(--ed-outline-dim);
+}
+
+/* ─── Editorial token values ─── */
+
+/* Light mode (Scholarly Paper) — default */
+:root {
+  --ed-primary: #4d6328;
+  --ed-primary-container: #657c3e;
+  --ed-on-primary: #ffffff;
+  --ed-surface: #fbfbe2;
+  --ed-surface-dim: #f5f5dc;
+  --ed-surface-container: #ededce;
+  --ed-surface-high: #e4e4cc;
+  --ed-surface-highest: #d8d8c0;
+  --ed-on-surface: #1b1d0e;
+  --ed-on-surface-dim: #4a4a3a;
+  --ed-on-surface-muted: #8a8870;
+  --ed-outline: #c5c3b0;
+  --ed-outline-dim: #c5c3b033;
+}
+
+/* Dark mode (Digital Curator) — OS preference */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ed-primary: #c8c8b0;
+    --ed-primary-container: #474836;
+    --ed-on-primary: #404130;
+    --ed-surface: #0e0e0e;
+    --ed-surface-dim: #141412;
+    --ed-surface-container: #1c1c1a;
+    --ed-surface-high: #252523;
+    --ed-surface-highest: #333330;
+    --ed-on-surface: #e7e5e5;
+    --ed-on-surface-dim: #a8a6a0;
+    --ed-on-surface-muted: #6b6860;
+    --ed-outline: #49473f;
+    --ed-outline-dim: #49473f33;
+  }
+}
+
+/* Forced light via theme toggle */
+html[data-theme="light"] {
+  --ed-primary: #4d6328;
+  --ed-primary-container: #657c3e;
+  --ed-on-primary: #ffffff;
+  --ed-surface: #fbfbe2;
+  --ed-surface-dim: #f5f5dc;
+  --ed-surface-container: #ededce;
+  --ed-surface-high: #e4e4cc;
+  --ed-surface-highest: #d8d8c0;
+  --ed-on-surface: #1b1d0e;
+  --ed-on-surface-dim: #4a4a3a;
+  --ed-on-surface-muted: #8a8870;
+  --ed-outline: #c5c3b0;
+  --ed-outline-dim: #c5c3b033;
+}
+
+/* Forced dark via theme toggle */
+html[data-theme="dark"] {
+  --ed-primary: #c8c8b0;
+  --ed-primary-container: #474836;
+  --ed-on-primary: #404130;
+  --ed-surface: #0e0e0e;
+  --ed-surface-dim: #141412;
+  --ed-surface-container: #1c1c1a;
+  --ed-surface-high: #252523;
+  --ed-surface-highest: #333330;
+  --ed-on-surface: #e7e5e5;
+  --ed-on-surface-dim: #a8a6a0;
+  --ed-on-surface-muted: #6b6860;
+  --ed-outline: #49473f;
+  --ed-outline-dim: #49473f33;
+}

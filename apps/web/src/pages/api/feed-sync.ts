@@ -1,9 +1,9 @@
 import type { APIRoute } from 'astro'
 import { eq, and, sql } from 'drizzle-orm'
-import { db } from '../../../lib/db.ts'
+import { db } from '../../lib/db.ts'
 import { feedEvents, cardScores, cards } from '@scroll-reader/db'
-import { createSupabaseServer } from '../../../lib/supabase.ts'
-import { SR_ELIGIBLE_TYPES, sm2, type SM2Grade } from '../../../lib/sr.ts'
+import { createSupabaseServer } from '../../lib/supabase.ts'
+import { SR_ELIGIBLE_TYPES, sm2, type SM2Grade } from '../../lib/sr.ts'
 
 interface ImpressionPayload {
   cardId: string

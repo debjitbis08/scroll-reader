@@ -1,0 +1,739 @@
+---
+interface Props {
+  title?: string
+}
+
+const { title = 'Scroll Reader — Read Deeply. Scroll Freely.' } = Astro.props
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Mono:wght@300;400&family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,600;1,6..72,300;1,6..72,400&family=Inter:wght@300;400;500;600&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <slot />
+  </body>
+</html>
+
+<style is:global>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --ink: #0d0b09;
+    --ink-soft: #1a1714;
+    --cream: #f4ead8;
+    --cream-dim: #d9c9a8;
+    --gold: #c09a58;
+    --gold-dim: #8a6c38;
+    --sage: #7a9e8a;
+    --muted: #5a5044;
+    --faint: #2e2820;
+    --card-bg: #161310;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--ink);
+    color: var(--cream);
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    overflow-x: hidden;
+    line-height: 1.6;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.6;
+  }
+
+  /* ─── NAV ─── */
+  nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    padding: 1.5rem 3rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: linear-gradient(to bottom, rgba(13,11,9,0.95), transparent);
+  }
+
+  .logo {
+    font-size: 1.1rem;
+    font-weight: 300;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--cream);
+    text-decoration: none;
+  }
+
+  .logo span { color: var(--gold); }
+
+  nav ul {
+    list-style: none;
+    display: flex;
+    gap: 2.5rem;
+  }
+
+  nav a {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--cream-dim);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+
+  nav a:hover { color: var(--gold); }
+
+  /* ─── HERO ─── */
+  .hero {
+    min-height: 100vh;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: center;
+    padding: 8rem 3rem 4rem;
+    gap: 4rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  .hero-text { animation: fadeUp 1s ease both; }
+
+  .hero-eyebrow {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .hero-eyebrow::before {
+    content: '';
+    display: block;
+    width: 2rem;
+    height: 1px;
+    background: var(--gold);
+  }
+
+  h1 {
+    font-size: clamp(3rem, 6vw, 5.5rem);
+    font-weight: 300;
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+    margin-bottom: 1.5rem;
+  }
+
+  h1 em {
+    font-style: italic;
+    color: var(--gold);
+  }
+
+  .hero-sub {
+    font-size: 1.25rem;
+    font-weight: 300;
+    color: var(--cream-dim);
+    max-width: 42ch;
+    line-height: 1.7;
+    margin-bottom: 3rem;
+  }
+
+  .cta-row {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+  }
+
+  .btn-primary {
+    background: var(--gold);
+    color: var(--ink);
+    border: none;
+    padding: 0.85rem 2.2rem;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.2s, transform 0.15s;
+  }
+
+  .btn-primary:hover {
+    background: var(--cream);
+    transform: translateY(-1px);
+  }
+
+  .btn-ghost {
+    color: var(--cream-dim);
+    border: 1px solid var(--faint);
+    padding: 0.85rem 2.2rem;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    cursor: pointer;
+    text-decoration: none;
+    transition: border-color 0.2s, color 0.2s;
+  }
+
+  .btn-ghost:hover {
+    border-color: var(--gold-dim);
+    color: var(--gold);
+  }
+
+  /* ─── PHONE MOCKUP ─── */
+  .hero-visual {
+    display: flex;
+    justify-content: center;
+    animation: fadeUp 1s 0.2s ease both;
+  }
+
+  .phone-frame {
+    width: 280px;
+    height: 560px;
+    background: var(--card-bg);
+    border-radius: 36px;
+    border: 1.5px solid #2a2520;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 40px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.03);
+  }
+
+  .phone-notch {
+    width: 90px;
+    height: 22px;
+    background: var(--ink);
+    border-radius: 0 0 14px 14px;
+    margin: 0 auto;
+    position: relative;
+    z-index: 2;
+  }
+
+  .phone-feed {
+    padding: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    animation: scrollFeed 12s linear infinite;
+    margin-top: -22px;
+    padding-top: 30px;
+  }
+
+  @keyframes scrollFeed {
+    0%   { transform: translateY(0); }
+    45%  { transform: translateY(-38%); }
+    55%  { transform: translateY(-38%); }
+    95%  { transform: translateY(0); }
+    100% { transform: translateY(0); }
+  }
+
+  .feed-card {
+    background: #1d1915;
+    border: 1px solid #2a2520;
+    border-radius: 12px;
+    padding: 1rem;
+    flex-shrink: 0;
+  }
+
+  .card-type {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.5rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    padding: 0.2rem 0.6rem;
+    border-radius: 20px;
+    display: inline-block;
+    margin-bottom: 0.6rem;
+  }
+
+  .type-discover  { background: rgba(122,158,138,0.15); color: var(--sage); }
+  .type-passage   { background: rgba(90,80,68,0.3); color: var(--muted); }
+  .type-flashcard { background: rgba(192,154,88,0.15); color: var(--gold); }
+  .type-glossary  { background: rgba(138,108,56,0.12); color: #b08a50; }
+  .type-contrast  { background: rgba(122,158,138,0.08); color: #7a9e8a; }
+  .type-connect   { background: rgba(192,154,88,0.08); color: #9a7a40; }
+  .type-commentary { background: rgba(90,80,68,0.2); color: var(--cream-dim); }
+
+  .feed-card p {
+    font-size: 0.72rem;
+    line-height: 1.55;
+    color: var(--cream-dim);
+    font-family: 'Cormorant Garamond', serif;
+  }
+
+  .feed-card .source {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.48rem;
+    color: var(--muted);
+    margin-top: 0.6rem;
+    letter-spacing: 0.1em;
+  }
+
+  /* ─── DECORATIVE LINE ─── */
+  .divider-line {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    padding: 0 3rem;
+    margin: 2rem 0;
+    position: relative;
+    z-index: 1;
+  }
+
+  .divider-line::before, .divider-line::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(to right, transparent, var(--faint));
+  }
+  .divider-line::after {
+    background: linear-gradient(to left, transparent, var(--faint));
+  }
+
+  .divider-glyph {
+    font-size: 0.9rem;
+    color: var(--gold-dim);
+  }
+
+  /* ─── PHILOSOPHY SECTION ─── */
+  .philosophy {
+    padding: 6rem 3rem;
+    position: relative;
+    z-index: 1;
+    max-width: 960px;
+    margin: 0 auto;
+  }
+
+  .section-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--gold);
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 2.5rem;
+  }
+
+  .section-label::before {
+    content: '';
+    display: block;
+    width: 2rem;
+    height: 1px;
+    background: var(--gold);
+  }
+
+  .philosophy h2 {
+    font-size: clamp(2rem, 4vw, 3.2rem);
+    font-weight: 300;
+    line-height: 1.2;
+    margin-bottom: 2rem;
+  }
+
+  .philosophy p {
+    font-size: 1.15rem;
+    font-weight: 300;
+    color: var(--cream-dim);
+    max-width: 58ch;
+    line-height: 1.8;
+    margin-bottom: 1.2rem;
+  }
+
+  .philosophy p em {
+    color: var(--gold);
+    font-style: italic;
+  }
+
+  /* ─── HOW IT WORKS ─── */
+  .how-it-works {
+    padding: 6rem 3rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  .how-it-works h2 {
+    font-size: clamp(2rem, 4vw, 3.2rem);
+    font-weight: 300;
+    text-align: center;
+    margin-bottom: 4rem;
+  }
+
+  .steps {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2px;
+    max-width: 1000px;
+    margin: 0 auto;
+  }
+
+  .step {
+    background: var(--card-bg);
+    padding: 2.5rem 2rem;
+    border: 1px solid var(--faint);
+    position: relative;
+    transition: border-color 0.3s;
+  }
+
+  .step:hover { border-color: var(--gold-dim); }
+
+  .step-num {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.2em;
+    color: var(--gold);
+    margin-bottom: 1.5rem;
+  }
+
+  .step h3 {
+    font-size: 1.5rem;
+    font-weight: 400;
+    margin-bottom: 0.75rem;
+    line-height: 1.2;
+  }
+
+  .step p {
+    font-size: 1rem;
+    color: var(--cream-dim);
+    font-weight: 300;
+    line-height: 1.7;
+  }
+
+  /* ─── CARD TYPES ─── */
+  .card-types {
+    padding: 6rem 3rem;
+    position: relative;
+    z-index: 1;
+    background: linear-gradient(to bottom, transparent, rgba(20,16,12,0.6), transparent);
+  }
+
+  .card-types h2 {
+    font-size: clamp(2rem, 4vw, 3.2rem);
+    font-weight: 300;
+    text-align: center;
+    margin-bottom: 1rem;
+  }
+
+  .card-types .subtitle {
+    text-align: center;
+    color: var(--cream-dim);
+    font-size: 1.1rem;
+    font-weight: 300;
+    margin-bottom: 3.5rem;
+  }
+
+  .types-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  .type-card {
+    background: var(--card-bg);
+    border: 1px solid var(--faint);
+    padding: 1.75rem 1.25rem;
+    border-radius: 2px;
+    transition: transform 0.25s, border-color 0.25s;
+  }
+
+  .type-card:hover {
+    transform: translateY(-4px);
+    border-color: var(--gold-dim);
+  }
+
+  .type-icon {
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+    display: block;
+  }
+
+  .type-card h4 {
+    font-size: 1rem;
+    font-weight: 400;
+    margin-bottom: 0.5rem;
+    letter-spacing: 0.03em;
+  }
+
+  .type-card p {
+    font-size: 0.85rem;
+    color: var(--muted);
+    line-height: 1.6;
+    font-weight: 300;
+  }
+
+  /* ─── FORMATS ─── */
+  .formats {
+    padding: 6rem 3rem;
+    position: relative;
+    z-index: 1;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  .formats h2 {
+    font-size: clamp(2rem, 4vw, 3.2rem);
+    font-weight: 300;
+    margin-bottom: 3rem;
+  }
+
+  .format-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--faint);
+    border: 1px solid var(--faint);
+  }
+
+  .format-item {
+    background: var(--ink-soft);
+    padding: 1.5rem 2rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 1.25rem;
+  }
+
+  .format-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--gold);
+    margin-top: 0.5rem;
+    flex-shrink: 0;
+  }
+
+  .format-item h4 {
+    font-size: 1rem;
+    font-weight: 400;
+    margin-bottom: 0.3rem;
+  }
+
+  .format-item p {
+    font-size: 0.85rem;
+    color: var(--muted);
+    font-weight: 300;
+  }
+
+  /* ─── QUOTE ─── */
+  .pullquote-section {
+    padding: 8rem 3rem;
+    text-align: center;
+    position: relative;
+    z-index: 1;
+  }
+
+  .pullquote {
+    font-size: clamp(1.6rem, 3.5vw, 2.8rem);
+    font-weight: 300;
+    font-style: italic;
+    line-height: 1.4;
+    max-width: 22em;
+    margin: 0 auto 1.5rem;
+    color: var(--cream);
+  }
+
+  .pullquote em {
+    color: var(--gold);
+    font-style: normal;
+  }
+
+  .pullquote-attr {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  /* ─── OPEN SOURCE ─── */
+  .open-source {
+    padding: 6rem 3rem;
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5rem;
+    max-width: 1100px;
+    margin: 0 auto;
+    align-items: center;
+  }
+
+  .open-source h2 {
+    font-size: clamp(1.8rem, 3.5vw, 3rem);
+    font-weight: 300;
+    margin-bottom: 1rem;
+    line-height: 1.15;
+  }
+
+  .open-source p {
+    font-size: 1.05rem;
+    color: var(--cream-dim);
+    font-weight: 300;
+    line-height: 1.75;
+    margin-bottom: 1rem;
+  }
+
+  .options-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-top: 2rem;
+  }
+
+  .option-item {
+    display: flex;
+    gap: 1.25rem;
+    align-items: flex-start;
+    padding: 1.25rem 1.5rem;
+    border: 1px solid var(--faint);
+    background: var(--card-bg);
+    transition: border-color 0.2s;
+  }
+
+  .option-item:hover { border-color: var(--gold-dim); }
+
+  .option-tag {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.55rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    padding: 0.25rem 0.6rem;
+    flex-shrink: 0;
+    margin-top: 0.15rem;
+  }
+
+  .tag-desktop { background: rgba(192,154,88,0.12); color: var(--gold); }
+  .tag-selfhost { background: rgba(122,158,138,0.12); color: var(--sage); }
+
+  .option-text h4 {
+    font-size: 1rem;
+    font-weight: 400;
+    margin-bottom: 0.25rem;
+  }
+
+  .option-text p {
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin: 0;
+    line-height: 1.5;
+  }
+
+  /* ─── CTA SECTION ─── */
+  .cta-section {
+    padding: 8rem 3rem;
+    text-align: center;
+    position: relative;
+    z-index: 1;
+  }
+
+  .cta-section h2 {
+    font-size: clamp(2.5rem, 5vw, 4.5rem);
+    font-weight: 300;
+    line-height: 1.1;
+    margin-bottom: 1.5rem;
+  }
+
+  .cta-section p {
+    font-size: 1.2rem;
+    color: var(--cream-dim);
+    font-weight: 300;
+    margin-bottom: 2.5rem;
+  }
+
+  .cta-row-center {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  /* ─── FOOTER ─── */
+  footer {
+    border-top: 1px solid var(--faint);
+    padding: 2rem 3rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+    z-index: 1;
+  }
+
+  footer p {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.6rem;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+  }
+
+  .footer-links {
+    display: flex;
+    gap: 2rem;
+    list-style: none;
+  }
+
+  .footer-links a {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.6rem;
+    color: var(--muted);
+    text-decoration: none;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    transition: color 0.2s;
+  }
+
+  .footer-links a:hover { color: var(--gold); }
+
+  /* ─── ANIMATIONS ─── */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(24px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .fade-in {
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.7s ease, transform 0.7s ease;
+  }
+
+  .fade-in.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* ─── RESPONSIVE ─── */
+  @media (max-width: 768px) {
+    nav { padding: 1.25rem 1.5rem; }
+    nav ul { display: none; }
+    .hero { grid-template-columns: 1fr; padding: 7rem 1.5rem 4rem; gap: 3rem; }
+    .hero-visual { display: none; }
+    .steps { grid-template-columns: 1fr; }
+    .types-grid { grid-template-columns: repeat(2, 1fr); }
+    .format-list { grid-template-columns: 1fr; }
+    .open-source { grid-template-columns: 1fr; gap: 3rem; }
+    .philosophy, .how-it-works, .card-types, .formats, .pullquote-section, .cta-section { padding: 4rem 1.5rem; }
+    footer { flex-direction: column; gap: 1rem; text-align: center; }
+  }
+</style>

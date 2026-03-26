@@ -1,7 +1,9 @@
+use flate2::read::ZlibDecoder;
 use scraper::{ElementRef, Html, Selector};
 use serde::Serialize;
 use sha2::{Sha256, Digest};
 use std::collections::HashSet;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 // ── Output types ──────────────────────────────────────────────────────────────
@@ -694,6 +696,17 @@ fn extract_page_images(
                     continue;
                 }
             }
+
+            // FlateDecode → raw pixels compressed with zlib; reconstruct as PNG
+            if filter_name == Some(b"FlateDecode") {
+                match decode_flate_image(doc, &stream.dict, &stream.content, output_dir, seen) {
+                    Some((fp, m)) => {
+                        images.push(DocElement::Image { alt, file: Some(fp), mime: Some(m) });
+                        continue;
+                    }
+                    None => {}
+                }
+            }
         }
 
         // Unsupported filter or extraction failed: emit placeholder
@@ -701,6 +714,115 @@ fn extract_page_images(
     }
 
     images
+}
+
+/// Decompress a FlateDecode image stream and encode it as PNG.
+/// Reads Width, Height, BitsPerComponent, and ColorSpace from the stream dict.
+fn decode_flate_image(
+    doc: &lopdf::Document,
+    dict: &lopdf::Dictionary,
+    compressed: &[u8],
+    output_dir: Option<&Path>,
+    seen: &mut HashSet<String>,
+) -> Option<(String, String)> {
+    let output_dir = output_dir?;
+
+    let width = dict.get(b"Width").ok()?.as_i64().ok()? as u32;
+    let height = dict.get(b"Height").ok()?.as_i64().ok()? as u32;
+    let bpc = dict.get(b"BitsPerComponent").ok()
+        .and_then(|v| v.as_i64().ok())
+        .unwrap_or(8) as u8;
+
+    if bpc != 8 {
+        return None; // only handle 8-bit for now
+    }
+
+    // Determine color type from ColorSpace
+    // Can be a direct Name or a Reference to an array like [/ICCBased <stream>]
+    let color_type = resolve_color_space(doc, dict.get(b"ColorSpace").ok()?)?;
+
+    let channels: u32 = match color_type {
+        png::ColorType::Rgb => 3,
+        png::ColorType::Grayscale => 1,
+        _ => return None,
+    };
+
+    // Decompress
+    let mut decoder = ZlibDecoder::new(compressed);
+    let mut pixels = Vec::new();
+    if decoder.read_to_end(&mut pixels).is_err() {
+        return None;
+    }
+
+    let expected = (width * height * channels) as usize;
+    if pixels.len() < expected {
+        return None;
+    }
+
+    // Skip very small images (likely decorative/spacer)
+    if width < 10 || height < 10 {
+        return None;
+    }
+
+    // Encode as PNG into memory
+    let mut png_buf = Vec::new();
+    {
+        let mut encoder = png::Encoder::new(&mut png_buf, width, height);
+        encoder.set_color(color_type);
+        encoder.set_depth(png::BitDepth::Eight);
+        let mut writer = encoder.write_header().ok()?;
+        writer.write_image_data(&pixels[..expected]).ok()?;
+    }
+
+    if png_buf.len() > MAX_IMAGE_BYTES {
+        return None;
+    }
+
+    write_image_file(Some(output_dir), &png_buf, "image/png", seen)
+}
+
+/// Resolve a ColorSpace object to a png::ColorType.
+/// Handles direct names (DeviceRGB), references, and arrays like [/ICCBased <stream>].
+fn resolve_color_space(doc: &lopdf::Document, obj: &lopdf::Object) -> Option<png::ColorType> {
+    match obj {
+        lopdf::Object::Name(name) => match name.as_slice() {
+            b"DeviceRGB" => Some(png::ColorType::Rgb),
+            b"DeviceGray" => Some(png::ColorType::Grayscale),
+            _ => None,
+        },
+        lopdf::Object::Reference(id) => {
+            let resolved = doc.get_object(*id).ok()?;
+            resolve_color_space(doc, resolved)
+        },
+        lopdf::Object::Array(arr) => {
+            // [/ICCBased <stream ref>] or [/CalRGB <dict ref>]
+            let name = arr.first()?.as_name().ok()?;
+            match name {
+                b"ICCBased" => {
+                    // Get the ICC profile stream to read /N (number of components)
+                    let profile_obj = arr.get(1)?;
+                    let profile_id = match profile_obj {
+                        lopdf::Object::Reference(id) => id,
+                        _ => return None,
+                    };
+                    let profile = match doc.get_object(*profile_id).ok()? {
+                        lopdf::Object::Stream(s) => s,
+                        _ => return None,
+                    };
+                    let n = profile.dict.get(b"N").ok()?.as_i64().ok()?;
+                    match n {
+                        1 => Some(png::ColorType::Grayscale),
+                        3 => Some(png::ColorType::Rgb),
+                        _ => None,
+                    }
+                },
+                b"CalRGB" => Some(png::ColorType::Rgb),
+                b"CalGray" => Some(png::ColorType::Grayscale),
+                _ => None,
+            }
+        },
+        _ => None,
+    }
 }
 
 /// Resolves an Object (inline dict, stream, or indirect reference) to a &Dictionary.

@@ -2,7 +2,7 @@ export type CardType = 'discover' | 'connect' | 'raw_commentary' | 'flashcard' |
 
 // --- Card content types (stored as JSONB in cards.content) ---
 
-export type BodyContent = { body: string }
+export type BodyContent = { body: string; title?: string }
 
 export type FlashcardContent = { question: string; answer: string }
 
