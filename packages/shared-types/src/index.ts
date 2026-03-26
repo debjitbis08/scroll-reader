@@ -66,7 +66,7 @@ export const TIER_LIMITS: Record<Tier, TierLimits> = {
   },
 }
 
-export type FeedEventType = 'view' | 'pause' | 'skip' | 'engage' | 'expand'
+export type FeedEventType = 'scrolled_past' | 'glanced' | 'engaged'
 
 export type ReadingGoal = 'casual' | 'reflective' | 'study'
 

@@ -1,4 +1,4 @@
-import { pgTable, pgEnum, text, boolean, integer, real, timestamp, uuid, unique, jsonb, index } from 'drizzle-orm/pg-core'
+import { pgTable, pgEnum, text, boolean, integer, real, timestamp, uuid, unique, jsonb, index, primaryKey } from 'drizzle-orm/pg-core'
 
 export const aiProviderEnum = pgEnum('ai_provider_enum', ['gemini', 'ollama'])
 
@@ -25,7 +25,7 @@ export const chunkTypeEnum = pgEnum('chunk_type', ['text', 'image', 'code'])
 export const tierEnum = pgEnum('tier', ['free', 'plus'])
 
 export const feedEventTypeEnum = pgEnum('feed_event_type', [
-  'view', 'pause', 'skip', 'engage', 'expand',
+  'scrolled_past', 'glanced', 'engaged',
 ])
 
 // The stable identity anchor used across both deployment modes:
@@ -170,4 +170,25 @@ export const feedEvents = pgTable('feed_events', {
   timeOfDay: integer('time_of_day'),
   dayOfWeek: integer('day_of_week'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
-})
+}, (t) => [
+  index('idx_feed_events_user_created').on(t.userId, t.createdAt),
+])
+
+export const cardScores = pgTable('card_scores', {
+  userId: uuid('user_id')
+    .references(() => profiles.id, { onDelete: 'cascade' })
+    .notNull(),
+  cardId: uuid('card_id')
+    .references(() => cards.id, { onDelete: 'cascade' })
+    .notNull(),
+  timesShown: integer('times_shown').notNull().default(0),
+  timesEngaged: integer('times_engaged').notNull().default(0),
+  timesSkipped: integer('times_skipped').notNull().default(0),
+  lastShownAt: timestamp('last_shown_at', { withTimezone: true }),
+  srRepetition: integer('sr_repetition').notNull().default(0),
+  srIntervalDays: real('sr_interval_days').default(1),
+  srDueAt: timestamp('sr_due_at', { withTimezone: true }),
+  srEaseFactor: real('sr_ease_factor').default(2.5),
+}, (t) => [
+  primaryKey({ columns: [t.userId, t.cardId] }),
+])

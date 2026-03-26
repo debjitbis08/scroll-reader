@@ -30,7 +30,85 @@ interface FeedCard {
     author: string | null
   }
   actions: string[]
+  isSrDue: boolean
+  wordCount: number
 }
+
+// --- Impression tracking ---
+
+interface PendingImpression {
+  cardId: string
+  durationMs: number
+  wasSrDue: boolean
+  timestamp: number
+}
+
+const FLUSH_INTERVAL_MS = 10_000
+const MAX_BUFFER_SIZE = 20
+
+const impressionState = {
+  currentCardId: null as string | null,
+  currentSrDue: false,
+  startTime: null as number | null,
+  buffer: [] as PendingImpression[],
+}
+
+function bufferImpression(cardId: string, durationMs: number, wasSrDue: boolean) {
+  impressionState.buffer.push({ cardId, durationMs, wasSrDue, timestamp: Date.now() })
+  if (impressionState.buffer.length >= MAX_BUFFER_SIZE) {
+    flushImpressions()
+  }
+}
+
+function flushImpressions() {
+  if (impressionState.buffer.length === 0) return
+  const batch = impressionState.buffer.splice(0)
+  navigator.sendBeacon(
+    '/api/impressions/batch',
+    JSON.stringify({ impressions: batch }),
+  )
+}
+
+function flushCurrentAndBuffer() {
+  if (impressionState.currentCardId && impressionState.startTime) {
+    const duration = Date.now() - impressionState.startTime
+    bufferImpression(impressionState.currentCardId, duration, impressionState.currentSrDue)
+    impressionState.currentCardId = null
+    impressionState.startTime = null
+  }
+  flushImpressions()
+}
+
+function getOwnerCard(cardElements: Element[]): Element | null {
+  const viewportMid = window.innerHeight / 2
+
+  return cardElements.reduce((closest, card) => {
+    const rect = card.getBoundingClientRect()
+    const cardMid = rect.top + rect.height / 2
+    const distance = Math.abs(cardMid - viewportMid)
+
+    if (!closest) return card
+
+    const closestRect = closest.getBoundingClientRect()
+    const closestMid = closestRect.top + closestRect.height / 2
+    const closestDistance = Math.abs(closestMid - viewportMid)
+
+    return distance < closestDistance ? card : closest
+  }, null as Element | null)
+}
+
+function throttle<T extends (...args: unknown[]) => void>(fn: T, ms: number): T {
+  let last = 0
+  return ((...args: unknown[]) => {
+    const now = Date.now()
+    if (now - last >= ms) {
+      last = now
+      fn(...args)
+    }
+  }) as T
+}
+
+// --- Card type constants ---
 
 const CARD_TYPE_LABEL: Record<string, string> = {
   discover: 'Discover',
@@ -149,6 +227,26 @@ export default function Feed() {
     }
   }
 
+  // Viewport ownership scroll handler
+  const handleScroll = throttle(() => {
+    const owner = getOwnerCard(
+      Array.from(document.querySelectorAll('[data-card-id]')),
+    )
+    if (!owner) return
+
+    const cardId = (owner as HTMLElement).dataset.cardId!
+    if (cardId !== impressionState.currentCardId) {
+      // Transfer ownership — flush previous card's impression
+      if (impressionState.currentCardId && impressionState.startTime) {
+        const duration = Date.now() - impressionState.startTime
+        bufferImpression(impressionState.currentCardId, duration, impressionState.currentSrDue)
+      }
+      impressionState.currentCardId = cardId
+      impressionState.currentSrDue = (owner as HTMLElement).dataset.srDue === 'true'
+      impressionState.startTime = Date.now()
+    }
+  }, 100)
+
   onMount(() => {
     loadMore()
 
@@ -160,9 +258,26 @@ export default function Feed() {
     )
 
     if (sentinelRef) observer.observe(sentinelRef)
+
+    // Impression tracking
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    const flushInterval = setInterval(flushImpressions, FLUSH_INTERVAL_MS)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    window.addEventListener('pagehide', flushCurrentAndBuffer)
+
+    onCleanup(() => {
+      observer?.disconnect()
+      window.removeEventListener('scroll', handleScroll)
+      clearInterval(flushInterval)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      window.removeEventListener('pagehide', flushCurrentAndBuffer)
+      flushCurrentAndBuffer()
+    })
   })
 
-  onCleanup(() => observer?.disconnect())
+  function onVisibilityChange() {
+    if (document.hidden) flushCurrentAndBuffer()
+  }
 
   return (
     <div class="space-y-6">
@@ -178,7 +293,11 @@ export default function Feed() {
 
           return (
             <Show when={!dismissed()}>
-              <div class={`rounded-xl border bg-ctp-surface0/50 p-5 space-y-3 ${CARD_TYPE_BG[item.card.cardType] ?? 'border-ctp-surface1'}`}>
+              <div
+                data-card-id={item.card.id}
+                data-sr-due={item.isSrDue ? 'true' : 'false'}
+                class={`rounded-xl border bg-ctp-surface0/50 p-5 space-y-3 ${CARD_TYPE_BG[item.card.cardType] ?? 'border-ctp-surface1'}`}
+              >
                 <div class="flex items-center justify-between gap-2">
                   <span class={`text-xs font-semibold uppercase tracking-wide ${CARD_TYPE_COLOR[item.card.cardType] ?? 'text-ctp-subtext0'}`}>
                     {CARD_TYPE_LABEL[item.card.cardType] ?? item.card.cardType}

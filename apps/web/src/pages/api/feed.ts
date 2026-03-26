@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro'
 import { eq, and, sql, inArray } from 'drizzle-orm'
 import { db } from '../../lib/db.ts'
-import { cards, chunks, documents, cardActions } from '@scroll-reader/db'
+import { cards, chunks, documents, cardActions, cardScores } from '@scroll-reader/db'
 import { createSupabaseServer } from '../../lib/supabase.ts'
 
 export const GET: APIRoute = async ({ request, cookies, url }) => {
@@ -28,10 +28,16 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
         title: documents.title,
         author: documents.author,
       },
+      wordCount: chunks.wordCount,
+      srDueAt: cardScores.srDueAt,
     })
     .from(cards)
     .innerJoin(chunks, eq(cards.chunkId, chunks.id))
     .innerJoin(documents, eq(chunks.documentId, documents.id))
+    .leftJoin(
+      cardScores,
+      and(eq(cardScores.cardId, cards.id), eq(cardScores.userId, cards.userId)),
+    )
     .where(eq(cards.userId, user.id))
     .orderBy(sql`random()`)
     .limit(limit)
@@ -53,9 +59,14 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
     actionMap.get(a.cardId)!.push(a.action)
   }
 
+  const now = new Date()
   const result = rows.map((r) => ({
-    ...r,
+    card: r.card,
+    chunk: r.chunk,
+    document: r.document,
     actions: actionMap.get(r.card.id) ?? [],
+    isSrDue: r.srDueAt != null && r.srDueAt <= now,
+    wordCount: r.wordCount ?? 0,
   }))
 
   return new Response(JSON.stringify(result), {
