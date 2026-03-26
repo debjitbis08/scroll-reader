@@ -1,0 +1,1 @@
+ALTER TABLE "documents" DROP COLUMN "card_strategy";

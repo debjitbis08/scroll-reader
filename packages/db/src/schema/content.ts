@@ -66,7 +66,6 @@ export const documents = pgTable('documents', {
   chunkCount: integer('chunk_count').default(0),
   cardCount: integer('card_count').default(0),
   readingGoal: readingGoalEnum('reading_goal'),
-  cardStrategy: jsonb('card_strategy').$type<{ cardTypes: string[]; chunkInterval: number }>(),
   lockedBy: text('locked_by'),
   lockedAt: timestamp('locked_at', { withTimezone: true }),
   docVirtualTime: real('doc_virtual_time').default(0).notNull(),

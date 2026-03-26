@@ -10,8 +10,8 @@ import { callSegmenter, callChunker } from './chunker.ts'
 import { createProvider } from './ai/index.ts'
 import { aiChunk } from './ai/chunk.ts'
 import { generateCardsForChunk } from './cards/generate.ts'
-import type { CardType, CardStrategy, Tier } from '@scroll-reader/shared-types'
-import { TIER_LIMITS } from '@scroll-reader/shared-types'
+import type { CardType, DocumentType, ReadingGoal, Tier } from '@scroll-reader/shared-types'
+import { TIER_LIMITS, resolveCardStrategy } from '@scroll-reader/shared-types'
 import { BATCH_SIZE } from 'astro:env/server'
 import { downloadDocument, deleteDocument, uploadImage } from './storage.ts'
 import { MACHINE_ID, addAffinity, hasAffinity, cleanAffinity } from './machine.ts'
@@ -118,10 +118,13 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
   const docUuid = crypto.randomUUID()
   const tmpPath = `/tmp/scroll-${docUuid}${ext}`
   const imageDir = `/tmp/scroll-${docUuid}-images`
-  const strategy = doc.cardStrategy as CardStrategy | null
+  const strategy = resolveCardStrategy(
+    (doc.documentType ?? 'other') as DocumentType,
+    (doc.readingGoal ?? 'reflective') as ReadingGoal,
+  )
 
   // If strategy says no cards, finish immediately
-  if (strategy && strategy.cardTypes.length === 0) {
+  if (strategy.cardTypes.length === 0) {
     if (doc.processingStatus === 'chunking') {
       await db
         .update(documents)

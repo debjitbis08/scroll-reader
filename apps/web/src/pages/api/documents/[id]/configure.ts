@@ -2,7 +2,6 @@ import type { APIRoute } from 'astro'
 import { eq, and } from 'drizzle-orm'
 import { db } from '../../../../lib/db.ts'
 import { documents, profiles } from '@scroll-reader/db'
-import { resolveCardStrategy } from '@scroll-reader/shared-types'
 import type { DocumentType, ReadingGoal, Tier } from '@scroll-reader/shared-types'
 import { processUser } from '../../../../lib/pipeline.ts'
 
@@ -51,9 +50,7 @@ export const POST: APIRoute = async ({ request, locals, params }) => {
     ? readingGoal as ReadingGoal
     : 'reflective'
 
-  const cardStrategy = resolveCardStrategy(docType, goal)
-
-  // Save page range, strategy, and transition to chunking
+  // Save page range, doc type, goal, and transition to chunking
   await db
     .update(documents)
     .set({
@@ -61,7 +58,6 @@ export const POST: APIRoute = async ({ request, locals, params }) => {
       pageEnd,
       documentType: docType,
       readingGoal: goal,
-      cardStrategy,
       processingStatus: 'chunking',
     })
     .where(eq(documents.id, docId))

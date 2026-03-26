@@ -4,7 +4,8 @@ import { Icon } from 'astro-icon/components'
 import { eq, and } from 'drizzle-orm'
 import { db } from '../../lib/db.ts'
 import { documents, chunks, cards, jobs } from '@scroll-reader/db'
-import type { CardStrategy } from '@scroll-reader/shared-types'
+import type { CardStrategy, DocumentType, ReadingGoal } from '@scroll-reader/shared-types'
+import { resolveCardStrategy } from '@scroll-reader/shared-types'
 import JobPoller from '../../components/JobPoller.tsx'
 import AutoRefresh from '../../components/AutoRefresh.tsx'
 import PageRangeSelector from '../../components/PageRangeSelector.tsx'
@@ -96,6 +97,10 @@ const CARD_TYPE_COLOR: Record<string, string> = {
   contrast: 'text-ctp-teal',
   passage: 'text-ctp-flamingo',
 }
+const strategy = resolveCardStrategy(
+  (doc.documentType ?? 'other') as DocumentType,
+  (doc.readingGoal ?? 'reflective') as ReadingGoal,
+)
 ---
 
 <Layout title={`${doc.title} — Scroll Reader`}>
@@ -106,7 +111,7 @@ const CARD_TYPE_COLOR: Record<string, string> = {
         <h1 class="text-2xl font-bold">{doc.title}</h1>
         {doc.processingStatus === 'ready' && (
           <p class="mt-1 text-sm text-ctp-subtext0">
-            {(doc.cardStrategy as CardStrategy | null)?.cardTypes?.length === 0
+            {strategy.cardTypes.length === 0
               ? `${doc.chunkCount} passage${doc.chunkCount !== 1 ? 's' : ''} · reading mode`
               : `${doc.cardCount} card${doc.cardCount !== 1 ? 's' : ''} · ${doc.chunkCount} passage${doc.chunkCount !== 1 ? 's' : ''}`
             }
@@ -222,7 +227,7 @@ const CARD_TYPE_COLOR: Record<string, string> = {
 
     {!isPending && !isPreview && !isChunking && !isGenerating && !isError && grouped.length === 0 && (
       <div class="rounded-xl border border-ctp-surface1 bg-ctp-surface0 px-6 py-4 text-center space-y-1">
-        {(doc.cardStrategy as CardStrategy | null)?.cardTypes?.length === 0 ? (
+        {strategy.cardTypes.length === 0 ? (
           <>
             <p class="text-ctp-text font-medium">Reading mode</p>
             <p class="text-sm text-ctp-subtext0">No cards for this document — just reading.</p>
