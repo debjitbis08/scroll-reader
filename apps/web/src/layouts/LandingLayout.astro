@@ -393,7 +393,7 @@ const { title = 'Scroll Reader — Read Deeply. Scroll Freely.' } = Astro.props
 
   .lp-card-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     gap: 1rem;
   }
 
@@ -428,6 +428,14 @@ const { title = 'Scroll Reader — Read Deeply. Scroll Freely.' } = Astro.props
     font-weight: 300;
   }
 
+  .lp-card-grid-note {
+    margin-top: 1.5rem;
+    font-size: 0.85rem;
+    color: var(--ed-on-surface-muted);
+    font-weight: 300;
+    font-style: italic;
+  }
+
   /* ─── DEPLOY ─── */
   .lp-deploy {
     padding: 6rem 3rem;
@@ -448,8 +456,8 @@ const { title = 'Scroll Reader — Read Deeply. Scroll Freely.' } = Astro.props
   .lp-deploy > .lp-eyebrow { margin-bottom: 3rem; }
 
   .lp-deploy-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    display: flex;
+    justify-content: center;
     gap: 1.25rem;
     text-align: left;
   }
@@ -461,6 +469,8 @@ const { title = 'Scroll Reader — Read Deeply. Scroll Freely.' } = Astro.props
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
+    max-width: 320px;
+    width: 100%;
   }
 
   .lp-deploy-tag {
@@ -550,6 +560,23 @@ const { title = 'Scroll Reader — Read Deeply. Scroll Freely.' } = Astro.props
   .lp-deploy-btn-primary:hover {
     opacity: 0.85;
     color: var(--ed-on-primary);
+  }
+
+  .lp-deploy-future {
+    margin-top: 2.5rem;
+    font-size: 0.9rem;
+    color: var(--ed-on-surface-muted);
+    font-weight: 300;
+    line-height: 1.6;
+    max-width: 640px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .lp-deploy-future a {
+    color: var(--ed-primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
   }
 
   /* ─── FINAL CTA ─── */
