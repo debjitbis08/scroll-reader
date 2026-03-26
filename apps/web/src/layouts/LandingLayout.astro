@@ -14,7 +14,7 @@ const { title = 'Scroll Reader — Read Deeply. Scroll Freely.' } = Astro.props
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Mono:wght@300;400&family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,600;1,6..72,300;1,6..72,400&family=Inter:wght@300;400;500;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,600;1,6..72,300;1,6..72,400;1,6..72,600&family=Inter:wght@300;400;500;600&display=swap"
       rel="stylesheet"
     />
   </head>
@@ -26,714 +26,647 @@ const { title = 'Scroll Reader — Read Deeply. Scroll Freely.' } = Astro.props
 <style is:global>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+  /* ─── EDITORIAL TOKENS ─── */
   :root {
-    --ink: #0d0b09;
-    --ink-soft: #1a1714;
-    --cream: #f4ead8;
-    --cream-dim: #d9c9a8;
-    --gold: #c09a58;
-    --gold-dim: #8a6c38;
-    --sage: #7a9e8a;
-    --muted: #5a5044;
-    --faint: #2e2820;
-    --card-bg: #161310;
+    --ed-primary: #4d6328;
+    --ed-primary-container: #657c3e;
+    --ed-on-primary: #ffffff;
+    --ed-surface: #fbfbe2;
+    --ed-surface-dim: #f5f5dc;
+    --ed-surface-container: #ededce;
+    --ed-surface-high: #e4e4cc;
+    --ed-surface-highest: #d8d8c0;
+    --ed-on-surface: #1b1d0e;
+    --ed-on-surface-dim: #4a4a3a;
+    --ed-on-surface-muted: #8a8870;
+    --ed-outline: #c5c3b0;
+    --ed-outline-dim: #c5c3b022;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ed-primary: #c8c8b0;
+      --ed-primary-container: #474836;
+      --ed-on-primary: #404130;
+      --ed-surface: #0e0e0e;
+      --ed-surface-dim: #141412;
+      --ed-surface-container: #1c1c1a;
+      --ed-surface-high: #252523;
+      --ed-surface-highest: #333330;
+      --ed-on-surface: #e7e5e5;
+      --ed-on-surface-dim: #a8a6a0;
+      --ed-on-surface-muted: #6b6860;
+      --ed-outline: #49473f;
+      --ed-outline-dim: #49473f22;
+    }
   }
 
   html { scroll-behavior: smooth; }
 
   body {
-    background: var(--ink);
-    color: var(--cream);
-    font-family: 'Cormorant Garamond', Georgia, serif;
+    background: var(--ed-surface);
+    color: var(--ed-on-surface);
+    font-family: 'Inter', system-ui, sans-serif;
     overflow-x: hidden;
     line-height: 1.6;
-  }
-
-  body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
-    pointer-events: none;
-    z-index: 0;
-    opacity: 0.6;
+    font-weight: 400;
   }
 
   /* ─── NAV ─── */
-  nav {
+  .lp-nav {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
     z-index: 100;
-    padding: 1.5rem 3rem;
+    padding: 1.25rem 3rem;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background: linear-gradient(to bottom, rgba(13,11,9,0.95), transparent);
+    background: color-mix(in srgb, var(--ed-surface) 85%, transparent);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
   }
 
-  .logo {
-    font-size: 1.1rem;
-    font-weight: 300;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    color: var(--cream);
+  .lp-logo {
+    font-family: 'Newsreader', Georgia, serif;
+    font-size: 1.25rem;
+    font-style: italic;
+    font-weight: 400;
+    color: var(--ed-on-surface);
     text-decoration: none;
   }
 
-  .logo span { color: var(--gold); }
-
-  nav ul {
+  .lp-nav-links {
     list-style: none;
     display: flex;
     gap: 2.5rem;
+    align-items: center;
   }
 
-  nav a {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.7rem;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    color: var(--cream-dim);
+  .lp-nav-links a {
+    font-size: 0.8rem;
+    color: var(--ed-on-surface-muted);
     text-decoration: none;
     transition: color 0.2s;
   }
 
-  nav a:hover { color: var(--gold); }
+  .lp-nav-links a:hover { color: var(--ed-on-surface); }
+
+  .lp-nav-cta {
+    font-size: 0.75rem !important;
+    font-weight: 500 !important;
+    letter-spacing: 0.04em;
+    color: var(--ed-on-primary) !important;
+    background: var(--ed-primary);
+    padding: 0.5rem 1.25rem;
+    border-radius: 0.25rem;
+    transition: opacity 0.2s;
+  }
+
+  .lp-nav-cta:hover { opacity: 0.85; color: var(--ed-on-primary) !important; }
 
   /* ─── HERO ─── */
-  .hero {
+  .lp-hero {
     min-height: 100vh;
     display: grid;
     grid-template-columns: 1fr 1fr;
     align-items: center;
     padding: 8rem 3rem 4rem;
     gap: 4rem;
-    position: relative;
-    z-index: 1;
+    max-width: 1200px;
+    margin: 0 auto;
   }
 
-  .hero-text { animation: fadeUp 1s ease both; }
-
-  .hero-eyebrow {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.65rem;
-    letter-spacing: 0.3em;
-    text-transform: uppercase;
-    color: var(--gold);
-    margin-bottom: 1.5rem;
-    display: flex;
-    align-items: center;
-    gap: 1rem;
+  .lp-hero-text {
+    animation: lpFadeUp 0.8s ease both;
   }
 
-  .hero-eyebrow::before {
-    content: '';
-    display: block;
-    width: 2rem;
-    height: 1px;
-    background: var(--gold);
-  }
-
-  h1 {
-    font-size: clamp(3rem, 6vw, 5.5rem);
+  .lp-hero h1 {
+    font-family: 'Newsreader', Georgia, serif;
+    font-size: clamp(2.8rem, 5.5vw, 4.5rem);
     font-weight: 300;
-    line-height: 1.05;
-    letter-spacing: -0.01em;
+    line-height: 1.08;
+    letter-spacing: -0.02em;
     margin-bottom: 1.5rem;
+    color: var(--ed-on-surface);
   }
 
-  h1 em {
+  .lp-hero h1 em {
     font-style: italic;
-    color: var(--gold);
+    color: var(--ed-primary);
   }
 
-  .hero-sub {
-    font-size: 1.25rem;
+  .lp-hero-sub {
+    font-size: 1.05rem;
     font-weight: 300;
-    color: var(--cream-dim);
-    max-width: 42ch;
+    color: var(--ed-on-surface-dim);
+    max-width: 44ch;
     line-height: 1.7;
-    margin-bottom: 3rem;
+    margin-bottom: 2.5rem;
   }
 
-  .cta-row {
+  .lp-cta-row {
     display: flex;
     gap: 1rem;
     align-items: center;
   }
 
-  .btn-primary {
-    background: var(--gold);
-    color: var(--ink);
+  .lp-btn-primary {
+    background: var(--ed-primary);
+    color: var(--ed-on-primary);
     border: none;
-    padding: 0.85rem 2.2rem;
-    font-family: 'DM Mono', monospace;
-    font-size: 0.7rem;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
+    padding: 0.8rem 2rem;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    border-radius: 0.25rem;
     cursor: pointer;
     text-decoration: none;
-    transition: background 0.2s, transform 0.15s;
+    transition: opacity 0.2s, transform 0.15s;
   }
 
-  .btn-primary:hover {
-    background: var(--cream);
+  .lp-btn-primary:hover {
+    opacity: 0.85;
     transform: translateY(-1px);
   }
 
-  .btn-ghost {
-    color: var(--cream-dim);
-    border: 1px solid var(--faint);
-    padding: 0.85rem 2.2rem;
-    font-family: 'DM Mono', monospace;
-    font-size: 0.7rem;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
+  .lp-btn-ghost {
+    color: var(--ed-on-surface-dim);
+    border: 1px solid var(--ed-outline);
+    background: transparent;
+    padding: 0.8rem 2rem;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    border-radius: 0.25rem;
     cursor: pointer;
     text-decoration: none;
     transition: border-color 0.2s, color 0.2s;
   }
 
-  .btn-ghost:hover {
-    border-color: var(--gold-dim);
-    color: var(--gold);
+  .lp-btn-ghost:hover {
+    border-color: var(--ed-primary);
+    color: var(--ed-primary);
   }
 
-  /* ─── PHONE MOCKUP ─── */
-  .hero-visual {
+  /* Hero visual placeholder — for future screenshot/video */
+  .lp-hero-visual {
     display: flex;
     justify-content: center;
-    animation: fadeUp 1s 0.2s ease both;
+    align-items: center;
+    animation: lpFadeUp 0.8s 0.15s ease both;
   }
 
-  .phone-frame {
-    width: 280px;
-    height: 560px;
-    background: var(--card-bg);
-    border-radius: 36px;
-    border: 1.5px solid #2a2520;
-    overflow: hidden;
-    position: relative;
-    box-shadow: 0 40px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.03);
-  }
-
-  .phone-notch {
-    width: 90px;
-    height: 22px;
-    background: var(--ink);
-    border-radius: 0 0 14px 14px;
-    margin: 0 auto;
-    position: relative;
-    z-index: 2;
-  }
-
-  .phone-feed {
-    padding: 0.75rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.6rem;
-    animation: scrollFeed 12s linear infinite;
-    margin-top: -22px;
-    padding-top: 30px;
-  }
-
-  @keyframes scrollFeed {
-    0%   { transform: translateY(0); }
-    45%  { transform: translateY(-38%); }
-    55%  { transform: translateY(-38%); }
-    95%  { transform: translateY(0); }
-    100% { transform: translateY(0); }
-  }
-
-  .feed-card {
-    background: #1d1915;
-    border: 1px solid #2a2520;
-    border-radius: 12px;
-    padding: 1rem;
-    flex-shrink: 0;
-  }
-
-  .card-type {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.5rem;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    padding: 0.2rem 0.6rem;
-    border-radius: 20px;
-    display: inline-block;
-    margin-bottom: 0.6rem;
-  }
-
-  .type-discover  { background: rgba(122,158,138,0.15); color: var(--sage); }
-  .type-passage   { background: rgba(90,80,68,0.3); color: var(--muted); }
-  .type-flashcard { background: rgba(192,154,88,0.15); color: var(--gold); }
-  .type-glossary  { background: rgba(138,108,56,0.12); color: #b08a50; }
-  .type-contrast  { background: rgba(122,158,138,0.08); color: #7a9e8a; }
-  .type-connect   { background: rgba(192,154,88,0.08); color: #9a7a40; }
-  .type-commentary { background: rgba(90,80,68,0.2); color: var(--cream-dim); }
-
-  .feed-card p {
-    font-size: 0.72rem;
-    line-height: 1.55;
-    color: var(--cream-dim);
-    font-family: 'Cormorant Garamond', serif;
-  }
-
-  .feed-card .source {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.48rem;
-    color: var(--muted);
-    margin-top: 0.6rem;
-    letter-spacing: 0.1em;
-  }
-
-  /* ─── DECORATIVE LINE ─── */
-  .divider-line {
+  .lp-hero-placeholder {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    background: var(--ed-surface-high);
+    border-radius: 0.375rem;
     display: flex;
     align-items: center;
-    gap: 1.5rem;
-    padding: 0 3rem;
-    margin: 2rem 0;
-    position: relative;
-    z-index: 1;
-  }
-
-  .divider-line::before, .divider-line::after {
-    content: '';
-    flex: 1;
-    height: 1px;
-    background: linear-gradient(to right, transparent, var(--faint));
-  }
-  .divider-line::after {
-    background: linear-gradient(to left, transparent, var(--faint));
-  }
-
-  .divider-glyph {
-    font-size: 0.9rem;
-    color: var(--gold-dim);
-  }
-
-  /* ─── PHILOSOPHY SECTION ─── */
-  .philosophy {
-    padding: 6rem 3rem;
-    position: relative;
-    z-index: 1;
-    max-width: 960px;
-    margin: 0 auto;
-  }
-
-  .section-label {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.65rem;
-    letter-spacing: 0.3em;
-    text-transform: uppercase;
-    color: var(--gold);
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    margin-bottom: 2.5rem;
-  }
-
-  .section-label::before {
-    content: '';
-    display: block;
-    width: 2rem;
-    height: 1px;
-    background: var(--gold);
-  }
-
-  .philosophy h2 {
-    font-size: clamp(2rem, 4vw, 3.2rem);
-    font-weight: 300;
-    line-height: 1.2;
-    margin-bottom: 2rem;
-  }
-
-  .philosophy p {
-    font-size: 1.15rem;
-    font-weight: 300;
-    color: var(--cream-dim);
-    max-width: 58ch;
-    line-height: 1.8;
-    margin-bottom: 1.2rem;
-  }
-
-  .philosophy p em {
-    color: var(--gold);
+    justify-content: center;
+    color: var(--ed-on-surface-muted);
+    font-size: 0.8rem;
     font-style: italic;
   }
 
-  /* ─── HOW IT WORKS ─── */
-  .how-it-works {
-    padding: 6rem 3rem;
-    position: relative;
-    z-index: 1;
-  }
-
-  .how-it-works h2 {
-    font-size: clamp(2rem, 4vw, 3.2rem);
-    font-weight: 300;
+  /* ─── MANIFESTO ─── */
+  .lp-manifesto {
+    padding: 7rem 3rem;
     text-align: center;
-    margin-bottom: 4rem;
+    max-width: 900px;
+    margin: 0 auto;
   }
 
-  .steps {
+  .lp-eyebrow {
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--ed-on-surface-muted);
+    margin-bottom: 1.5rem;
+  }
+
+  .lp-manifesto h2 {
+    font-family: 'Newsreader', Georgia, serif;
+    font-size: clamp(2rem, 4vw, 3.2rem);
+    font-weight: 400;
+    line-height: 1.15;
+    margin-bottom: 2rem;
+    color: var(--ed-on-surface);
+  }
+
+  .lp-manifesto h2 em {
+    font-style: italic;
+    color: var(--ed-primary);
+  }
+
+  .lp-manifesto-body {
+    font-size: 1rem;
+    font-weight: 300;
+    color: var(--ed-on-surface-dim);
+    max-width: 60ch;
+    margin: 0 auto 3.5rem;
+    line-height: 1.8;
+  }
+
+  .lp-manifesto-body strong {
+    font-weight: 600;
+    color: var(--ed-on-surface);
+  }
+
+  /* Principle cards */
+  .lp-principles {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 2px;
+    gap: 2rem;
+    max-width: 900px;
+    margin: 0 auto;
+    text-align: left;
+  }
+
+  .lp-principle {
+    padding: 0.5rem 0;
+  }
+
+  .lp-principle-icon {
+    font-size: 1.5rem;
+    margin-bottom: 0.75rem;
+    color: var(--ed-primary);
+  }
+
+  .lp-principle h4 {
+    font-family: 'Newsreader', Georgia, serif;
+    font-size: 1.1rem;
+    font-weight: 400;
+    font-style: italic;
+    margin-bottom: 0.5rem;
+    color: var(--ed-on-surface);
+  }
+
+  .lp-principle p {
+    font-size: 0.85rem;
+    color: var(--ed-on-surface-muted);
+    line-height: 1.65;
+    font-weight: 300;
+  }
+
+  /* ─── HOW IT WORKS ─── */
+  .lp-how {
+    padding: 6rem 3rem;
     max-width: 1000px;
     margin: 0 auto;
   }
 
-  .step {
-    background: var(--card-bg);
-    padding: 2.5rem 2rem;
-    border: 1px solid var(--faint);
-    position: relative;
-    transition: border-color 0.3s;
-  }
-
-  .step:hover { border-color: var(--gold-dim); }
-
-  .step-num {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.6rem;
-    letter-spacing: 0.2em;
-    color: var(--gold);
-    margin-bottom: 1.5rem;
-  }
-
-  .step h3 {
-    font-size: 1.5rem;
+  .lp-how h2 {
+    font-family: 'Newsreader', Georgia, serif;
+    font-size: clamp(1.8rem, 3.5vw, 2.5rem);
     font-weight: 400;
-    margin-bottom: 0.75rem;
-    line-height: 1.2;
+    text-align: center;
+    margin-bottom: 3.5rem;
+    color: var(--ed-on-surface);
   }
 
-  .step p {
+  .lp-steps {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2.5rem;
+  }
+
+  .lp-step-icon {
+    width: 2.5rem;
+    height: 2.5rem;
+    background: var(--ed-surface-high);
+    border-radius: 0.375rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1.25rem;
     font-size: 1rem;
-    color: var(--cream-dim);
+    color: var(--ed-primary);
+  }
+
+  .lp-step h3 {
+    font-family: 'Newsreader', Georgia, serif;
+    font-size: 1.15rem;
+    font-weight: 400;
+    margin-bottom: 0.5rem;
+    color: var(--ed-on-surface);
+  }
+
+  .lp-step p {
+    font-size: 0.85rem;
+    color: var(--ed-on-surface-muted);
     font-weight: 300;
     line-height: 1.7;
   }
 
   /* ─── CARD TYPES ─── */
-  .card-types {
+  .lp-cards {
     padding: 6rem 3rem;
-    position: relative;
-    z-index: 1;
-    background: linear-gradient(to bottom, transparent, rgba(20,16,12,0.6), transparent);
+    max-width: 1100px;
+    margin: 0 auto;
   }
 
-  .card-types h2 {
-    font-size: clamp(2rem, 4vw, 3.2rem);
-    font-weight: 300;
-    text-align: center;
-    margin-bottom: 1rem;
+  .lp-cards-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 2.5rem;
+    gap: 2rem;
   }
 
-  .card-types .subtitle {
-    text-align: center;
-    color: var(--cream-dim);
-    font-size: 1.1rem;
-    font-weight: 300;
-    margin-bottom: 3.5rem;
+  .lp-cards-header h2 {
+    font-family: 'Newsreader', Georgia, serif;
+    font-size: clamp(1.8rem, 3.5vw, 2.5rem);
+    font-weight: 400;
+    color: var(--ed-on-surface);
   }
 
-  .types-grid {
+  .lp-cards-header .lp-eyebrow {
+    margin-bottom: 0;
+    white-space: nowrap;
+  }
+
+  .lp-card-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 1rem;
-    max-width: 1100px;
+  }
+
+  .lp-card-type {
+    background: var(--ed-surface-high);
+    padding: 1.5rem 1.25rem;
+    border-radius: 0.25rem;
+    transition: transform 0.2s;
+  }
+
+  .lp-card-type:hover { transform: translateY(-3px); }
+
+  .lp-card-type-icon {
+    font-size: 1.25rem;
+    margin-bottom: 0.75rem;
+    color: var(--ed-primary);
+  }
+
+  .lp-card-type h4 {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 0.5rem;
+    color: var(--ed-on-surface);
+  }
+
+  .lp-card-type p {
+    font-size: 0.8rem;
+    color: var(--ed-on-surface-muted);
+    line-height: 1.55;
+    font-weight: 300;
+  }
+
+  /* ─── DEPLOY ─── */
+  .lp-deploy {
+    padding: 6rem 3rem;
+    text-align: center;
+    max-width: 1000px;
     margin: 0 auto;
   }
 
-  .type-card {
-    background: var(--card-bg);
-    border: 1px solid var(--faint);
-    padding: 1.75rem 1.25rem;
-    border-radius: 2px;
-    transition: transform 0.25s, border-color 0.25s;
-  }
-
-  .type-card:hover {
-    transform: translateY(-4px);
-    border-color: var(--gold-dim);
-  }
-
-  .type-icon {
-    font-size: 1.5rem;
-    margin-bottom: 1rem;
-    display: block;
-  }
-
-  .type-card h4 {
-    font-size: 1rem;
+  .lp-deploy h2 {
+    font-family: 'Newsreader', Georgia, serif;
+    font-size: clamp(1.8rem, 3.5vw, 2.5rem);
     font-weight: 400;
-    margin-bottom: 0.5rem;
-    letter-spacing: 0.03em;
+    font-style: italic;
+    margin-bottom: 0.75rem;
+    color: var(--ed-on-surface);
   }
 
-  .type-card p {
+  .lp-deploy > .lp-eyebrow { margin-bottom: 3rem; }
+
+  .lp-deploy-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.25rem;
+    text-align: left;
+  }
+
+  .lp-deploy-card {
+    background: var(--ed-surface-high);
+    padding: 1.75rem;
+    border-radius: 0.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .lp-deploy-tag {
+    font-size: 0.6rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 0.2rem 0.55rem;
+    border-radius: 2px;
+    display: inline-block;
+    width: fit-content;
+  }
+
+  .lp-tag-current {
+    background: var(--ed-primary);
+    color: var(--ed-on-primary);
+  }
+
+  .lp-tag-soon {
+    background: var(--ed-outline-dim);
+    color: var(--ed-on-surface-muted);
+    border: 1px solid var(--ed-outline);
+  }
+
+  .lp-deploy-card h4 {
+    font-family: 'Newsreader', Georgia, serif;
+    font-size: 1.15rem;
+    font-weight: 400;
+    color: var(--ed-on-surface);
+  }
+
+  .lp-deploy-card p {
     font-size: 0.85rem;
-    color: var(--muted);
+    color: var(--ed-on-surface-muted);
     line-height: 1.6;
     font-weight: 300;
+    flex: 1;
   }
 
-  /* ─── FORMATS ─── */
-  .formats {
-    padding: 6rem 3rem;
-    position: relative;
-    z-index: 1;
-    max-width: 900px;
-    margin: 0 auto;
-  }
-
-  .formats h2 {
-    font-size: clamp(2rem, 4vw, 3.2rem);
-    font-weight: 300;
-    margin-bottom: 3rem;
-  }
-
-  .format-list {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1px;
-    background: var(--faint);
-    border: 1px solid var(--faint);
-  }
-
-  .format-item {
-    background: var(--ink-soft);
-    padding: 1.5rem 2rem;
-    display: flex;
-    align-items: flex-start;
-    gap: 1.25rem;
-  }
-
-  .format-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--gold);
-    margin-top: 0.5rem;
-    flex-shrink: 0;
-  }
-
-  .format-item h4 {
-    font-size: 1rem;
-    font-weight: 400;
-    margin-bottom: 0.3rem;
-  }
-
-  .format-item p {
-    font-size: 0.85rem;
-    color: var(--muted);
-    font-weight: 300;
-  }
-
-  /* ─── QUOTE ─── */
-  .pullquote-section {
-    padding: 8rem 3rem;
-    text-align: center;
-    position: relative;
-    z-index: 1;
-  }
-
-  .pullquote {
-    font-size: clamp(1.6rem, 3.5vw, 2.8rem);
-    font-weight: 300;
-    font-style: italic;
-    line-height: 1.4;
-    max-width: 22em;
-    margin: 0 auto 1.5rem;
-    color: var(--cream);
-  }
-
-  .pullquote em {
-    color: var(--gold);
-    font-style: normal;
-  }
-
-  .pullquote-attr {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.65rem;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    color: var(--muted);
-  }
-
-  /* ─── OPEN SOURCE ─── */
-  .open-source {
-    padding: 6rem 3rem;
-    position: relative;
-    z-index: 1;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 5rem;
-    max-width: 1100px;
-    margin: 0 auto;
-    align-items: center;
-  }
-
-  .open-source h2 {
-    font-size: clamp(1.8rem, 3.5vw, 3rem);
-    font-weight: 300;
-    margin-bottom: 1rem;
-    line-height: 1.15;
-  }
-
-  .open-source p {
-    font-size: 1.05rem;
-    color: var(--cream-dim);
-    font-weight: 300;
-    line-height: 1.75;
-    margin-bottom: 1rem;
-  }
-
-  .options-list {
+  .lp-deploy-card .lp-features {
     list-style: none;
     display: flex;
     flex-direction: column;
-    gap: 1rem;
-    margin-top: 2rem;
+    gap: 0.3rem;
+    margin-top: 0.25rem;
   }
 
-  .option-item {
-    display: flex;
-    gap: 1.25rem;
-    align-items: flex-start;
-    padding: 1.25rem 1.5rem;
-    border: 1px solid var(--faint);
-    background: var(--card-bg);
-    transition: border-color 0.2s;
-  }
-
-  .option-item:hover { border-color: var(--gold-dim); }
-
-  .option-tag {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.55rem;
-    letter-spacing: 0.2em;
+  .lp-deploy-card .lp-features li {
+    font-size: 0.7rem;
+    font-weight: 500;
+    letter-spacing: 0.05em;
     text-transform: uppercase;
-    padding: 0.25rem 0.6rem;
-    flex-shrink: 0;
-    margin-top: 0.15rem;
+    color: var(--ed-on-surface-dim);
   }
 
-  .tag-desktop { background: rgba(192,154,88,0.12); color: var(--gold); }
-  .tag-selfhost { background: rgba(122,158,138,0.12); color: var(--sage); }
-
-  .option-text h4 {
-    font-size: 1rem;
-    font-weight: 400;
-    margin-bottom: 0.25rem;
+  .lp-deploy-card .lp-features li::before {
+    content: '\2713';
+    margin-right: 0.5rem;
+    color: var(--ed-primary);
   }
 
-  .option-text p {
-    font-size: 0.85rem;
-    color: var(--muted);
-    margin: 0;
-    line-height: 1.5;
+  .lp-deploy-btn {
+    display: block;
+    text-align: center;
+    padding: 0.7rem;
+    border: 1px solid var(--ed-outline);
+    border-radius: 0.25rem;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--ed-on-surface-dim);
+    text-decoration: none;
+    transition: border-color 0.2s, color 0.2s;
+    margin-top: 0.5rem;
   }
 
-  /* ─── CTA SECTION ─── */
-  .cta-section {
+  .lp-deploy-btn:hover {
+    border-color: var(--ed-primary);
+    color: var(--ed-primary);
+  }
+
+  .lp-deploy-btn-primary {
+    background: var(--ed-primary);
+    color: var(--ed-on-primary);
+    border-color: var(--ed-primary);
+  }
+
+  .lp-deploy-btn-primary:hover {
+    opacity: 0.85;
+    color: var(--ed-on-primary);
+  }
+
+  /* ─── FINAL CTA ─── */
+  .lp-cta {
     padding: 8rem 3rem;
     text-align: center;
-    position: relative;
-    z-index: 1;
   }
 
-  .cta-section h2 {
-    font-size: clamp(2.5rem, 5vw, 4.5rem);
+  .lp-cta h2 {
+    font-family: 'Newsreader', Georgia, serif;
+    font-size: clamp(2rem, 4.5vw, 3.5rem);
+    font-weight: 400;
+    font-style: italic;
+    line-height: 1.15;
+    margin-bottom: 1rem;
+    color: var(--ed-on-surface);
+  }
+
+  .lp-cta p {
+    font-size: 1rem;
+    color: var(--ed-on-surface-muted);
     font-weight: 300;
-    line-height: 1.1;
-    margin-bottom: 1.5rem;
+    margin-bottom: 2rem;
   }
 
-  .cta-section p {
-    font-size: 1.2rem;
-    color: var(--cream-dim);
-    font-weight: 300;
-    margin-bottom: 2.5rem;
-  }
-
-  .cta-row-center {
-    display: flex;
-    gap: 1rem;
-    justify-content: center;
-    align-items: center;
-    flex-wrap: wrap;
+  .lp-cta-small {
+    font-size: 0.7rem !important;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-top: 1rem !important;
+    margin-bottom: 0 !important;
   }
 
   /* ─── FOOTER ─── */
-  footer {
-    border-top: 1px solid var(--faint);
-    padding: 2rem 3rem;
+  .lp-footer {
+    padding: 2.5rem 3rem;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    position: relative;
-    z-index: 1;
   }
 
-  footer p {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.6rem;
-    color: var(--muted);
-    letter-spacing: 0.1em;
+  .lp-footer-left {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
   }
 
-  .footer-links {
+  .lp-footer-logo {
+    font-family: 'Newsreader', Georgia, serif;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--ed-on-surface);
+    text-decoration: none;
+  }
+
+  .lp-footer-tagline {
+    font-family: 'Newsreader', Georgia, serif;
+    font-size: 0.8rem;
+    font-style: italic;
+    color: var(--ed-on-surface-muted);
+  }
+
+  .lp-footer-links {
+    list-style: none;
     display: flex;
     gap: 2rem;
-    list-style: none;
+    align-items: center;
   }
 
-  .footer-links a {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.6rem;
-    color: var(--muted);
-    text-decoration: none;
+  .lp-footer-links a {
+    font-size: 0.65rem;
+    font-weight: 500;
     letter-spacing: 0.1em;
     text-transform: uppercase;
+    color: var(--ed-on-surface-muted);
+    text-decoration: none;
     transition: color 0.2s;
   }
 
-  .footer-links a:hover { color: var(--gold); }
+  .lp-footer-links a:hover { color: var(--ed-primary); }
+
+  .lp-footer-copy {
+    font-size: 0.65rem;
+    color: var(--ed-on-surface-muted);
+    letter-spacing: 0.05em;
+  }
 
   /* ─── ANIMATIONS ─── */
-  @keyframes fadeUp {
-    from { opacity: 0; transform: translateY(24px); }
+  @keyframes lpFadeUp {
+    from { opacity: 0; transform: translateY(20px); }
     to   { opacity: 1; transform: translateY(0); }
   }
 
-  .fade-in {
+  .lp-fade {
     opacity: 0;
-    transform: translateY(20px);
-    transition: opacity 0.7s ease, transform 0.7s ease;
+    transform: translateY(16px);
+    transition: opacity 0.6s ease, transform 0.6s ease;
   }
 
-  .fade-in.visible {
+  .lp-fade.visible {
     opacity: 1;
     transform: translateY(0);
   }
 
   /* ─── RESPONSIVE ─── */
   @media (max-width: 768px) {
-    nav { padding: 1.25rem 1.5rem; }
-    nav ul { display: none; }
-    .hero { grid-template-columns: 1fr; padding: 7rem 1.5rem 4rem; gap: 3rem; }
-    .hero-visual { display: none; }
-    .steps { grid-template-columns: 1fr; }
-    .types-grid { grid-template-columns: repeat(2, 1fr); }
-    .format-list { grid-template-columns: 1fr; }
-    .open-source { grid-template-columns: 1fr; gap: 3rem; }
-    .philosophy, .how-it-works, .card-types, .formats, .pullquote-section, .cta-section { padding: 4rem 1.5rem; }
-    footer { flex-direction: column; gap: 1rem; text-align: center; }
+    .lp-nav { padding: 1rem 1.5rem; }
+    .lp-nav-links { display: none; }
+    .lp-hero { grid-template-columns: 1fr; padding: 7rem 1.5rem 3rem; gap: 2rem; }
+    .lp-hero-visual { display: none; }
+    .lp-principles { grid-template-columns: 1fr; }
+    .lp-steps { grid-template-columns: 1fr; }
+    .lp-card-grid { grid-template-columns: repeat(2, 1fr); }
+    .lp-cards-header { flex-direction: column; gap: 0.5rem; }
+    .lp-deploy-grid { grid-template-columns: 1fr; }
+    .lp-manifesto, .lp-how, .lp-cards, .lp-deploy, .lp-cta { padding: 4rem 1.5rem; }
+    .lp-footer { flex-direction: column; gap: 1.5rem; text-align: center; }
+    .lp-footer-links { flex-wrap: wrap; justify-content: center; }
   }
 </style>

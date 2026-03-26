@@ -1,15 +1,7 @@
 ---
-import Layout from '../layouts/Layout.astro'
-import Feed from '../components/Feed.tsx'
-
 const user = Astro.locals.user
-if (!user) return Astro.redirect('/landing')
----
+if (user) return Astro.redirect('/feed')
 
-<Layout title="Scroll Reader">
-  <main class="min-h-screen bg-ed-surface">
-    <section class="mx-auto max-w-2xl px-4 py-8">
-      <Feed client:load />
-    </section>
-  </main>
-</Layout>
+// Anonymous users see the landing page
+return Astro.redirect('/landing')
+---

@@ -3,289 +3,203 @@ import LandingLayout from '../layouts/LandingLayout.astro'
 ---
 
 <LandingLayout>
-  <nav>
-    <a href="/" class="logo">Scroll <span>Reader</span></a>
-    <ul>
-      <li><a href="#how">How it works</a></li>
-      <li><a href="#cards">Card types</a></li>
-      <li><a href="#deploy">Deploy</a></li>
-      <li><a href="/register" style="color: var(--gold);">Get started</a></li>
+
+  <!-- NAV -->
+  <nav class="lp-nav">
+    <a href="/" class="lp-logo">Scroll Reader</a>
+    <ul class="lp-nav-links">
+      <li><a href="#why">Why Scroll?</a></li>
+      <li><a href="#features">Features</a></li>
+      <li><a href="#deploy">Self-Host</a></li>
+      <li><a href="/login">Sign In</a></li>
+      <li><a href="/register" class="lp-nav-cta">Get Started</a></li>
     </ul>
   </nav>
 
   <!-- HERO -->
-  <section class="hero">
-    <div class="hero-text">
-      <div class="hero-eyebrow">Your library, alive</div>
-      <h1>Scroll your<br><em>books</em>, not<br>the timeline.</h1>
-      <p class="hero-sub">
-        Upload your EPUBs and PDFs. AI transforms passages into an intelligent
-        reading feed — flashcards, reflections, connections, quizzes — all from
+  <section class="lp-hero">
+    <div class="lp-hero-text">
+      <h1>Scroll your<br><em>books,</em> not<br>the timeline.</h1>
+      <p class="lp-hero-sub">
+        Transform your EPUBs and PDFs into an intelligent reading feed.
+        AI-powered insights, reflections, and connections — all from
         the texts you already own.
       </p>
-      <div class="cta-row">
-        <a href="/register" class="btn-primary">Get Started</a>
-        <a href="#how" class="btn-ghost">See how it works</a>
+      <div class="lp-cta-row">
+        <a href="/register" class="lp-btn-primary">Get Started (Web Hosted)</a>
+        <a href="#how" class="lp-btn-ghost">See how it works</a>
       </div>
     </div>
-
-    <div class="hero-visual">
-      <div class="phone-frame">
-        <div class="phone-notch"></div>
-        <div class="phone-feed">
-
-          <div class="feed-card">
-            <span class="card-type type-discover">Discover</span>
-            <p>The passage hints at something counterintuitive: understanding without action is incomplete, but action without understanding is dangerous. The tension is the point.</p>
-            <div class="source">Bhagavad Gita · Ch. 3</div>
-          </div>
-
-          <div class="feed-card">
-            <span class="card-type type-flashcard">Flashcard</span>
-            <p><strong>Q:</strong> What distinguishes a paradigm shift from normal scientific progress?</p>
-            <p style="margin-top:0.4rem; color: var(--gold-dim); font-size: 0.65rem;">Tap to reveal answer</p>
-            <div class="source">The Structure of Scientific Revolutions</div>
-          </div>
-
-          <div class="feed-card">
-            <span class="card-type type-glossary">Glossary</span>
-            <p><strong>categorical imperative</strong> — Act only according to that maxim by which you can simultaneously will it to become a universal law. Central to Kantian deontological ethics.</p>
-            <div class="source">Groundwork of the Metaphysics of Morals</div>
-          </div>
-
-          <div class="feed-card">
-            <span class="card-type type-contrast">Contrast</span>
-            <p><strong>Empiricism vs Rationalism:</strong> Knowledge from sensory experience alone, or from reason independent of experience? Locke's blank slate against Descartes' innate ideas.</p>
-            <div class="source">An Essay Concerning Human Understanding</div>
-          </div>
-
-          <div class="feed-card">
-            <span class="card-type type-passage">Passage</span>
-            <p>"The mind is not a vessel to be filled, but a fire to be kindled."</p>
-            <p style="margin-top:0.3rem; font-size:0.62rem; color: var(--muted);">A line Plutarch attributed to no one — yet everyone has believed.</p>
-            <div class="source">On Listening to Lectures</div>
-          </div>
-
-          <div class="feed-card">
-            <span class="card-type type-commentary">Raw Commentary</span>
-            <p>Darwin spent eight years on barnacles before writing the Origin. This section reads like someone building a case patiently — every detail earning the right to the conclusion.</p>
-            <div class="source">On the Origin of Species · Ch. 4</div>
-          </div>
-
-          <div class="feed-card">
-            <span class="card-type type-connect">Connect</span>
-            <p>The Stoics called the rational order <em>logos</em>. The Vedantists called it <em>brahman</em>. Both traditions converged on a strange claim: the structure of reality is itself aware.</p>
-            <div class="source">Meditations + Upanishads</div>
-          </div>
-
-        </div>
+    <div class="lp-hero-visual">
+      <!-- Placeholder for future screenshot/video of the feed -->
+      <div class="lp-hero-placeholder">
+        Feed preview coming soon
       </div>
     </div>
   </section>
 
-  <div class="divider-line"><span class="divider-glyph">&#10022;</span></div>
+  <!-- MANIFESTO -->
+  <section class="lp-manifesto lp-fade" id="why">
+    <p class="lp-eyebrow">The Manifesto</p>
+    <h2>Designed for <em>depth,</em><br>not engagement.</h2>
+    <p class="lp-manifesto-body">
+      Social feeds are optimized for time-on-app.
+      <strong>Scroll Reader is optimized for YOU</strong> —
+      specifically, the version of you that wants to actually read those
+      books piling up in your library. No ads, no algorithmic rabbit holes.
+      Just the substance of your library, delivered in the rhythm of the
+      modern web.
+    </p>
 
-  <!-- PHILOSOPHY -->
-  <section class="philosophy fade-in">
-    <div class="section-label">Why Scroll Reader</div>
-    <h2>Built for depth,<br>not engagement.</h2>
-    <p>
-      Social feeds are optimized for time-on-app. Scroll Reader is optimized for
-      <em>you</em> — specifically, the version of you that wants to actually read
-      those books piling up in your library.
-    </p>
-    <p>
-      Set your reading goal to <em>casual</em> for a relaxed scroll through
-      discoveries and passages. Switch to <em>study</em> for flashcards, quizzes,
-      and spaced repetition that adapts to how you engage. Your library. Your pace.
-      No ads, no algorithmic rabbit holes.
-    </p>
+    <div class="lp-principles">
+      <div class="lp-principle">
+        <div class="lp-principle-icon">&#9641;</div>
+        <h4>Intentional Pace</h4>
+        <p>Most readers optimize for speed. We optimize for the pause — the moment where a concept actually takes root.</p>
+      </div>
+      <div class="lp-principle">
+        <div class="lp-principle-icon">&#9670;</div>
+        <h4>Digital Vellum</h4>
+        <p>High-contrast, paper-soft palettes that reduce ocular fatigue and mimic the tactile focus of physical paper.</p>
+      </div>
+      <div class="lp-principle">
+        <div class="lp-principle-icon">&#9673;</div>
+        <h4>Cognitive Shelter</h4>
+        <p>No notifications. No infinite discovery loops. Just you and the text, exactly as the author intended.</p>
+      </div>
+    </div>
   </section>
 
   <!-- HOW IT WORKS -->
-  <section class="how-it-works fade-in" id="how">
+  <section class="lp-how lp-fade" id="how">
     <h2>How it works</h2>
-    <div class="steps">
-      <div class="step">
-        <div class="step-num">01 — Import</div>
-        <h3>Upload your documents</h3>
-        <p>
-          Drop in EPUBs and PDFs — books, research papers, scriptures, manuals,
-          articles. Anything with depth. A Rust-powered extractor parses the content
-          and a paragraph-aware chunker splits it into 200–400 word passages.
-        </p>
+    <div class="lp-steps">
+      <div class="lp-step">
+        <div class="lp-step-icon">&#128196;</div>
+        <h3>1. Upload your documents</h3>
+        <p>Simply drop your EPUB or PDF files into the reader. We parse the structure, metadata, and core text with high precision.</p>
       </div>
-      <div class="step">
-        <div class="step-num">02 — Generate</div>
-        <h3>AI creates your cards</h3>
-        <p>
-          Each passage becomes multiple card types — discoveries, flashcards,
-          glossary entries, contrasts, raw commentary. The card mix adapts to your
-          document type and reading goal. Powered by Gemini or your own local
-          Ollama models.
-        </p>
+      <div class="lp-step">
+        <div class="lp-step-icon">&#9672;</div>
+        <h3>2. AI creates your cards</h3>
+        <p>Powered by Gemini, our engine extracts insights, poses reflective questions, and finds thematic links between your books.</p>
       </div>
-      <div class="step">
-        <div class="step-num">03 — Scroll</div>
-        <h3>Read like you scroll</h3>
-        <p>
-          Open the feed instead of social media. A spaced-repetition algorithm
-          surfaces cards based on how you engage — cards you spend time on come
-          back smarter, cards you skip fade away. Like, bookmark, or dismiss to
-          shape your feed.
-        </p>
+      <div class="lp-step">
+        <div class="lp-step-icon">&#9638;</div>
+        <h3>3. Read like you scroll</h3>
+        <p>Ideas from your library appear in a seamless vertical feed. It's the doom-scroll interface, reclaimed for intellectual growth.</p>
       </div>
     </div>
   </section>
 
   <!-- CARD TYPES -->
-  <section class="card-types fade-in" id="cards">
-    <div class="section-label" style="justify-content: center; text-align: center; margin-bottom: 0.75rem;">Eight ways to engage</div>
-    <h2>Eight card types</h2>
-    <p class="subtitle">Every passage can become something different depending on how you want to encounter it.</p>
-    <div class="types-grid">
-      <div class="type-card">
-        <span class="type-icon">&#9674;</span>
+  <section class="lp-cards lp-fade" id="features">
+    <div class="lp-cards-header">
+      <h2>The Anatomy of a Feed</h2>
+      <p class="lp-eyebrow">Eight distinct modes of thought</p>
+    </div>
+    <div class="lp-card-grid">
+      <div class="lp-card-type">
+        <div class="lp-card-type-icon">&#9674;</div>
         <h4>Discover</h4>
-        <p>Teases the most intriguing idea from a passage to pull you deeper into the text.</p>
+        <p>Surfaces forgotten passages and buried ideas from your archive.</p>
       </div>
-      <div class="type-card">
-        <span class="type-icon">&#9645;</span>
-        <h4>Raw Commentary</h4>
-        <p>Brief, direct marginal notes — the kind a thoughtful reader scribbles in the margins.</p>
+      <div class="lp-card-type">
+        <div class="lp-card-type-icon">&#9645;</div>
+        <h4>Commentary</h4>
+        <p>AI-assisted analysis providing historical context or modern relevance.</p>
       </div>
-      <div class="type-card">
-        <span class="type-icon">&#9700;</span>
+      <div class="lp-card-type">
+        <div class="lp-card-type-icon">&#9700;</div>
         <h4>Flashcard</h4>
-        <p>A question about transferable concepts with the answer revealed on tap. Tracked by spaced repetition.</p>
+        <p>Convert highlighted insights into active recall cards with spaced repetition.</p>
       </div>
-      <div class="type-card">
-        <span class="type-icon">&#9673;</span>
+      <div class="lp-card-type">
+        <div class="lp-card-type-icon">&#9673;</div>
         <h4>Quiz</h4>
-        <p>Four-option multiple choice with explanations for each answer. Graded and scheduled by SM-2.</p>
+        <p>Multiple-choice questions graded by SM-2 — knowledge that sticks.</p>
       </div>
-      <div class="type-card">
-        <span class="type-icon">&#9830;</span>
+      <div class="lp-card-type">
+        <div class="lp-card-type-icon">&#9830;</div>
         <h4>Glossary</h4>
-        <p>Key terms with definitions, optional etymology, and pointers to related concepts.</p>
+        <p>Automatically builds a glossary from technical terms, with etymology.</p>
       </div>
-      <div class="type-card">
-        <span class="type-icon">&#9670;</span>
+      <div class="lp-card-type">
+        <div class="lp-card-type-icon">&#9670;</div>
         <h4>Contrast</h4>
-        <p>Side-by-side comparison of concepts — X vs Y with clear dimensional analysis.</p>
+        <p>Side-by-side comparison of concepts — X vs Y with dimensional analysis.</p>
       </div>
-      <div class="type-card">
-        <span class="type-icon">&#9647;</span>
+      <div class="lp-card-type">
+        <div class="lp-card-type-icon">&#9647;</div>
         <h4>Passage</h4>
-        <p>A beautiful or significant excerpt, surfaced with a single sentence on why it matters.</p>
+        <p>The most beautiful or significant excerpts, surfaced with brief context.</p>
       </div>
-      <div class="type-card">
-        <span class="type-icon">&#9656;</span>
+      <div class="lp-card-type">
+        <div class="lp-card-type-icon">&#9656;</div>
         <h4>Connect</h4>
-        <p>Non-obvious threads between texts in your library — cross-document insight powered by a premium model.</p>
+        <p>Thematic bridges between different authors in your collection.</p>
       </div>
     </div>
   </section>
 
-  <!-- FORMATS -->
-  <section class="formats fade-in">
-    <div class="section-label">What you can bring</div>
-    <h2>Reads anything<br>you read.</h2>
-    <div class="format-list">
-      <div class="format-item">
-        <div class="format-dot"></div>
-        <div>
-          <h4>Books &amp; novels</h4>
-          <p>EPUB files — fiction, philosophy, science, history. Chunked and surfaced over time.</p>
-        </div>
+  <!-- DEPLOY -->
+  <section class="lp-deploy lp-fade" id="deploy">
+    <h2>Three ways to run it</h2>
+    <p class="lp-eyebrow">Choose your level of digital sovereignty</p>
+    <div class="lp-deploy-grid">
+      <div class="lp-deploy-card">
+        <span class="lp-deploy-tag lp-tag-current">Current</span>
+        <h4>Web Hosted</h4>
+        <p>Zero setup — just upload and scroll. Hosted on our secure, high-speed infrastructure.</p>
+        <ul class="lp-features">
+          <li>Instant access</li>
+          <li>Gemini-powered</li>
+        </ul>
+        <a href="/register" class="lp-deploy-btn lp-deploy-btn-primary">Launch Reader</a>
       </div>
-      <div class="format-item">
-        <div class="format-dot"></div>
-        <div>
-          <h4>Research papers</h4>
-          <p>Dense PDFs with per-page extraction — distilled into digestible cards without losing nuance.</p>
-        </div>
+      <div class="lp-deploy-card">
+        <span class="lp-deploy-tag lp-tag-soon">Coming Soon</span>
+        <h4>Self-Hosted</h4>
+        <p>Docker Compose on any VPS. Your data never leaves your machine. Perfect for privacy maximalists.</p>
+        <ul class="lp-features">
+          <li>Docker Compose</li>
+          <li>Ollama support</li>
+        </ul>
+        <a href="#" class="lp-deploy-btn">Get Early Access</a>
       </div>
-      <div class="format-item">
-        <div class="format-dot"></div>
-        <div>
-          <h4>Scriptures &amp; manuals</h4>
-          <p>Ancient texts, technical documentation, reference material — anything with depth worth revisiting.</p>
-        </div>
-      </div>
-      <div class="format-item">
-        <div class="format-dot"></div>
-        <div>
-          <h4>Articles &amp; notes</h4>
-          <p>Long-form pieces and personal notes you saved but never found time to absorb.</p>
-        </div>
+      <div class="lp-deploy-card">
+        <span class="lp-deploy-tag lp-tag-soon">Coming Soon</span>
+        <h4>Desktop Companion</h4>
+        <p>Tauri desktop app with E2E encrypted cloud sync. Native speed, offline first, global shortcuts.</p>
+        <ul class="lp-features">
+          <li>SQLite engine</li>
+          <li>Full privacy</li>
+        </ul>
+        <a href="#" class="lp-deploy-btn">Waitlist</a>
       </div>
     </div>
-  </section>
-
-  <!-- PULLQUOTE -->
-  <section class="pullquote-section fade-in">
-    <blockquote class="pullquote">
-      "A doom scroll interface where all content is drawn from <em>your</em> personal document library."
-    </blockquote>
-    <p class="pullquote-attr">— From the project spec</p>
-  </section>
-
-  <!-- OPEN SOURCE / DEPLOY -->
-  <section class="open-source fade-in" id="deploy">
-    <div>
-      <div class="section-label">Three ways to run it</div>
-      <h2>Open source.<br>Self-hostable.<br>Yours.</h2>
-      <p>
-        Scroll Reader is AGPL-3.0 licensed. Run it on your own infrastructure
-        with your own AI keys. Your documents never have to leave your machine.
-      </p>
-      <p>
-        Or use the hosted version for zero setup — just upload and scroll.
-      </p>
-    </div>
-    <ul class="options-list">
-      <li class="option-item">
-        <span class="option-tag tag-selfhost">Self-host</span>
-        <div class="option-text">
-          <h4>Docker Compose on any VPS</h4>
-          <p>Full control. Drop documents into a watched directory. One <code style="color:var(--gold-dim);">docker compose up</code> after configuring <code style="color:var(--gold-dim);">.env</code>.</p>
-        </div>
-      </li>
-      <li class="option-item">
-        <span class="option-tag tag-selfhost">Local AI</span>
-        <div class="option-text">
-          <h4>Ollama support</h4>
-          <p>Run entirely offline with local models — Mistral, Llama 3. Your texts never leave your hardware.</p>
-        </div>
-      </li>
-      <li class="option-item">
-        <span class="option-tag tag-desktop">Desktop</span>
-        <div class="option-text">
-          <h4>Tauri companion app</h4>
-          <p>Mac, Windows, Linux. E2E encrypted sync. No server required — for anyone who just wants it to work.</p>
-        </div>
-      </li>
-    </ul>
   </section>
 
   <!-- FINAL CTA -->
-  <section class="cta-section fade-in">
-    <h2>Put down the feed.<br>Pick up your <em style="color:var(--gold);font-style:italic;">library.</em></h2>
-    <p>Sign up and upload your first document. No credit card required.</p>
-    <div class="cta-row-center">
-      <a href="/register" class="btn-primary">Create an account</a>
-      <a href="/login" class="btn-ghost">Sign in</a>
-    </div>
+  <section class="lp-cta lp-fade">
+    <h2>Ready to read deeply?</h2>
+    <p>Join the readers who have reclaimed their attention from the feed.</p>
+    <a href="/register" class="lp-btn-primary">Start Your Library</a>
+    <p class="lp-cta-small">Free to start &middot; No credit card required</p>
   </section>
 
-  <footer>
-    <p>&copy; 2025 Scroll Reader &middot; AGPL-3.0</p>
-    <ul class="footer-links">
-      <li><a href="#how">How it works</a></li>
-      <li><a href="#cards">Cards</a></li>
-      <li><a href="#deploy">Deploy</a></li>
+  <!-- FOOTER -->
+  <footer class="lp-footer">
+    <div class="lp-footer-left">
+      <a href="/" class="lp-footer-logo">Scroll Reader</a>
+      <span class="lp-footer-tagline">Put down the feed. Pick up your library.</span>
+    </div>
+    <ul class="lp-footer-links">
+      <li><a href="#">GitHub</a></li>
+      <li><a href="#">Privacy</a></li>
+      <li><a href="#">Licensing</a></li>
     </ul>
+    <span class="lp-footer-copy">&copy; 2026 Scroll Reader. Licensed under AGPL-3.0.</span>
   </footer>
 
   <script>
@@ -298,6 +212,7 @@ import LandingLayout from '../layouts/LandingLayout.astro'
       });
     }, { threshold: 0.1 });
 
-    document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+    document.querySelectorAll('.lp-fade').forEach(el => observer.observe(el));
   </script>
+
 </LandingLayout>
