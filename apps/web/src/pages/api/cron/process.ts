@@ -1,21 +1,25 @@
 import type { APIRoute } from 'astro'
 import { processCron } from '../../../lib/pipeline.ts'
+import { runCronGuarded } from '../../../lib/machine.ts'
+import { CRON_SECRET } from 'astro:env/server'
 
 /**
- * Cron endpoint — run every few hours to distribute load.
+ * Manual cron trigger — for debugging or forcing a run.
  *
- * 1. Chunks documents in 'chunking' state (full extraction)
- * 2. Generates cards per user up to their tier's daily limit
- *
- * Call via: curl -X POST http://localhost:4321/api/cron/process
- * Or set up an external cron service to hit this every 2-4 hours.
+ * Requires: Authorization: Bearer <CRON_SECRET>
+ * Shares the same concurrency guard as the in-process timer.
  */
-export const POST: APIRoute = async () => {
-  try {
-    await processCron()
-    return new Response('OK', { status: 200 })
-  } catch (err) {
-    console.error('[cron] processCron failed:', err)
-    return new Response('Internal error', { status: 500 })
+export const POST: APIRoute = async ({ request }) => {
+  const auth = request.headers.get('Authorization')
+  if (auth !== `Bearer ${CRON_SECRET}`) {
+    return new Response('Unauthorized', { status: 401 })
   }
+
+  const ran = await runCronGuarded(processCron)
+
+  if (!ran) {
+    return new Response('OK (already running, skipped)', { status: 200 })
+  }
+
+  return new Response('OK', { status: 200 })
 }

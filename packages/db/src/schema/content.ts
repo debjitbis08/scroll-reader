@@ -1,4 +1,4 @@
-import { pgTable, pgEnum, text, boolean, integer, timestamp, uuid, unique, jsonb, index } from 'drizzle-orm/pg-core'
+import { pgTable, pgEnum, text, boolean, integer, real, timestamp, uuid, unique, jsonb, index } from 'drizzle-orm/pg-core'
 
 export const aiProviderEnum = pgEnum('ai_provider_enum', ['gemini', 'ollama'])
 
@@ -40,6 +40,7 @@ export const profiles = pgTable('profiles', {
   aiModel: text('ai_model'),
   ollamaBaseUrl: text('ollama_base_url'),
   tier: tierEnum('tier').default('free').notNull(),
+  virtualTime: real('virtual_time').default(0).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 })
 
@@ -66,6 +67,9 @@ export const documents = pgTable('documents', {
   cardCount: integer('card_count').default(0),
   readingGoal: readingGoalEnum('reading_goal'),
   cardStrategy: jsonb('card_strategy').$type<{ cardTypes: string[]; chunkInterval: number }>(),
+  lockedBy: text('locked_by'),
+  lockedAt: timestamp('locked_at', { withTimezone: true }),
+  docVirtualTime: real('doc_virtual_time').default(0).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 })
 

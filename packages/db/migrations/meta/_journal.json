@@ -71,6 +71,13 @@
       "when": 1774463916624,
       "tag": "0009_high_the_santerians",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1774506177525,
+      "tag": "0010_amusing_chronomancer",
+      "breakpoints": true
     }
   ]
 }

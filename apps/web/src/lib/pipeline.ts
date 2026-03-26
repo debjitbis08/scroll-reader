@@ -1,4 +1,4 @@
-import { eq, and, sql, gte, inArray } from 'drizzle-orm'
+import { eq, and, or, sql, gte, lt, isNull, inArray, asc } from 'drizzle-orm'
 import { readFile, writeFile, unlink, rm, mkdir } from 'node:fs/promises'
 import { extname, basename } from 'node:path'
 import { db } from './db.ts'
@@ -14,6 +14,7 @@ import type { CardType, CardStrategy, Tier } from '@scroll-reader/shared-types'
 import { TIER_LIMITS } from '@scroll-reader/shared-types'
 import { BATCH_SIZE } from 'astro:env/server'
 import { downloadDocument, deleteDocument, uploadImage } from './storage.ts'
+import { MACHINE_ID, addAffinity, hasAffinity, cleanAffinity } from './machine.ts'
 
 type PendingImage = {
   file: string    // path on disk
@@ -32,6 +33,14 @@ type PendingChunk = {
 
 // ── Helpers ─────────────────────────────────────────────────
 
+const LOCK_EXPIRY_MS = 10 * 60 * 1000 // 10 minutes
+const CARDS_PER_BATCH = 10
+
+const DOC_PRIORITY_WEIGHT = 3 // priority document (oldest) gets 3x weight
+const DOC_DEFAULT_WEIGHT = 1
+
+const TIER_WEIGHTS: Record<string, number> = { plus: 2, free: 1 }
+
 /**
  * Count how many cards a user has generated today (UTC).
  */
@@ -45,6 +54,54 @@ async function cardsGeneratedToday(userId: string): Promise<number> {
     .where(and(eq(cards.userId, userId), gte(cards.createdAt, todayStart)))
 
   return row?.count ?? 0
+}
+
+// ── Document Locking ────────────────────────────────────────
+
+/**
+ * Acquire a document-level lock. Returns true if lock was acquired.
+ * Stale locks (older than 10 min) are automatically broken.
+ */
+async function acquireLock(docId: string): Promise<boolean> {
+  const staleThreshold = new Date(Date.now() - LOCK_EXPIRY_MS)
+
+  const result = await db
+    .update(documents)
+    .set({ lockedBy: MACHINE_ID, lockedAt: new Date() })
+    .where(and(
+      eq(documents.id, docId),
+      or(
+        isNull(documents.lockedBy),
+        lt(documents.lockedAt, staleThreshold),
+      ),
+    ))
+    .returning({ id: documents.id })
+
+  return result.length > 0
+}
+
+/**
+ * Release a document lock — only if this machine holds it.
+ */
+async function releaseLock(docId: string): Promise<void> {
+  await db
+    .update(documents)
+    .set({ lockedBy: null, lockedAt: null })
+    .where(and(eq(documents.id, docId), eq(documents.lockedBy, MACHINE_ID)))
+}
+
+/**
+ * Release all locks held by this machine (clean shutdown safety net).
+ */
+async function releaseAllMyLocks(): Promise<void> {
+  await db
+    .update(documents)
+    .set({ lockedBy: null, lockedAt: null })
+    .where(eq(documents.lockedBy, MACHINE_ID))
+}
+
+function getDocWeight(docId: string, priorityDocId: string): number {
+  return docId === priorityDocId ? DOC_PRIORITY_WEIGHT : DOC_DEFAULT_WEIGHT
 }
 
 // ── Process a single document ───────────────────────────────
@@ -129,10 +186,9 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
           .where(eq(chunks.documentId, doc.id))
         let nextIndex = (maxRow?.max ?? -1) + 1
 
-        // Chunk enough elements to fill the card budget.
-        // With multiple card types, each chunk may produce ~3-5 cards.
-        const cardsPerChunk = Math.max(1, strategy?.cardTypes?.length ?? 2)
-        const targetChunks = Math.max(10, Math.ceil(cardBudget / cardsPerChunk))
+        // Chunk generously — 2x the card budget to build a buffer for this
+        // and the next cron run. Card generation stops at the daily budget.
+        const targetChunks = Math.max(20, cardBudget * 2)
         let textChunksSeen = 0
         let elementsThisBatch = 0
 
@@ -375,11 +431,12 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
   }
 }
 
-// ── Per-user entry point ────────────────────────────────────
+// ── Per-user entry point (Document-level VTRR) ──────────────
 
 /**
- * Process all active documents for a user (both chunking and generating),
- * respecting their tier's daily card limit.
+ * Process active documents for a user using Virtual Time Round Robin.
+ * The oldest document (priority) has a higher weight (3x) so its virtual
+ * clock advances slower → it gets picked more often.
  *
  * Returns the number of cards generated in this run.
  */
@@ -393,59 +450,163 @@ export async function processUser(userId: string, tier: Tier): Promise<number> {
     return 0
   }
 
-  // Process documents in order: oldest first
+  const staleThreshold = new Date(Date.now() - LOCK_EXPIRY_MS)
+
+  // Fetch active documents that are not locked by another machine
   const activeDocs = await db
     .select()
     .from(documents)
     .where(and(
       eq(documents.userId, userId),
       inArray(documents.processingStatus, ['chunking', 'generating']),
+      or(
+        isNull(documents.lockedBy),
+        eq(documents.lockedBy, MACHINE_ID),
+        lt(documents.lockedAt, staleThreshold),
+      ),
     ))
-    .orderBy(documents.createdAt)
+    .orderBy(asc(documents.docVirtualTime))
+
+  if (activeDocs.length === 0) return 0
+
+  // Priority doc = oldest by createdAt
+  const priorityDocId = activeDocs.reduce((oldest, doc) =>
+    doc.createdAt! < oldest.createdAt! ? doc : oldest,
+  ).id
 
   let totalGenerated = 0
+  const exhausted = new Set<string>()
 
-  for (const doc of activeDocs) {
-    if (budget <= 0) break
+  while (budget > 0) {
+    // Pick doc with lowest virtualTime that isn't exhausted
+    const candidates = activeDocs
+      .filter((d) => !exhausted.has(d.id))
+      .sort((a, b) => {
+        const vtDiff = (a.docVirtualTime ?? 0) - (b.docVirtualTime ?? 0)
+        if (vtDiff !== 0) return vtDiff
+        // Tie-break: prefer docs we have affinity with
+        const aAff = hasAffinity(a.id) ? 0 : 1
+        const bAff = hasAffinity(b.id) ? 0 : 1
+        return aAff - bAff
+      })
+
+    if (candidates.length === 0) break
+
+    const doc = candidates[0]
+    const batchBudget = Math.min(budget, CARDS_PER_BATCH)
+
+    const locked = await acquireLock(doc.id)
+    if (!locked) {
+      exhausted.add(doc.id)
+      continue
+    }
 
     try {
-      const generated = await processDocument(doc, budget)
-      totalGenerated += generated
-      budget -= generated
+      const generated = await processDocument(doc, batchBudget)
+
+      if (generated === 0) {
+        exhausted.add(doc.id)
+      } else {
+        const weight = getDocWeight(doc.id, priorityDocId)
+        const newVt = (doc.docVirtualTime ?? 0) + generated / weight
+        doc.docVirtualTime = newVt
+
+        await db
+          .update(documents)
+          .set({ docVirtualTime: newVt })
+          .where(eq(documents.id, doc.id))
+
+        totalGenerated += generated
+        budget -= generated
+      }
+
+      addAffinity(doc.id)
     } catch (err) {
       console.error(`[pipeline] error processing doc=${doc.id}:`, err)
+      exhausted.add(doc.id)
+    } finally {
+      await releaseLock(doc.id)
     }
   }
 
   return totalGenerated
 }
 
-// ── Cron entry point ────────────────────────────────────────
+// ── Cron entry point (User-level VTRR) ──────────────────────
 
 /**
- * Main cron handler — call every few hours.
+ * Main cron handler — runs every 15 minutes.
  *
- * For each user with active documents, chunk a batch of elements and
- * generate cards up to their tier's daily limit.
+ * Uses Virtual Time Round Robin across users. Plus-tier users have a
+ * higher weight (2x) so their virtual clock advances slower → they get
+ * processed more often. Users who got 0 processing last run have the
+ * lowest virtualTime → automatically boosted.
  */
 export async function processCron(): Promise<void> {
+  // Fetch users with active documents, joined with their tier + virtualTime
   const usersWithWork = await db
-    .selectDistinct({ userId: documents.userId })
+    .selectDistinct({
+      userId: documents.userId,
+      tier: profiles.tier,
+      virtualTime: profiles.virtualTime,
+    })
     .from(documents)
+    .innerJoin(profiles, eq(profiles.id, documents.userId))
     .where(inArray(documents.processingStatus, ['chunking', 'generating']))
 
-  for (const { userId } of usersWithWork) {
-    try {
-      const [profile] = await db
-        .select({ tier: profiles.tier })
-        .from(profiles)
-        .where(eq(profiles.id, userId))
-        .limit(1)
+  if (usersWithWork.length === 0) return
 
-      const tier = (profile?.tier ?? 'free') as Tier
-      await processUser(userId, tier)
+  const users = usersWithWork.map((u) => ({
+    ...u,
+    tier: (u.tier ?? 'free') as Tier,
+    virtualTime: u.virtualTime ?? 0,
+    exhausted: false,
+  }))
+
+  let anyProgress = true
+
+  while (anyProgress) {
+    anyProgress = false
+
+    // Pick user with lowest virtualTime that isn't exhausted
+    const candidates = users
+      .filter((u) => !u.exhausted)
+      .sort((a, b) => a.virtualTime - b.virtualTime)
+
+    if (candidates.length === 0) break
+
+    const user = candidates[0]
+
+    try {
+      const generated = await processUser(user.userId, user.tier)
+
+      if (generated === 0) {
+        user.exhausted = true
+      } else {
+        anyProgress = true
+        const weight = TIER_WEIGHTS[user.tier] ?? 1
+        user.virtualTime += generated / weight
+
+        await db
+          .update(profiles)
+          .set({ virtualTime: user.virtualTime })
+          .where(eq(profiles.id, user.userId))
+      }
     } catch (err) {
-      console.error(`[cron] error for user=${userId}:`, err)
+      console.error(`[cron] error for user=${user.userId}:`, err)
+      user.exhausted = true
     }
   }
+
+  // Virtual time normalization — prevent overflow
+  const minVt = Math.min(...users.map((u) => u.virtualTime))
+  if (minVt > 10000) {
+    await db
+      .update(profiles)
+      .set({ virtualTime: sql`${profiles.virtualTime} - ${minVt}` })
+      .where(inArray(profiles.id, users.map((u) => u.userId)))
+  }
+
+  cleanAffinity()
+  await releaseAllMyLocks()
 }
