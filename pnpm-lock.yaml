@@ -137,6 +137,22 @@ importers:
 
   packages/shared-types: {}
 
+  tools/card-tester:
+    dependencies:
+      '@scroll-reader/shared-types':
+        specifier: workspace:*
+        version: link:../../packages/shared-types
+      dotenv:
+        specifier: ^17.3.1
+        version: 17.3.1
+    devDependencies:
+      tsx:
+        specifier: ^4.19.4
+        version: 4.21.0
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+
 packages:
 
   '@antfu/install-pkg@1.1.0':

@@ -1,0 +1,315 @@
+#!/usr/bin/env tsx
+/**
+ * Generate cards from chunks.json → cards.json
+ *
+ * Usage:
+ *   pnpm --filter card-tester generate [-- --type book --goal study --dir ./test-output]
+ */
+
+import { readFile, writeFile } from 'node:fs/promises'
+import { join, resolve, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { parseArgs } from 'node:util'
+import { config } from 'dotenv'
+import type {
+  CardType,
+  CardStrategy,
+  CardContent,
+  DocumentType,
+  ReadingGoal,
+} from '@scroll-reader/shared-types'
+import { resolveCardStrategy } from '@scroll-reader/shared-types'
+
+const HERE = dirname(fileURLToPath(import.meta.url))
+const ROOT = resolve(HERE, '../..')
+
+// Load .env from workspace root
+config({ path: join(ROOT, '.env') })
+
+// ── CLI args ──
+
+const args = process.argv.slice(2).filter(a => a !== '--')
+const { values } = parseArgs({
+  args,
+  options: {
+    type: { type: 'string', default: 'book' },
+    goal: { type: 'string', default: 'study' },
+    dir: { type: 'string', default: join(HERE, 'test-output') },
+    provider: { type: 'string', default: 'gemini' },
+  },
+})
+
+const outDir = resolve(values.dir!)
+const chunksPath = join(outDir, 'chunks.json')
+const cardsPath = join(outDir, 'cards.json')
+
+// ── Load chunks ──
+
+interface TestChunk {
+  content: string
+  chapter: string | null
+  chunkType: 'text' | 'code'
+  wordCount: number
+  language: string
+  images: { file: string; alt: string; mime: string }[]
+}
+
+let chunks: TestChunk[]
+try {
+  chunks = JSON.parse(await readFile(chunksPath, 'utf-8'))
+} catch {
+  console.error(`Could not read ${chunksPath}. Run "extract" first.`)
+  process.exit(1)
+}
+
+console.log(`Loaded ${chunks.length} chunks from ${chunksPath}`)
+
+// ── Strategy ──
+
+const strategy = resolveCardStrategy(
+  values.type as DocumentType,
+  values.goal as ReadingGoal,
+)
+
+console.log(`Strategy: ${values.type}/${values.goal} → [${strategy.cardTypes.join(', ')}] every ${strategy.chunkInterval} chunk(s)`)
+
+// ── AI Provider (standalone, no Astro deps) ──
+
+interface AIProvider {
+  name: string
+  model: string
+  generate(prompt: string): Promise<string>
+}
+
+function createProvider(): AIProvider {
+  const name = values.provider ?? 'gemini'
+
+  if (name === 'gemini') {
+    const apiKey = process.env.GEMINI_API_KEY
+    const model = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'
+    if (!apiKey) {
+      console.error('GEMINI_API_KEY env var required')
+      process.exit(1)
+    }
+    return {
+      name: 'gemini',
+      model,
+      async generate(prompt: string): Promise<string> {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+        })
+        if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`)
+        const data = await res.json() as { candidates: { content: { parts: { text: string }[] } }[] }
+        return data.candidates[0].content.parts[0].text
+      },
+    }
+  }
+
+  if (name === 'ollama') {
+    const baseUrl = process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434'
+    const model = process.env.OLLAMA_MODEL ?? 'mistral:7b'
+    return {
+      name: 'ollama',
+      model,
+      async generate(prompt: string): Promise<string> {
+        const res = await fetch(`${baseUrl}/api/generate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model, prompt, stream: false }),
+        })
+        if (!res.ok) throw new Error(`Ollama ${res.status}: ${await res.text()}`)
+        const data = await res.json() as { response: string }
+        return data.response
+      },
+    }
+  }
+
+  console.error(`Unknown provider: ${name}`)
+  process.exit(1)
+}
+
+// ── Prompt builder (standalone copy from apps/web/src/lib/cards/prompts.ts) ──
+
+const CARD_TYPE_DESCRIPTIONS: Record<string, string> = {
+  discover: 'Discover — one surprising or illuminating insight from the passage that a reader would find worth sitting with. 2-3 sentences.',
+  raw_commentary: 'Notes — a brief, direct marginal note, the kind a thoughtful reader scribbles in the margin. Specific to the text. 2-3 sentences.',
+  connect: 'Connect — links this passage to ideas from elsewhere in the book or other works.',
+  flashcard: 'Flashcard — a question about the transferable concept or principle illustrated in the passage, NOT about specific datasets, examples, or named entities used to explain it. Ask about the underlying idea ("What is the purpose of principal components?") not the example ("What did they do with the NCI60 dataset?"). Answer should be 1-3 sentences.',
+  quiz: 'Quiz — a multiple choice question about a transferable concept or principle, with exactly 4 options (A-D), one correct answer (0-indexed), and a brief explanation for each option. Frame questions around the general idea, not specific examples or datasets from the text.',
+  glossary: 'Glossary — a key term from the passage with its definition as used in this text, optional etymology or origin, and optionally related terms.',
+  contrast: 'Contrast — an "X vs Y" comparison of two concepts, methods, or ideas mentioned or implied in the passage. Present 2-4 key dimensions of difference.',
+  passage: 'Passage — select the most beautiful, significant, or thought-provoking excerpt from the passage. Reproduce it verbatim. Add only a brief (1 sentence) note on why it matters.',
+}
+
+function buildPrompt(
+  chunk: TestChunk,
+  prevChunk: TestChunk | null,
+  docTitle: string,
+  strategy: CardStrategy,
+): string {
+  const contextBlock = prevChunk
+    ? prevChunk.chunkType === 'code'
+      ? `[Prior content was a code block]\n\`\`\`\n${prevChunk.content}\n\`\`\`\n\n`
+      : `[Prior passage — for context only]\n${prevChunk.content}\n\n`
+    : ''
+
+  const isCodeChunk = chunk.chunkType === 'code'
+  const passageBlock = isCodeChunk
+    ? `[Code sample from "${docTitle}"]\n\`\`\`${chunk.language !== 'en' ? chunk.language : ''}\n${chunk.content}\n\`\`\``
+    : `[Passage from "${docTitle}"]\n${chunk.content}`
+
+  const typeDescriptions = strategy.cardTypes
+    .map((t) => `  - ${CARD_TYPE_DESCRIPTIONS[t] ?? t}`)
+    .join('\n')
+
+  const codeInstructions = isCodeChunk
+    ? `\nThis is a CODE chunk. Focus on what the code does, key patterns, and concepts demonstrated. Use inline \`code\` formatting for identifiers.\n`
+    : ''
+
+  return `You are an expert reading companion that creates flashcards, quiz questions, and study materials from book passages.
+
+${contextBlock}${passageBlock}
+${codeInstructions}
+SUGGESTED CARD TYPES (you may adjust based on the content):
+${typeDescriptions}
+
+INSTRUCTIONS:
+1. First, understand what kind of content this is (prose, reference table, notation, formula, code sample, etc.).
+2. ALWAYS generate a "discover" card first if it is in the suggested types — it is the primary card type. Then add other types only if the content warrants them.
+3. You may skip non-discover card types that don't fit, generate fewer cards, or return an empty array if the content is not meaningful enough.
+4. Format card text appropriately:
+   - Use LaTeX notation (e.g., $x^2$, $\\sum_{i=1}^{n}$) for mathematical content
+   - Use clean formatting for reference material (structured lists, tables)
+   - Use natural prose for narrative content
+   - Use backtick code spans for inline code references
+5. CRITICAL — every card MUST be completely self-contained. The reader will see the card WITHOUT the source passage. Never write "the passage", "the text", "the author", "according to the passage", or "this section". Instead, name the specific concept, book, author, or idea directly. Include enough context that the card makes sense on its own.
+
+Respond with ONLY a JSON array. Each element has "type" and "content" (an object whose shape depends on the type):
+
+For "discover", "raw_commentary", "connect":
+  {"type":"discover", "content": {"body":"The key insight is..."}}
+
+For "flashcard":
+  {"type":"flashcard", "content": {"question":"What is...?", "answer":"It is..."}}
+
+For "quiz":
+  {"type":"quiz", "content": {"question":"Which of...?", "options":["A","B","C","D"], "correct":0, "explanations":["Why A","Why B","Why C","Why D"]}}
+
+For "glossary":
+  {"type":"glossary", "content": {"term":"Term", "definition":"Definition", "etymology":"Origin (optional)", "related":["term1","term2"]}}
+
+For "contrast":
+  {"type":"contrast", "content": {"itemA":"X", "itemB":"Y", "dimensions":["dim1","dim2"], "dimensionA":["x1","x2"], "dimensionB":["y1","y2"]}}
+
+For "passage":
+  {"type":"passage", "content": {"excerpt":"Verbatim text...", "commentary":"Why it matters."}}
+
+ALLOWED TYPES: ${strategy.cardTypes.join(', ')}
+
+JSON:`
+}
+
+// ── AI response parser (from apps/web/src/lib/cards/generate.ts) ──
+
+interface AICard { type: CardType; content: CardContent }
+
+function parseResponse(response: string, strategy: CardStrategy): AICard[] {
+  const cleaned = response.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
+
+  const escaped = cleaned
+    .replace(/\\\\/g, '\x00DOUBLE\x00')
+    .replace(/\\"/g, '\x00QUOTE\x00')
+    .replace(/\\\//g, '\x00SLASH\x00')
+    .replace(/\\u([0-9a-fA-F]{4})/g, '\x00U$1\x00')
+    .replace(/\\/g, '\\\\')
+    .replace(/\x00DOUBLE\x00/g, '\\\\')
+    .replace(/\x00QUOTE\x00/g, '\\"')
+    .replace(/\x00SLASH\x00/g, '\\/')
+    .replace(/\x00U([0-9a-fA-F]{4})\x00/g, '\\u$1')
+
+  let cards: unknown[]
+  try {
+    cards = JSON.parse(escaped)
+  } catch {
+    const match = escaped.match(/\[[\s\S]*\]/)
+    if (match) {
+      try { cards = JSON.parse(match[0]) } catch { return [] }
+    } else {
+      return []
+    }
+  }
+
+  if (!Array.isArray(cards)) return []
+  const validTypes = new Set<string>(strategy.cardTypes)
+
+  return cards.filter((card): card is AICard => {
+    if (!card || typeof card !== 'object') return false
+    const c = card as Record<string, unknown>
+    return typeof c.type === 'string' && validTypes.has(c.type) && !!c.content && typeof c.content === 'object'
+  })
+}
+
+// ── Generate ──
+
+const provider = createProvider()
+const docTitle = 'Test Document'
+const interval = strategy.chunkInterval
+
+const textChunks = chunks.filter((c) => c.chunkType === 'text' || c.chunkType === 'code')
+const eligibleChunks = interval > 1
+  ? textChunks.filter((_, i) => i % interval === 0)
+  : textChunks
+
+console.log(`Eligible chunks: ${eligibleChunks.length} (of ${textChunks.length} text/code chunks)`)
+
+interface TestCard {
+  cardType: string
+  content: CardContent
+  chunkIndex: number
+  chunk: { content: string; chapter: string | null; images: TestChunk['images'] }
+}
+
+const allCards: TestCard[] = []
+
+for (let i = 0; i < eligibleChunks.length; i++) {
+  const chunk = eligibleChunks[i]
+  const chunkIndex = chunks.indexOf(chunk)
+  const prevChunk = chunkIndex > 0 ? chunks[chunkIndex - 1] : null
+
+  process.stdout.write(`  Generating cards for chunk ${i + 1}/${eligibleChunks.length}...`)
+
+  try {
+    const prompt = buildPrompt(chunk, prevChunk, docTitle, strategy)
+    const response = await provider.generate(prompt)
+    const cards = parseResponse(response, strategy)
+
+    for (const card of cards) {
+      allCards.push({
+        cardType: card.type,
+        content: card.content,
+        chunkIndex,
+        chunk: {
+          content: chunk.content,
+          chapter: chunk.chapter,
+          images: chunk.images,
+        },
+      })
+    }
+
+    console.log(` ${cards.length} cards (${cards.map((c) => c.type).join(', ')})`)
+  } catch (err) {
+    console.log(` ERROR: ${(err as Error).message}`)
+  }
+}
+
+await writeFile(cardsPath, JSON.stringify(allCards, null, 2))
+
+// Summary
+const typeCounts = new Map<string, number>()
+for (const c of allCards) typeCounts.set(c.cardType, (typeCounts.get(c.cardType) ?? 0) + 1)
+
+console.log(`\nDone! ${allCards.length} cards written to ${cardsPath}`)
+console.log('  Types:', [...typeCounts.entries()].map(([t, n]) => `${t}: ${n}`).join(', '))
