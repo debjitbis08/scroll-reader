@@ -195,23 +195,17 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
         let textChunksSeen = 0
         let elementsThisBatch = 0
 
+        // Buffer images to attach to the next text/code chunk
+        let pendingImages: PendingImage[] = []
+
         for (const el of remaining) {
           if (textChunksSeen >= targetChunks) break
 
           if (el.type === 'image') {
             const imgEl = el as ImageElement
-            const images: PendingImage[] = []
             if (imgEl.file && imgEl.mime) {
-              images.push({ file: imgEl.file, mime: imgEl.mime, alt: imgEl.alt })
+              pendingImages.push({ file: imgEl.file, mime: imgEl.mime, alt: imgEl.alt })
             }
-            pendingChunks.push({
-              chunkType: 'image',
-              content: imgEl.alt || '',
-              chapter: null,
-              wordCount: 0,
-              language: 'en',
-              images: images.length > 0 ? images : undefined,
-            })
             elementsThisBatch++
             continue
           }
@@ -223,7 +217,9 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
               chapter: el.chapter ?? null,
               wordCount: el.content.split(/\s+/).filter(Boolean).length,
               language: el.language ?? 'en',
+              images: pendingImages.length > 0 ? pendingImages : undefined,
             })
+            pendingImages = []
             textChunksSeen++
             elementsThisBatch++
             continue
@@ -238,17 +234,31 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
             textChunks = await callChunker(el.content)
           }
 
-          for (const c of textChunks) {
+          // Attach buffered images to the first text chunk from this element
+          for (let ci = 0; ci < textChunks.length; ci++) {
+            const c = textChunks[ci]
             pendingChunks.push({
               chunkType: 'text',
               content: c.content,
               chapter: c.chapter ?? el.chapter ?? null,
               wordCount: c.word_count,
               language: c.language,
+              ...(ci === 0 && pendingImages.length > 0
+                ? { images: pendingImages }
+                : {}),
             })
             textChunksSeen++
           }
+          if (textChunks.length > 0) pendingImages = []
           elementsThisBatch++
+        }
+
+        // If there are trailing images with no following text chunk,
+        // attach them to the last chunk
+        if (pendingImages.length > 0 && pendingChunks.length > 0) {
+          const last = pendingChunks[pendingChunks.length - 1]
+          last.images = [...(last.images ?? []), ...pendingImages]
+          pendingImages = []
         }
 
         if (pendingChunks.length > 0) {

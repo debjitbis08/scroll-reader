@@ -39,13 +39,15 @@ COPY apps/web/ apps/web/
 ENV SUPABASE_URL=https://placeholder.supabase.co
 ENV SUPABASE_ANON_KEY=placeholder
 ENV DATABASE_URL=postgresql://placeholder:placeholder@localhost:5432/placeholder
+ENV CRON_SECRET=placeholder
 
 RUN pnpm --filter @scroll-reader/web build
 
 # Stage 3: Runtime
 FROM node:22-slim AS runtime
 
-RUN apt-get update && apt-get install -y poppler-utils && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y poppler-utils python3 python3-pip && rm -rf /var/lib/apt/lists/*
+RUN pip install --break-system-packages pymupdf
 RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 
 WORKDIR /app
@@ -69,11 +71,13 @@ COPY --from=node-builder /app/packages/shared-types packages/shared-types
 # Copy Rust binaries
 COPY --from=rust-builder /build/packages/chunker/target/release/chunker /usr/local/bin/chunker
 COPY --from=rust-builder /build/packages/extractor/target/release/extractor /usr/local/bin/extractor
+COPY packages/extractor/figure_extract.py /usr/local/bin/figure_extract.py
 
 ENV HOST=0.0.0.0
 ENV PORT=8080
 ENV CHUNKER_BIN=/usr/local/bin/chunker
 ENV EXTRACTOR_BIN=/usr/local/bin/extractor
+ENV FIGURE_EXTRACT_BIN=/usr/local/bin/figure_extract.py
 ENV NODE_OPTIONS="--max-http-header-size=32768"
 
 EXPOSE 8080

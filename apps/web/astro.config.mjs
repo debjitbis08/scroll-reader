@@ -33,6 +33,7 @@ export default defineConfig({
       BATCH_SIZE: envField.number({ context: 'server', access: 'secret', default: 5 }),
       CHUNKER_BIN: envField.string({ context: 'server', access: 'secret', optional: true }),
       EXTRACTOR_BIN: envField.string({ context: 'server', access: 'secret', optional: true }),
+      FIGURE_EXTRACT_BIN: envField.string({ context: 'server', access: 'secret', optional: true }),
       CRON_SECRET: envField.string({ context: 'server', access: 'secret' }),
     },
   },

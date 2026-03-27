@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { extname, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
-import { EXTRACTOR_BIN } from 'astro:env/server'
+import { EXTRACTOR_BIN, FIGURE_EXTRACT_BIN } from 'astro:env/server'
 
 export interface TextElement { type: 'text'; content: string; chapter?: string }
 export interface ImageElement {
@@ -26,7 +26,14 @@ export async function extractDocument(filePath: string, outputDir?: string): Pro
     const content = await readFile(filePath, 'utf-8')
     return [{ type: 'text', content }]
   }
-  if (ext === '.epub' || ext === '.pdf') return callExtractor(filePath, outputDir)
+  if (ext === '.epub') return callExtractor(filePath, outputDir)
+  if (ext === '.pdf') {
+    const [rustElements, figures] = await Promise.all([
+      callExtractor(filePath, outputDir),
+      outputDir ? callFigureExtractor(filePath, outputDir) : Promise.resolve([]),
+    ])
+    return mergeFigures(rustElements, figures)
+  }
   throw new Error(`Unsupported file type: ${ext}`)
 }
 
@@ -93,6 +100,130 @@ function tagWithPages(
     }
     return { element: el, page: currentPage }
   })
+}
+
+interface FigureElement extends ImageElement {
+  page: number
+}
+
+function resolveFigureExtractBin(): string {
+  if (FIGURE_EXTRACT_BIN) return FIGURE_EXTRACT_BIN
+  const here = dirname(fileURLToPath(import.meta.url))
+  return join(here, '../../../../packages/extractor/figure_extract.py')
+}
+
+async function callFigureExtractor(filePath: string, outputDir: string): Promise<FigureElement[]> {
+  const scriptPath = resolveFigureExtractBin()
+
+  return new Promise((resolve, reject) => {
+    const proc = spawn('python3', [scriptPath], { stdio: ['pipe', 'pipe', 'pipe'] })
+    let stdout = ''
+    let stderr = ''
+
+    proc.stdout.on('data', (d: Buffer) => { stdout += d.toString() })
+    proc.stderr.on('data', (d: Buffer) => { stderr += d.toString() })
+
+    proc.on('close', (code) => {
+      if (code !== 0) {
+        // Non-fatal: if figure extraction fails, we still have the Rust output
+        console.warn(`[figure-extract] exited ${code}: ${stderr.trim()}`)
+        resolve([])
+        return
+      }
+      try {
+        resolve(JSON.parse(stdout) as FigureElement[])
+      } catch {
+        console.warn(`[figure-extract] invalid JSON output`)
+        resolve([])
+      }
+    })
+
+    proc.on('error', () => {
+      // python3 not available or script missing — non-fatal
+      console.warn(`[figure-extract] failed to spawn python3`)
+      resolve([])
+    })
+
+    proc.stdin.write(JSON.stringify({ file_path: filePath, output_dir: outputDir }))
+    proc.stdin.end()
+  })
+}
+
+/**
+ * Merge PyMuPDF-extracted vector figures into the Rust extractor output.
+ *
+ * Strategy:
+ * 1. Replace placeholder image elements (no file) with rendered figures
+ *    from the same page.
+ * 2. Insert remaining figures (from pages that had no placeholder) at
+ *    the correct position based on page number.
+ */
+function mergeFigures(rustElements: DocElement[], figures: FigureElement[]): DocElement[] {
+  if (figures.length === 0) return rustElements
+
+  // Group figures by page
+  const figuresByPage = new Map<number, FigureElement[]>()
+  for (const fig of figures) {
+    const list = figuresByPage.get(fig.page) || []
+    list.push(fig)
+    figuresByPage.set(fig.page, list)
+  }
+
+  const usedPages = new Set<number>()
+  const result: DocElement[] = []
+
+  for (const el of rustElements) {
+    if (el.type === 'image' && !el.file) {
+      // Placeholder image from Rust — try to replace with rendered figure
+      const pageMatch = el.alt.match(/page\s+(\d+)/i)
+      const page = pageMatch ? parseInt(pageMatch[1], 10) : 0
+      const pageFigures = figuresByPage.get(page)
+
+      if (pageFigures && pageFigures.length > 0) {
+        // Replace placeholder with all figures from this page
+        if (!usedPages.has(page)) {
+          for (const fig of pageFigures) {
+            result.push({ type: 'image', alt: fig.alt, file: fig.file, mime: fig.mime })
+          }
+          usedPages.add(page)
+        }
+        // Skip the placeholder either way
+        continue
+      }
+    }
+
+    // Check if we need to insert figures before this element (by page)
+    if (el.type === 'text' || el.type === 'code') {
+      const chapter = el.chapter
+      const pageMatch = chapter?.match(/^Page\s+(\d+)$/i)
+      const page = pageMatch ? parseInt(pageMatch[1], 10) : 0
+
+      if (page > 0) {
+        // Insert any figures from earlier pages that haven't been used yet
+        for (const [figPage, figs] of figuresByPage) {
+          if (figPage <= page && !usedPages.has(figPage)) {
+            for (const fig of figs) {
+              result.push({ type: 'image', alt: fig.alt, file: fig.file, mime: fig.mime })
+            }
+            usedPages.add(figPage)
+          }
+        }
+      }
+    }
+
+    result.push(el)
+  }
+
+  // Append any remaining figures that weren't placed
+  for (const [page, figs] of figuresByPage) {
+    if (!usedPages.has(page)) {
+      for (const fig of figs) {
+        result.push({ type: 'image', alt: fig.alt, file: fig.file, mime: fig.mime })
+      }
+    }
+  }
+
+  return result
 }
 
 async function callExtractor(filePath: string, outputDir?: string): Promise<DocElement[]> {
