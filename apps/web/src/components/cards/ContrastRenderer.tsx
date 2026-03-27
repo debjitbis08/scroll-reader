@@ -10,7 +10,7 @@ export default function ContrastRenderer(props: Props) {
   return (
     <div class="space-y-4">
       {/* Title */}
-      <h3 class="font-display text-xl font-normal text-ed-on-surface">
+      <h3 class="font-display text-xl font-normal text-ed-on-surface flex items-center gap-2 flex-wrap">
         <LatexText text={props.content.itemA} class="inline" /> <span class="font-body text-sm text-ed-on-surface-muted">vs.</span> <LatexText text={props.content.itemB} class="inline" />
       </h3>
 
