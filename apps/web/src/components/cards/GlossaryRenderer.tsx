@@ -11,7 +11,7 @@ export default function GlossaryRenderer(props: Props) {
     <div class="space-y-3">
       {/* Term — large serif */}
       <h3 class="font-display text-2xl font-normal text-ed-on-surface">
-        {props.content.term}
+        <LatexText text={props.content.term} />
       </h3>
 
       {/* Definition */}
