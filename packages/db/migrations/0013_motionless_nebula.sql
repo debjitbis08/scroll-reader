@@ -1,0 +1,10 @@
+ALTER TABLE "card_scores" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "chunk_images" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+CREATE POLICY "card_scores_select_own" ON "card_scores" AS PERMISSIVE FOR SELECT TO "authenticated" USING ("card_scores"."user_id" = (select auth.uid()));--> statement-breakpoint
+CREATE POLICY "card_scores_insert_own" ON "card_scores" AS PERMISSIVE FOR INSERT TO "authenticated" WITH CHECK ("card_scores"."user_id" = (select auth.uid()));--> statement-breakpoint
+CREATE POLICY "card_scores_update_own" ON "card_scores" AS PERMISSIVE FOR UPDATE TO "authenticated" USING ("card_scores"."user_id" = (select auth.uid()));--> statement-breakpoint
+CREATE POLICY "card_scores_delete_own" ON "card_scores" AS PERMISSIVE FOR DELETE TO "authenticated" USING ("card_scores"."user_id" = (select auth.uid()));--> statement-breakpoint
+CREATE POLICY "chunk_images_select_own" ON "chunk_images" AS PERMISSIVE FOR SELECT TO "authenticated" USING (EXISTS (SELECT 1 FROM "chunks" WHERE "chunks"."id" = "chunk_images"."chunk_id" AND "chunks"."user_id" = (select auth.uid())));--> statement-breakpoint
+CREATE POLICY "chunk_images_insert_own" ON "chunk_images" AS PERMISSIVE FOR INSERT TO "authenticated" WITH CHECK (EXISTS (SELECT 1 FROM "chunks" WHERE "chunks"."id" = "chunk_images"."chunk_id" AND "chunks"."user_id" = (select auth.uid())));--> statement-breakpoint
+CREATE POLICY "chunk_images_update_own" ON "chunk_images" AS PERMISSIVE FOR UPDATE TO "authenticated" USING (EXISTS (SELECT 1 FROM "chunks" WHERE "chunks"."id" = "chunk_images"."chunk_id" AND "chunks"."user_id" = (select auth.uid())));--> statement-breakpoint
+CREATE POLICY "chunk_images_delete_own" ON "chunk_images" AS PERMISSIVE FOR DELETE TO "authenticated" USING (EXISTS (SELECT 1 FROM "chunks" WHERE "chunks"."id" = "chunk_images"."chunk_id" AND "chunks"."user_id" = (select auth.uid())));

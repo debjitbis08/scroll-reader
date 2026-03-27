@@ -1,4 +1,6 @@
-import { pgTable, pgEnum, text, boolean, integer, real, timestamp, uuid, unique, jsonb, index, primaryKey } from 'drizzle-orm/pg-core'
+import { pgTable, pgEnum, pgPolicy, text, boolean, integer, real, timestamp, uuid, unique, jsonb, index, primaryKey } from 'drizzle-orm/pg-core'
+import { sql } from 'drizzle-orm'
+import { authUid, authenticatedRole } from 'drizzle-orm/supabase'
 
 export const aiProviderEnum = pgEnum('ai_provider_enum', ['gemini', 'ollama'])
 
@@ -107,7 +109,27 @@ export const chunkImages = pgTable('chunk_images', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [
   index('idx_chunk_images_chunk_id').on(t.chunkId),
-])
+  pgPolicy('chunk_images_select_own', {
+    for: 'select',
+    to: authenticatedRole,
+    using: sql`EXISTS (SELECT 1 FROM ${chunks} WHERE ${chunks.id} = ${t.chunkId} AND ${chunks.userId} = ${authUid})`,
+  }),
+  pgPolicy('chunk_images_insert_own', {
+    for: 'insert',
+    to: authenticatedRole,
+    withCheck: sql`EXISTS (SELECT 1 FROM ${chunks} WHERE ${chunks.id} = ${t.chunkId} AND ${chunks.userId} = ${authUid})`,
+  }),
+  pgPolicy('chunk_images_update_own', {
+    for: 'update',
+    to: authenticatedRole,
+    using: sql`EXISTS (SELECT 1 FROM ${chunks} WHERE ${chunks.id} = ${t.chunkId} AND ${chunks.userId} = ${authUid})`,
+  }),
+  pgPolicy('chunk_images_delete_own', {
+    for: 'delete',
+    to: authenticatedRole,
+    using: sql`EXISTS (SELECT 1 FROM ${chunks} WHERE ${chunks.id} = ${t.chunkId} AND ${chunks.userId} = ${authUid})`,
+  }),
+]).enableRLS()
 
 export const cards = pgTable('cards', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -191,4 +213,24 @@ export const cardScores = pgTable('card_scores', {
   srEaseFactor: real('sr_ease_factor').default(2.5),
 }, (t) => [
   primaryKey({ columns: [t.userId, t.cardId] }),
-])
+  pgPolicy('card_scores_select_own', {
+    for: 'select',
+    to: authenticatedRole,
+    using: sql`${t.userId} = ${authUid}`,
+  }),
+  pgPolicy('card_scores_insert_own', {
+    for: 'insert',
+    to: authenticatedRole,
+    withCheck: sql`${t.userId} = ${authUid}`,
+  }),
+  pgPolicy('card_scores_update_own', {
+    for: 'update',
+    to: authenticatedRole,
+    using: sql`${t.userId} = ${authUid}`,
+  }),
+  pgPolicy('card_scores_delete_own', {
+    for: 'delete',
+    to: authenticatedRole,
+    using: sql`${t.userId} = ${authUid}`,
+  }),
+]).enableRLS()
