@@ -18,6 +18,10 @@ export const documentSourceEnum = pgEnum('document_source', [
   'desktop', 'upload', 'server',
 ])
 
+export const documentPriorityEnum = pgEnum('document_priority', [
+  'pinned', 'active', 'normal',
+])
+
 export const cardTypeEnum = pgEnum('card_type', [
   'discover', 'connect', 'raw_commentary', 'flashcard', 'quiz', 'glossary', 'contrast', 'passage',
 ])
@@ -68,6 +72,8 @@ export const documents = pgTable('documents', {
   chunkCount: integer('chunk_count').default(0),
   cardCount: integer('card_count').default(0),
   readingGoal: readingGoalEnum('reading_goal'),
+  priority: documentPriorityEnum('priority').default('normal').notNull(),
+  paused: boolean('paused').default(false).notNull(),
   lockedBy: text('locked_by'),
   lockedAt: timestamp('locked_at', { withTimezone: true }),
   docVirtualTime: real('doc_virtual_time').default(0).notNull(),

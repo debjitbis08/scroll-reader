@@ -7,6 +7,7 @@ export {
   documentTypeEnum,
   processingStatusEnum,
   documentSourceEnum,
+  documentPriorityEnum,
   cardTypeEnum,
   chunkTypeEnum,
   readingGoalEnum,

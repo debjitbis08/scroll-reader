@@ -1,19 +1,18 @@
 ---
-import Layout from '../layouts/Layout.astro'
-import { Icon } from 'astro-icon/components'
-import { eq, desc, sql } from 'drizzle-orm'
-// Icon import kept for document type icons below
-import { db } from '../lib/db.ts'
-import { documents, cards, chunks } from '@scroll-reader/db'
+import Layout from "../layouts/Layout.astro";
+import { Icon } from "astro-icon/components";
+import { eq, desc, sql } from "drizzle-orm";
+import { db } from "../lib/db.ts";
+import { documents, cards, chunks } from "@scroll-reader/db";
 
-const user = Astro.locals.user
-if (!user) return Astro.redirect('/login')
+const user = Astro.locals.user;
+if (!user) return Astro.redirect("/login");
 
 const docs = await db
   .select()
   .from(documents)
   .where(eq(documents.userId, user.id))
-  .orderBy(desc(documents.createdAt))
+  .orderBy(desc(documents.createdAt));
 
 // Live card counts from DB (document.cardCount may lag behind)
 const cardCounts = await db
@@ -24,72 +23,140 @@ const cardCounts = await db
   .from(cards)
   .innerJoin(chunks, eq(cards.chunkId, chunks.id))
   .where(eq(cards.userId, user.id))
-  .groupBy(chunks.documentId)
+  .groupBy(chunks.documentId);
 
-const cardCountMap = new Map(cardCounts.map((r) => [r.documentId, r.count]))
+const cardCountMap = new Map(cardCounts.map((r) => [r.documentId, r.count]));
 
-const STATUS_BADGE: Record<string, { label: string; color: string }> = {
-  pending: { label: 'Pending', color: 'bg-ctp-yellow/15 text-ctp-yellow' },
-  preview: { label: 'Select pages', color: 'bg-ctp-peach/15 text-ctp-peach' },
-  chunking: { label: 'Chunking', color: 'bg-ctp-blue/15 text-ctp-blue' },
-  generating: { label: 'Generating', color: 'bg-ctp-mauve/15 text-ctp-mauve' },
-  ready: { label: 'Ready', color: 'bg-ctp-green/15 text-ctp-green' },
-  error: { label: 'Error', color: 'bg-ctp-red/15 text-ctp-red' },
-}
+const STATUS_LABEL: Record<string, string> = {
+  pending: "Pending",
+  preview: "Select pages",
+  chunking: "Processing",
+  generating: "Generating",
+  ready: "Ready",
+  error: "Error",
+};
+
+const DOC_TYPE_ICON: Record<string, string> = {
+  book: "mdi:book-open-variant",
+  fiction: "mdi:book-open-variant",
+  paper: "mdi:file-document-outline",
+  article: "mdi:newspaper-variant-outline",
+  manual: "mdi:cog-outline",
+  note: "mdi:note-text-outline",
+  scripture: "mdi:book-cross",
+  other: "mdi:file-document-outline",
+};
+
+const READING_GOAL_LABEL: Record<string, string> = {
+  casual: "Casual",
+  reflective: "Reflective",
+  study: "Study",
+};
 ---
 
 <Layout title="Library — Scroll Reader">
   <main class="min-h-screen">
-    <section class="mx-auto max-w-3xl px-4 py-8">
-      {docs.length === 0 ? (
-        <div class="flex flex-col items-center gap-4 py-20 text-center">
-          <Icon name="mdi:bookshelf" class="size-12 text-ctp-surface2" />
-          <p class="text-ctp-subtext0">No documents yet.</p>
-          <a
-            href="/upload"
-            class="rounded-lg bg-ctp-mauve px-4 py-2 text-sm font-medium text-ctp-base transition-colors hover:bg-ctp-mauve/80"
-          >
-            Upload your first document
-          </a>
-        </div>
-      ) : (
-        <ul class="space-y-3">
-          {docs.map((doc) => {
-            const badge = STATUS_BADGE[doc.processingStatus ?? 'pending']
-            return (
-              <li>
-                <a
-                  href={`/doc/${doc.id}`}
-                  class="flex items-center gap-4 rounded-xl border border-ctp-surface0 bg-ctp-surface0/50 px-5 py-4 transition-colors hover:bg-ctp-surface0"
-                >
-                  <Icon
-                    name={doc.documentType === 'book' ? 'mdi:book-open-variant' : 'mdi:file-document-outline'}
-                    class="size-6 shrink-0 text-ctp-subtext0"
-                  />
-                  <div class="min-w-0 flex-1">
-                    <p class="truncate font-medium">{doc.title}</p>
-                    <p class="mt-0.5 text-xs text-ctp-subtext0">
-                      {doc.author && <span>{doc.author} · </span>}
-                      {cardCountMap.get(doc.id) ?? 0} card{(cardCountMap.get(doc.id) ?? 0) !== 1 ? 's' : ''} · {doc.chunkCount} passage{doc.chunkCount !== 1 ? 's' : ''}
-                    </p>
-                    {(doc.processingStatus === 'chunking' || doc.processingStatus === 'generating') && doc.chunkCount != null && doc.chunkCount > 0 && (
-                      <div class="mt-1.5 h-1 rounded-full bg-ctp-surface2 overflow-hidden">
-                        <div
-                          class="h-full rounded-full bg-ctp-mauve"
-                          style={`width: ${doc.totalElements ? Math.round(((doc.elementsProcessed ?? 0) / doc.totalElements) * 100) : 0}%`}
-                        />
+    <section class="mx-auto max-w-3xl px-4 py-10">
+      {
+        docs.length === 0 ? (
+          <div class="flex flex-col items-center gap-5 py-20 text-center">
+            <Icon
+              name="mdi:bookshelf"
+              class="size-12 text-ed-on-surface-muted"
+            />
+            <p class="font-display text-xl text-ed-on-surface-dim">
+              Your library is empty
+            </p>
+            <a
+              href="/upload"
+              class="rounded bg-ed-primary px-5 py-2 font-body text-sm font-medium text-ed-on-primary transition-colors hover:opacity-90"
+            >
+              Upload your first document
+            </a>
+          </div>
+        ) : (
+          <div>
+            <h1 class="text-2xl mb-4 font-display">My Library</h1>
+            <ul class="space-y-2">
+              {docs.map((doc) => {
+                const cardCount = cardCountMap.get(doc.id) ?? 0;
+                const statusLabel =
+                  STATUS_LABEL[doc.processingStatus ?? "pending"];
+                const isProcessing =
+                  doc.processingStatus === "chunking" ||
+                  doc.processingStatus === "generating";
+                const isReady = doc.processingStatus === "ready";
+                const isError = doc.processingStatus === "error";
+                const progressPct = doc.totalElements
+                  ? Math.round(
+                      ((doc.elementsProcessed ?? 0) / doc.totalElements) * 100,
+                    )
+                  : 0;
+                return (
+                  <li>
+                    <a
+                      href={`/doc/${doc.id}`}
+                      class="group flex items-center gap-4 rounded bg-ed-surface-high px-5 py-4 transition-colors hover:bg-ed-surface-highest"
+                    >
+                      <Icon
+                        name={
+                          DOC_TYPE_ICON[doc.documentType] ??
+                          "mdi:file-document-outline"
+                        }
+                        class="size-5 shrink-0 text-ed-on-surface-muted"
+                      />
+                      <div class="min-w-0 flex-1">
+                        <p class="font-display text-base leading-snug text-ed-on-surface group-hover:text-ed-primary transition-colors truncate">
+                          {doc.title}
+                        </p>
+                        <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 font-body text-[0.7rem] text-ed-on-surface-muted">
+                          {doc.author && <span>{doc.author}</span>}
+                          {doc.readingGoal && (
+                            <span>{READING_GOAL_LABEL[doc.readingGoal]}</span>
+                          )}
+                          {cardCount > 0 && (
+                            <span>
+                              {cardCount} card{cardCount !== 1 ? "s" : ""}
+                            </span>
+                          )}
+                          {doc.priority === "pinned" && (
+                            <span class="flex items-center gap-0.5 text-ed-primary">
+                              <Icon name="mdi:pin" class="size-3" />
+                              Pinned
+                            </span>
+                          )}
+                        </div>
+                        {isProcessing && progressPct > 0 && (
+                          <div class="mt-2 h-0.5 rounded-sm bg-ed-surface-container overflow-hidden">
+                            <div
+                              class="h-full rounded-sm bg-ed-primary transition-all"
+                              style={`width: ${progressPct}%`}
+                            />
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                  <span class={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${badge.color}`}>
-                    {badge.label}
-                  </span>
-                </a>
-              </li>
-            )
-          })}
-        </ul>
-      )}
+                      <span
+                        class:list={[
+                          "shrink-0 font-body text-[0.65rem] uppercase tracking-[0.15em]",
+                          isError
+                            ? "text-ed-on-surface-dim"
+                            : isReady
+                              ? "text-ed-primary"
+                              : isProcessing
+                                ? "text-ed-on-surface-muted"
+                                : "text-ed-on-surface-muted",
+                        ]}
+                      >
+                        {doc.paused ? "Paused" : statusLabel}
+                      </span>
+                    </a>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )
+      }
     </section>
   </main>
 </Layout>

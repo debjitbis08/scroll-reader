@@ -11,9 +11,16 @@ const OPTION_LABELS = ['A', 'B', 'C', 'D']
 export default function QuizRenderer(props: Props) {
   const [selected, setSelected] = createSignal<number | null>(null)
 
-  function select(index: number) {
+  // Shuffled order of original indices, stable for the lifetime of this component
+  const shuffledIndices = [...Array(props.content.options.length).keys()]
+  for (let i = shuffledIndices.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffledIndices[i], shuffledIndices[j]] = [shuffledIndices[j], shuffledIndices[i]]
+  }
+
+  function select(originalIndex: number) {
     if (selected() !== null) return
-    setSelected(index)
+    setSelected(originalIndex)
   }
 
   return (
@@ -23,10 +30,11 @@ export default function QuizRenderer(props: Props) {
 
       {/* Pill-shaped options */}
       <div class="space-y-2">
-        <For each={props.content.options}>
-          {(option, i) => {
-            const isSelected = () => selected() === i()
-            const isCorrect = () => i() === props.content.correct
+        <For each={shuffledIndices}>
+          {(originalIndex, displayIndex) => {
+            const option = props.content.options[originalIndex]
+            const isSelected = () => selected() === originalIndex
+            const isCorrect = () => originalIndex === props.content.correct
             const isAnswered = () => selected() !== null
 
             const style = () => {
@@ -39,15 +47,15 @@ export default function QuizRenderer(props: Props) {
             return (
               <div>
                 <button
-                  onClick={() => select(i())}
+                  onClick={() => select(originalIndex)}
                   disabled={isAnswered()}
                   class={`flex w-full items-center gap-3 rounded-full border px-4 py-2.5 font-body text-sm transition-colors ${style()}`}
                 >
-                  <span class="font-semibold text-ed-on-surface-muted">{OPTION_LABELS[i()]}.</span>
+                  <span class="font-semibold text-ed-on-surface-muted">{OPTION_LABELS[displayIndex()]}.</span>
                   <LatexText text={option.replace(/^[A-Da-d][).]\s*/, '')} class="inline text-left" />
                 </button>
-                <Show when={isAnswered() && (isSelected() || isCorrect()) && props.content.explanations?.[i()]}>
-                  <LatexText text={props.content.explanations[i()]} class="mt-1.5 ml-4 font-body text-xs text-ed-on-surface-muted leading-relaxed" />
+                <Show when={isAnswered() && (isSelected() || isCorrect()) && props.content.explanations?.[originalIndex]}>
+                  <LatexText text={props.content.explanations[originalIndex].replace(/^[A-Da-d][).]\s*/, '')} class="mt-1.5 ml-4 font-body text-xs text-ed-on-surface-muted leading-relaxed" />
                 </Show>
               </div>
             )

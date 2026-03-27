@@ -2,7 +2,7 @@ use flate2::read::ZlibDecoder;
 use scraper::{ElementRef, Html, Selector};
 use serde::Serialize;
 use sha2::{Sha256, Digest};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
@@ -34,6 +34,16 @@ pub enum DocElement {
         #[serde(skip_serializing_if = "Option::is_none")]
         chapter: Option<String>,
     },
+}
+
+/// A merged line from PDF extraction, carrying layout metadata for paragraph
+/// and heading detection.
+#[derive(Debug, Clone)]
+struct PdfLine {
+    top: i32,
+    font_size: f32,
+    is_mono: bool,
+    text: String,
 }
 
 // ── Shared constants ─────────────────────────────────────────────────────────
@@ -270,6 +280,7 @@ fn extract_pdf_via_html(path: &str, output_dir: Option<&Path>) -> Option<Vec<Doc
     // In per-page mode, they're inside each page. Check both.
     let root = document.root_element();
     let mono_fonts = build_mono_font_ids(&root, &fontspec_sel);
+    let doc_font_sizes = build_font_size_map(&root, &fontspec_sel);
 
     // Use a sequential physical index for lopdf (which keys pages 1..N by
     // physical position), and the XML `number` attribute only as a display
@@ -298,10 +309,11 @@ fn extract_pdf_via_html(path: &str, output_dir: Option<&Path>) -> Option<Vec<Doc
 
         // Merge page-level fontspecs (if any) with document-level ones
         let page_mono = build_mono_font_ids(&page_el, &fontspec_sel);
-        let all_mono: std::collections::HashSet<String> = mono_fonts.union(&page_mono).cloned().collect();
+        let all_mono: HashSet<String> = mono_fonts.union(&page_mono).cloned().collect();
+        let page_font_sizes = build_font_size_map(&page_el, &fontspec_sel);
 
-        // Collect text runs with their monospace status, sorted by vertical position
-        let mut runs: Vec<(i32, bool, String)> = Vec::new();
+        // Collect text runs with layout metadata
+        let mut runs: Vec<PdfRun> = Vec::new();
         for text_el in page_el.select(&text_sel) {
             let font_id = text_el.value().attr("font").unwrap_or("");
             let top: i32 = text_el
@@ -309,26 +321,30 @@ fn extract_pdf_via_html(path: &str, output_dir: Option<&Path>) -> Option<Vec<Doc
                 .attr("top")
                 .and_then(|t| t.parse().ok())
                 .unwrap_or(0);
+            let font_size = page_font_sizes.get(font_id)
+                .or_else(|| doc_font_sizes.get(font_id))
+                .copied()
+                .unwrap_or(12.0);
             let is_mono = all_mono.contains(font_id);
             let content = collect_pdf_text_formatted(text_el);
             if content.trim().is_empty() {
                 continue;
             }
-            runs.push((top, is_mono, content));
+            runs.push(PdfRun { top, font_size, is_mono, text: content });
         }
 
         // Merge text runs on the same line (same `top` value)
-        let merged = merge_text_runs(&runs);
+        let merged = merge_pdf_runs(&runs);
 
         // Group consecutive lines by type (mono vs non-mono)
         let mut i = 0;
         while i < merged.len() {
-            let is_mono = merged[i].1;
+            let is_mono = merged[i].is_mono;
 
             if is_mono {
                 let mut code_lines = Vec::new();
-                while i < merged.len() && merged[i].1 {
-                    code_lines.push(merged[i].2.as_str());
+                while i < merged.len() && merged[i].is_mono {
+                    code_lines.push(merged[i].text.as_str());
                     i += 1;
                 }
                 let code_content = code_lines.join("\n");
@@ -340,12 +356,11 @@ fn extract_pdf_via_html(path: &str, output_dir: Option<&Path>) -> Option<Vec<Doc
                     });
                 }
             } else {
-                let mut text_lines = Vec::new();
-                while i < merged.len() && !merged[i].1 {
-                    text_lines.push(merged[i].2.as_str());
+                let start = i;
+                while i < merged.len() && !merged[i].is_mono {
                     i += 1;
                 }
-                let text_content = text_lines.join(" ");
+                let text_content = join_text_with_paragraphs(&merged[start..i]);
                 let cleaned = clean_pdf_page(&text_content);
                 if !cleaned.is_empty() {
                     elements.push(DocElement::Text {
@@ -388,41 +403,147 @@ fn build_mono_font_ids(page_el: &ElementRef, fontspec_sel: &Selector) -> std::co
     mono_ids
 }
 
+/// Builds a map from font ID → font size (in pt) from <fontspec> elements.
+fn build_font_size_map(root: &ElementRef, fontspec_sel: &Selector) -> HashMap<String, f32> {
+    let mut map = HashMap::new();
+    for fs in root.select(fontspec_sel) {
+        let id = fs.value().attr("id").unwrap_or("").to_string();
+        let size: f32 = fs.value().attr("size").and_then(|s| s.parse().ok()).unwrap_or(0.0);
+        map.insert(id, size);
+    }
+    map
+}
+
+/// A raw text run from pdftohtml XML, before line-merging.
+struct PdfRun {
+    top: i32,
+    font_size: f32,
+    is_mono: bool,
+    text: String,
+}
+
 /// Merges text runs that share the same vertical position (same line) into single lines.
 /// A line is classified as monospace only if the majority of its text content (by char
 /// count) comes from monospace font runs. This avoids false positives from inline code
 /// references within prose (e.g. "Use the `Collection` interface").
-fn merge_text_runs(runs: &[(i32, bool, String)]) -> Vec<(i32, bool, String)> {
+fn merge_pdf_runs(runs: &[PdfRun]) -> Vec<PdfLine> {
     if runs.is_empty() {
         return Vec::new();
     }
 
-    let mut merged: Vec<(i32, bool, String)> = Vec::new();
-    let mut current_top = runs[0].0;
-    let mut current_text = runs[0].2.clone();
-    let mut mono_chars: usize = if runs[0].1 { runs[0].2.len() } else { 0 };
-    let mut total_chars: usize = runs[0].2.len();
+    let mut merged: Vec<PdfLine> = Vec::new();
+    let mut current_top = runs[0].top;
+    let mut current_text = runs[0].text.clone();
+    let mut mono_chars: usize = if runs[0].is_mono { runs[0].text.len() } else { 0 };
+    let mut total_chars: usize = runs[0].text.len();
+    // Weighted font size: track (size * char_count) to compute dominant size
+    let mut size_weight: f32 = runs[0].font_size * runs[0].text.len() as f32;
 
     for run in &runs[1..] {
-        if (run.0 - current_top).abs() <= 3 {
-            current_text.push_str(&run.2);
-            total_chars += run.2.len();
-            if run.1 {
-                mono_chars += run.2.len();
+        if (run.top - current_top).abs() <= 3 {
+            current_text.push_str(&run.text);
+            total_chars += run.text.len();
+            size_weight += run.font_size * run.text.len() as f32;
+            if run.is_mono {
+                mono_chars += run.text.len();
             }
         } else {
             let is_mono = total_chars > 0 && mono_chars * 2 > total_chars;
-            merged.push((current_top, is_mono, current_text));
-            current_top = run.0;
-            current_text = run.2.clone();
-            mono_chars = if run.1 { run.2.len() } else { 0 };
-            total_chars = run.2.len();
+            let font_size = if total_chars > 0 { size_weight / total_chars as f32 } else { 0.0 };
+            merged.push(PdfLine { top: current_top, font_size, is_mono, text: current_text });
+            current_top = run.top;
+            current_text = run.text.clone();
+            mono_chars = if run.is_mono { run.text.len() } else { 0 };
+            total_chars = run.text.len();
+            size_weight = run.font_size * run.text.len() as f32;
         }
     }
     let is_mono = total_chars > 0 && mono_chars * 2 > total_chars;
-    merged.push((current_top, is_mono, current_text));
+    let font_size = if total_chars > 0 { size_weight / total_chars as f32 } else { 0.0 };
+    merged.push(PdfLine { top: current_top, font_size, is_mono, text: current_text });
 
     merged
+}
+
+/// Legacy wrapper for tests that still use the old tuple API.
+/// Legacy wrapper for tests that still use the old tuple API.
+#[cfg(test)]
+fn merge_text_runs(runs: &[(i32, bool, String)]) -> Vec<(i32, bool, String)> {
+    let pdf_runs: Vec<PdfRun> = runs.iter().map(|(top, is_mono, text)| PdfRun {
+        top: *top, font_size: 12.0, is_mono: *is_mono, text: text.clone(),
+    }).collect();
+    merge_pdf_runs(&pdf_runs).into_iter().map(|l| (l.top, l.is_mono, l.text)).collect()
+}
+
+/// Joins consecutive non-mono PdfLines into paragraph-aware text, using vertical
+/// gaps to detect paragraph boundaries and font size to detect headings.
+///
+/// Returns the joined text with `\n\n` between paragraphs and `## ` prefixed headings.
+fn join_text_with_paragraphs(lines: &[PdfLine]) -> String {
+    if lines.is_empty() {
+        return String::new();
+    }
+
+    // Determine the body font size (most common size among these lines, by char count).
+    let mut size_counts: HashMap<i32, usize> = HashMap::new();
+    for line in lines {
+        // Quantise to integer pt to group similar sizes
+        let key = line.font_size.round() as i32;
+        *size_counts.entry(key).or_insert(0) += line.text.len();
+    }
+    let body_size = size_counts.into_iter().max_by_key(|&(_, count)| count)
+        .map(|(size, _)| size as f32)
+        .unwrap_or(12.0);
+
+    // Determine typical line spacing from consecutive lines.
+    let mut gaps: Vec<i32> = Vec::new();
+    for pair in lines.windows(2) {
+        let gap = pair[1].top - pair[0].top;
+        if gap > 0 {
+            gaps.push(gap);
+        }
+    }
+    // Median gap = normal line spacing; anything >1.5× that is a paragraph break.
+    let normal_gap = if !gaps.is_empty() {
+        gaps.sort();
+        gaps[gaps.len() / 2]
+    } else {
+        0
+    };
+    let para_threshold = if normal_gap > 0 { (normal_gap as f32 * 1.5) as i32 } else { 0 };
+
+    let mut result = String::new();
+    let mut prev_was_heading = false;
+
+    for (i, line) in lines.iter().enumerate() {
+        // Detect heading: font size notably larger than body text (≥1.2×)
+        let is_heading = line.font_size > body_size * 1.2
+            && line.text.split_whitespace().count() <= 15; // headings are short
+
+        // Detect paragraph break: gap between this line and previous is large
+        let is_para_break = if i > 0 && para_threshold > 0 {
+            let gap = line.top - lines[i - 1].top;
+            gap > para_threshold
+        } else {
+            false
+        };
+
+        if i > 0 {
+            if is_heading || is_para_break || prev_was_heading {
+                result.push_str("\n\n");
+            } else {
+                result.push(' ');
+            }
+        }
+
+        if is_heading {
+            result.push_str("## ");
+        }
+        result.push_str(line.text.trim());
+        prev_was_heading = is_heading;
+    }
+
+    result
 }
 
 /// Collects text from a pdftohtml XML `<text>` element, preserving <b> and <i>
@@ -1608,5 +1729,52 @@ mod tests {
         let DocElement::Code { content, .. } = &elements[1] else { panic!() };
         assert!(content.contains("public class Product"));
         assert!(content.contains("    private ProductId"));
+    }
+
+    #[test]
+    fn join_text_with_paragraphs_detects_gaps() {
+        // Simulate lines with a vertical gap between two paragraphs.
+        // Normal line spacing = 20, so gap of 40 should trigger paragraph break.
+        let lines = vec![
+            PdfLine { top: 100, font_size: 12.0, is_mono: false, text: "First paragraph line one.".into() },
+            PdfLine { top: 120, font_size: 12.0, is_mono: false, text: "First paragraph line two.".into() },
+            PdfLine { top: 180, font_size: 12.0, is_mono: false, text: "Second paragraph line one.".into() },
+            PdfLine { top: 200, font_size: 12.0, is_mono: false, text: "Second paragraph line two.".into() },
+        ];
+        let result = join_text_with_paragraphs(&lines);
+        assert!(result.contains("First paragraph line one. First paragraph line two."),
+            "lines within same paragraph should be space-joined, got: {result}");
+        assert!(result.contains("\n\n"),
+            "paragraph break should be double newline, got: {result}");
+        assert!(result.contains("Second paragraph line one. Second paragraph line two."),
+            "lines within second paragraph should be space-joined, got: {result}");
+    }
+
+    #[test]
+    fn join_text_with_paragraphs_detects_headings() {
+        // A line with significantly larger font size should be prefixed as a heading.
+        let lines = vec![
+            PdfLine { top: 100, font_size: 18.0, is_mono: false, text: "Chapter One".into() },
+            PdfLine { top: 140, font_size: 12.0, is_mono: false, text: "Body text follows here with enough detail.".into() },
+            PdfLine { top: 160, font_size: 12.0, is_mono: false, text: "More body text on the next line.".into() },
+        ];
+        let result = join_text_with_paragraphs(&lines);
+        assert!(result.starts_with("## Chapter One"),
+            "heading should be prefixed with ##, got: {result}");
+        assert!(result.contains("\n\n"),
+            "heading should be followed by paragraph break, got: {result}");
+    }
+
+    #[test]
+    fn join_text_with_paragraphs_no_false_heading_on_uniform_size() {
+        // All lines same font size — no headings should be detected.
+        let lines = vec![
+            PdfLine { top: 100, font_size: 12.0, is_mono: false, text: "Line one.".into() },
+            PdfLine { top: 120, font_size: 12.0, is_mono: false, text: "Line two.".into() },
+            PdfLine { top: 140, font_size: 12.0, is_mono: false, text: "Line three.".into() },
+        ];
+        let result = join_text_with_paragraphs(&lines);
+        assert!(!result.contains("##"), "no heading prefix for uniform size, got: {result}");
+        assert_eq!(result, "Line one. Line two. Line three.");
     }
 }

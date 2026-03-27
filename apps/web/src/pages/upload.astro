@@ -8,17 +8,19 @@ const error = Astro.url.searchParams.get('error')
 ---
 
 <Layout title="Upload — Scroll Reader">
-  <main class="flex min-h-screen items-center justify-center p-6">
-    <div class="w-full max-w-lg space-y-6">
+  <main class="flex h-[calc(100vh-8rem)] items-center justify-center p-6">
+    <div class="w-full max-w-lg space-y-8">
       <div>
-        <h1 class="text-2xl font-bold">Upload a document</h1>
-        <p class="mt-1 text-sm text-ctp-subtext0">
-          We'll generate reading cards from the first few chapters.
+        <h1 class="font-display text-3xl font-semibold tracking-tight text-ed-on-surface">
+          Upload a document
+        </h1>
+        <p class="mt-2 font-body text-sm text-ed-on-surface-muted">
+          We'll extract and generate reading cards from your document.
         </p>
       </div>
 
       {error && (
-        <p class="rounded-lg bg-ctp-red/10 px-4 py-2 text-sm text-ctp-red">{error}</p>
+        <p class="rounded bg-red-900/10 px-4 py-2 font-body text-sm text-red-400">{error}</p>
       )}
 
       <form
@@ -26,17 +28,17 @@ const error = Astro.url.searchParams.get('error')
         method="POST"
         action="/api/upload"
         enctype="multipart/form-data"
-        class="space-y-5"
+        class="space-y-6"
       >
         <!-- Drop zone -->
         <label
           id="drop-zone"
-          class="flex cursor-pointer flex-col items-center gap-3 rounded-xl border-2 border-dashed border-ctp-surface1 bg-ctp-surface0/50 px-6 py-10 text-center transition-colors hover:border-ctp-mauve hover:bg-ctp-surface0"
+          class="flex cursor-pointer flex-col items-center gap-3 rounded bg-ed-surface-high px-6 py-12 text-center transition-colors hover:bg-ed-surface-highest"
         >
-          <Icon name="mdi:file-upload-outline" class="size-10 text-ctp-mauve" />
+          <Icon name="mdi:file-upload-outline" class="size-10 text-ed-primary" />
           <div>
-            <p class="font-medium text-ctp-text">Drop an EPUB or PDF here</p>
-            <p class="mt-1 text-sm text-ctp-subtext0">or click to browse</p>
+            <p class="font-body font-medium text-ed-on-surface">Drop an EPUB or PDF here</p>
+            <p class="mt-1 font-body text-sm text-ed-on-surface-muted">or click to browse</p>
           </div>
           <input
             id="file-input"
@@ -46,35 +48,34 @@ const error = Astro.url.searchParams.get('error')
             required
             class="sr-only"
           />
-          <p id="file-name" class="text-sm font-medium text-ctp-mauve hidden"></p>
+          <p id="file-name" class="hidden font-body text-sm font-medium text-ed-primary"></p>
         </label>
 
         <!-- Privacy -->
-        <label class="flex items-start gap-3 cursor-pointer">
+        <label class="flex cursor-pointer items-start gap-3">
           <input
             type="checkbox"
             name="privacy_acknowledged"
             value="true"
             required
-            class="mt-0.5 accent-ctp-mauve"
+            class="mt-0.5 accent-ed-primary"
           />
-          <span class="text-sm text-ctp-subtext1">
-            I understand this document will be processed by an AI model to generate reading cards.
-            I will only upload content I have the right to share.
+          <span class="font-body text-sm text-ed-on-surface-dim">
+            I understand this document will be processed by an AI model to generate reading cards. I will only upload content I have the right to use.
           </span>
         </label>
 
         <button
           type="submit"
           id="submit-btn"
-          class="w-full rounded-lg bg-ctp-mauve px-4 py-2.5 font-medium text-ctp-base transition-opacity hover:opacity-90 disabled:opacity-50"
+          class="w-full rounded bg-ed-primary cursor-pointer px-4 py-2.5 font-body font-medium text-ed-on-primary transition-opacity hover:opacity-90 disabled:opacity-50"
         >
           Upload &amp; process
         </button>
       </form>
 
-      <p class="text-center text-sm text-ctp-subtext0">
-        <a href="/library" class="font-medium text-ctp-mauve hover:underline">← Back to library</a>
+      <p class="text-center font-body text-sm text-ed-on-surface-muted">
+        <a href="/library" class="font-medium text-ed-primary hover:underline">← Back to library</a>
       </p>
     </div>
   </main>

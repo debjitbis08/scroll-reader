@@ -1,13 +1,12 @@
 ---
 import Layout from '../../layouts/Layout.astro'
 import { Icon } from 'astro-icon/components'
-import { eq, and } from 'drizzle-orm'
+import { eq, and, sql, count, inArray } from 'drizzle-orm'
 import { db } from '../../lib/db.ts'
-import { documents, chunks, cards, jobs } from '@scroll-reader/db'
-import type { CardStrategy, DocumentType, ReadingGoal } from '@scroll-reader/shared-types'
-import { resolveCardStrategy } from '@scroll-reader/shared-types'
+import { documents, chunks, cards, jobs, cardScores, feedEvents } from '@scroll-reader/db'
+import type { DocumentType, ReadingGoal } from '@scroll-reader/shared-types'
+import { resolveCardStrategy, describeStrategy } from '@scroll-reader/shared-types'
 import JobPoller from '../../components/JobPoller.tsx'
-import AutoRefresh from '../../components/AutoRefresh.tsx'
 import PageRangeSelector from '../../components/PageRangeSelector.tsx'
 import LatexText from '../../components/LatexText.tsx'
 import FlashcardRenderer from '../../components/cards/FlashcardRenderer.tsx'
@@ -43,90 +42,332 @@ const isPending = doc.processingStatus === 'pending'
 const isPreview = doc.processingStatus === 'preview'
 const isChunking = doc.processingStatus === 'chunking'
 const isGenerating = doc.processingStatus === 'generating'
+const isReady = doc.processingStatus === 'ready'
 const isError = doc.processingStatus === 'error'
+const hasChunks = !isPending && !isPreview && !isError
 
-// Load cards grouped by chunk (even while still generating — show partial progress)
-type CardRow = typeof cards.$inferSelect
-type ChunkRow = typeof chunks.$inferSelect
-type GroupedCard = { chunk: ChunkRow; cards: CardRow[] }
-
-let grouped: GroupedCard[] = []
-let chunksWithCards = 0
-let totalTextChunks = 0
-
-if (!isPending && !isPreview && !isError) {
-  // Count text chunks for progress display
-  const textChunkRows = await db
-    .select()
-    .from(chunks)
-    .where(and(eq(chunks.documentId, docId), eq(chunks.userId, userId)))
-  totalTextChunks = textChunkRows.filter((c) => c.chunkType === 'text' || c.chunkType === 'code').length
-  const cardRows = await db
-    .select()
-    .from(cards)
-    .innerJoin(chunks, eq(cards.chunkId, chunks.id))
-    .where(and(eq(cards.userId, userId), eq(chunks.documentId, docId)))
-    .orderBy(chunks.chunkIndex)
-
-  // Group cards by chunk
-  const chunkMap = new Map<string, GroupedCard>()
-  for (const row of cardRows) {
-    const key = row.chunks.id
-    if (!chunkMap.has(key)) chunkMap.set(key, { chunk: row.chunks, cards: [] })
-    chunkMap.get(key)!.cards.push(row.cards)
-  }
-  grouped = Array.from(chunkMap.values())
-  chunksWithCards = chunkMap.size
-}
-
-const CARD_TYPE_LABEL: Record<string, string> = {
-  discover: 'Discover',
-  raw_commentary: 'Notes',
-  flashcard: 'Flashcard',
-  quiz: 'Quiz',
-  glossary: 'Glossary',
-  contrast: 'Contrast',
-  passage: 'Passage',
-}
-const CARD_TYPE_COLOR: Record<string, string> = {
-  discover: 'text-ctp-blue',
-  raw_commentary: 'text-ctp-green',
-  flashcard: 'text-ctp-peach',
-  quiz: 'text-ctp-mauve',
-  glossary: 'text-ctp-yellow',
-  contrast: 'text-ctp-teal',
-  passage: 'text-ctp-flamingo',
-}
 const strategy = resolveCardStrategy(
   (doc.documentType ?? 'other') as DocumentType,
   (doc.readingGoal ?? 'reflective') as ReadingGoal,
 )
+
+// --- Data queries (only when we have chunks/cards) ---
+
+type CardRow = typeof cards.$inferSelect
+type ChunkRow = typeof chunks.$inferSelect
+
+let allChunks: ChunkRow[] = []
+let totalTextChunks = 0
+let cardTypeCounts: Record<string, number> = {}
+let chunksWithCards = 0
+let seenChunkIndices = new Set<number>()
+let masteredChunkIndices = new Set<number>()
+let estimatedTotalChunks: number | null = null
+type SampleCard = { card: CardRow; chunk: ChunkRow }
+let sampleCards: SampleCard[] = []
+let chunkIndicesWithCards = new Set<number>()
+
+if (hasChunks) {
+  // Load all chunks (needed for processing map + chunk estimation)
+  allChunks = await db
+    .select()
+    .from(chunks)
+    .where(and(eq(chunks.documentId, docId), eq(chunks.userId, userId)))
+    .orderBy(chunks.chunkIndex)
+
+  totalTextChunks = allChunks.filter((c) => c.chunkType === 'text' || c.chunkType === 'code').length
+
+  // Card type counts + chunks with cards (aggregates only, no full card rows)
+  const typeCountRows = await db
+    .select({
+      cardType: cards.cardType,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(cards)
+    .innerJoin(chunks, eq(cards.chunkId, chunks.id))
+    .where(and(eq(cards.userId, userId), eq(chunks.documentId, docId)))
+    .groupBy(cards.cardType)
+
+  for (const row of typeCountRows) {
+    cardTypeCounts[row.cardType] = row.count
+  }
+
+  // Count distinct chunks that have cards
+  const [cwcRow] = await db
+    .select({ count: sql<number>`count(distinct ${cards.chunkId})::int` })
+    .from(cards)
+    .innerJoin(chunks, eq(cards.chunkId, chunks.id))
+    .where(and(eq(cards.userId, userId), eq(chunks.documentId, docId)))
+  chunksWithCards = cwcRow?.count ?? 0
+
+  // Which chunk indices have cards (for processing map)
+  const chunkIdxRows = await db
+    .select({ chunkIndex: chunks.chunkIndex })
+    .from(cards)
+    .innerJoin(chunks, eq(cards.chunkId, chunks.id))
+    .where(and(eq(cards.userId, userId), eq(chunks.documentId, docId)))
+    .groupBy(chunks.chunkIndex)
+  chunkIndicesWithCards = new Set(chunkIdxRows.map((r) => r.chunkIndex))
+
+  // Sample cards: one per type via DISTINCT ON
+  const sampleRows = await db.execute<{
+    card_id: string; card_type: string; content: Record<string, unknown>;
+    encrypted: boolean; ai_provider: string | null; ai_model: string | null;
+    chunk_id: string; chunk_content: string; chunk_type: string;
+    chunk_index: number; chapter: string | null; word_count: number | null;
+    language: string | null;
+  }>(sql`
+    SELECT DISTINCT ON (c.card_type)
+      c.id AS card_id, c.card_type, c.content, c.encrypted,
+      c.ai_provider, c.ai_model,
+      ch.id AS chunk_id, ch.content AS chunk_content, ch.chunk_type,
+      ch.chunk_index, ch.chapter, ch.word_count, ch.language
+    FROM cards c
+    JOIN chunks ch ON c.chunk_id = ch.id
+    WHERE c.user_id = ${userId} AND ch.document_id = ${docId}
+    ORDER BY c.card_type, c.created_at DESC
+  `)
+
+  sampleCards = sampleRows.map((r) => ({
+    card: {
+      id: r.card_id,
+      cardType: r.card_type,
+      content: typeof r.content === 'string' ? JSON.parse(r.content) : r.content,
+      encrypted: r.encrypted,
+      aiProvider: r.ai_provider,
+      aiModel: r.ai_model,
+      // fields not needed for rendering
+      userId, chunkId: r.chunk_id, secondaryChunkId: null, createdAt: null,
+    } as CardRow,
+    chunk: {
+      id: r.chunk_id,
+      content: r.chunk_content,
+      chunkType: r.chunk_type,
+      chunkIndex: r.chunk_index,
+      chapter: r.chapter,
+      wordCount: r.word_count,
+      language: r.language,
+      // fields not needed for rendering
+      userId, documentId: docId, encrypted: false, createdAt: null,
+    } as ChunkRow,
+  }))
+
+  // Reading progress: distinct chunk indices seen via feed events
+  const seenRows = await db
+    .select({ chunkIndex: chunks.chunkIndex })
+    .from(feedEvents)
+    .innerJoin(cards, eq(feedEvents.cardId, cards.id))
+    .innerJoin(chunks, eq(cards.chunkId, chunks.id))
+    .where(and(
+      eq(feedEvents.userId, userId),
+      eq(chunks.documentId, docId),
+    ))
+    .groupBy(chunks.chunkIndex)
+
+  seenChunkIndices = new Set(seenRows.map((r) => r.chunkIndex))
+
+  // Mastered chunks: chunk indices where at least one card has srRepetition >= 3
+  const masteredRows = await db
+    .select({ chunkIndex: chunks.chunkIndex })
+    .from(cardScores)
+    .innerJoin(cards, eq(cardScores.cardId, cards.id))
+    .innerJoin(chunks, eq(cards.chunkId, chunks.id))
+    .where(and(
+      eq(cardScores.userId, userId),
+      eq(chunks.documentId, docId),
+      sql`${cardScores.srRepetition} >= 3`,
+    ))
+    .groupBy(chunks.chunkIndex)
+
+  masteredChunkIndices = new Set(masteredRows.map((r) => r.chunkIndex))
+
+  // Chunk estimation
+  if (isReady) {
+    estimatedTotalChunks = totalTextChunks
+  } else if (totalTextChunks > 0 && doc.totalPages && doc.pageStart && doc.pageEnd) {
+    const selectedPages = doc.pageEnd - doc.pageStart + 1
+    const processedPages = doc.elementsProcessed && doc.totalElements
+      ? Math.round(selectedPages * (doc.elementsProcessed / doc.totalElements))
+      : 0
+    if (processedPages > 0) {
+      estimatedTotalChunks = Math.round(totalTextChunks * (selectedPages / processedPages))
+    }
+  }
+}
+
+// Format helpers
+const READING_GOAL_LABEL: Record<string, string> = {
+  casual: 'Casual',
+  reflective: 'Reflective',
+  study: 'Study',
+}
+const DOC_TYPE_LABEL: Record<string, string> = {
+  book: 'Book', paper: 'Paper', article: 'Article', manual: 'Manual',
+  note: 'Note', scripture: 'Scripture', other: 'Other', fiction: 'Fiction',
+}
+const CARD_TYPE_LABEL: Record<string, string> = {
+  discover: 'Discover', raw_commentary: 'Notes', flashcard: 'Flashcard',
+  quiz: 'Quiz', glossary: 'Glossary', contrast: 'Contrast', passage: 'Passage',
+}
+const PRIORITY_LABEL: Record<string, string> = {
+  pinned: 'Pinned', active: 'Active', normal: 'Normal',
+}
+
+const uploadDate = doc.createdAt ? new Date(doc.createdAt).toLocaleDateString('en-US', {
+  year: 'numeric', month: 'short', day: 'numeric',
+}) : null
+
+const totalCards = Object.values(cardTypeCounts).reduce((a, b) => a + b, 0)
+
+// Tonal hues for card type distribution chart — need to be visually distinct
+// These are inline styles so they work in both light/dark without extra CSS vars
+const CARD_TYPE_HUE: Record<string, string> = {
+  discover: '#6b8e5a',     // muted green
+  raw_commentary: '#7a8b6e', // sage
+  flashcard: '#b8956a',    // warm amber
+  quiz: '#8a7ab5',         // soft purple
+  glossary: '#b5a045',     // ochre
+  contrast: '#5a8a8a',     // teal
+  passage: '#a06a6a',      // dusty rose
+}
 ---
 
 <Layout title={`${doc.title} — Scroll Reader`}>
-  <div class="mx-auto max-w-3xl space-y-8 px-4 py-10">
-    <!-- Header -->
+  <div class="mx-auto max-w-3xl space-y-8 px-4 py-12">
+
+    <!-- Back link -->
+    <a href="/library" class="inline-flex items-center gap-1.5 font-body text-[0.75rem] tracking-wide text-ed-on-surface-muted hover:text-ed-primary transition-colors">
+      <Icon name="mdi:arrow-left" class="size-4" />
+      Library
+    </a>
+
+    <!-- Header: title + quick actions -->
     <div class="flex items-start justify-between gap-4">
-      <div>
-        <h1 class="text-2xl font-bold">{doc.title}</h1>
-        {doc.processingStatus === 'ready' && (
-          <p class="mt-1 text-sm text-ctp-subtext0">
-            {strategy.cardTypes.length === 0
-              ? `${doc.chunkCount} passage${doc.chunkCount !== 1 ? 's' : ''} · reading mode`
-              : `${doc.cardCount} card${doc.cardCount !== 1 ? 's' : ''} · ${doc.chunkCount} passage${doc.chunkCount !== 1 ? 's' : ''}`
-            }
-          </p>
-        )}
+      <div class="min-w-0">
+        <div id="title-display">
+          <h1 class="font-display text-3xl leading-tight text-ed-on-surface">{doc.title}</h1>
+        </div>
+        <div class="hidden items-center gap-2" id="title-edit">
+          <input
+            type="text"
+            id="title-input"
+            value={doc.title}
+            class="font-display text-3xl leading-tight text-ed-on-surface bg-transparent border-b-2 border-ed-primary outline-none w-full min-w-0"
+          />
+          <button data-action="save-title" data-doc-id={doc.id} class="rounded p-1.5 text-ed-primary hover:bg-ed-surface-high transition-colors shrink-0" title="Save">
+            <Icon name="mdi:check" class="size-5" />
+          </button>
+          <button data-action="cancel-title" class="rounded p-1.5 text-ed-on-surface-muted hover:bg-ed-surface-high transition-colors shrink-0" title="Cancel">
+            <Icon name="mdi:close" class="size-5" />
+          </button>
+        </div>
+        {doc.author && <p class="mt-1 font-body text-sm text-ed-on-surface-dim">{doc.author}</p>}
       </div>
-      <button
-        data-delete-doc
-        data-doc-id={doc.id}
-        class="rounded-md p-2 text-ctp-subtext0 transition-colors hover:bg-ctp-red/10 hover:text-ctp-red"
-        title="Delete document"
-      >
-        <Icon name="mdi:delete-outline" class="size-5" />
-      </button>
+      <div class="flex items-center gap-1 shrink-0">
+        <button
+          data-action="edit-title"
+          data-doc-id={doc.id}
+          class="rounded p-2 text-ed-on-surface-muted transition-colors hover:bg-ed-surface-high hover:text-ed-primary"
+          title="Edit title"
+        >
+          <Icon name="mdi:pencil-outline" class="size-5" />
+        </button>
+        {(isChunking || isGenerating) && !doc.paused && (
+          <button
+            data-action="pause"
+            data-doc-id={doc.id}
+            class="rounded p-2 text-ed-on-surface-muted transition-colors hover:bg-ed-surface-high hover:text-ed-primary"
+            title="Pause card generation"
+          >
+            <Icon name="mdi:pause-circle-outline" class="size-5" />
+          </button>
+        )}
+        {doc.paused && (
+          <button
+            data-action="resume"
+            data-doc-id={doc.id}
+            class="rounded p-2 text-ed-primary transition-colors hover:bg-ed-surface-high"
+            title="Resume card generation"
+          >
+            <Icon name="mdi:play-circle-outline" class="size-5" />
+          </button>
+        )}
+        <button
+          data-action="delete"
+          data-doc-id={doc.id}
+          class="rounded p-2 text-ed-on-surface-muted transition-colors hover:bg-ed-surface-high hover:text-ed-on-surface"
+          title="Delete document"
+        >
+          <Icon name="mdi:delete-outline" class="size-5" />
+        </button>
+      </div>
     </div>
+
+    <!-- Document metadata -->
+    <div class="flex flex-wrap gap-x-4 gap-y-1 font-body text-[0.75rem] tracking-wide text-ed-on-surface-muted">
+      <span>{DOC_TYPE_LABEL[doc.documentType] ?? doc.documentType}</span>
+      {doc.readingGoal && (
+        <span class="flex items-center gap-1">
+          <Icon name="mdi:target" class="size-3.5" />
+          {READING_GOAL_LABEL[doc.readingGoal]}
+        </span>
+      )}
+      {doc.totalPages && (
+        <span class="flex items-center gap-1">
+          <Icon name="mdi:book-open-page-variant-outline" class="size-3.5" />
+          {doc.pageStart && doc.pageEnd && doc.pageEnd !== doc.totalPages
+            ? `pp. ${doc.pageStart}-${doc.pageEnd} of ${doc.totalPages}`
+            : `${doc.totalPages} pages`
+          }
+        </span>
+      )}
+      {doc.source === 'upload' && (
+        <span class="flex items-center gap-1">
+          <Icon name="mdi:cloud-upload-outline" class="size-3.5" />
+          Uploaded
+        </span>
+      )}
+      {uploadDate && (
+        <span class="flex items-center gap-1">
+          <Icon name="mdi:calendar-outline" class="size-3.5" />
+          {uploadDate}
+        </span>
+      )}
+      <span class="flex items-center gap-1">
+        <Icon name="mdi:cards-outline" class="size-3.5" />
+        {describeStrategy(strategy)}
+      </span>
+    </div>
+
+    <!-- Priority control -->
+    {hasChunks && (
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="font-body text-sm tracking-wide text-ed-on-surface-muted">Priority:</span>
+          <div class="border border-ed-outline-dim p-1 rounded">
+            {(['pinned', 'active', 'normal'] as const).map((p) => (
+              <button
+                data-action="priority"
+                data-doc-id={doc.id}
+                data-priority={p}
+                class:list={[
+                  'rounded px-3 py-0.5 font-body text-sm font-medium tracking-wide transition-colors',
+                  doc.priority === p
+                    ? 'bg-ed-surface-highest text-ed-primary'
+                    : 'text-ed-on-surface-muted hover:bg-ed-surface-high',
+                ]}
+              >
+                {p === 'pinned' && <Icon name="mdi:pin" class="size-3 inline -mt-0.5 mr-0.5" />}
+                {PRIORITY_LABEL[p]}
+              </button>
+            ))}
+          </div>
+        </div>
+        <p class="font-body text-xs text-ed-on-surface-muted mt-2">
+          Cards are generated daily across all your documents. Priority controls which documents get processed first when your daily budget is limited.
+        </p>
+      </div>
+    )}
 
     <!-- Pending: extracting page count -->
     {isPending && (
@@ -144,96 +385,229 @@ const strategy = resolveCardStrategy(
       />
     )}
 
-    <!-- Chunking/generating progress -->
-    {(isChunking || isGenerating) && (
-      <div class="rounded-xl border border-ctp-surface1 bg-ctp-surface0 px-6 py-4 space-y-2">
-        <div class="flex items-center gap-3 text-ctp-mauve">
-          <Icon name="mdi:clock-outline" class="size-5" />
-          <p class="text-sm font-medium">
-            Processing gradually — {chunksWithCards} of {totalTextChunks} passages complete
-          </p>
-        </div>
-        <p class="text-xs text-ctp-subtext0">
-          New cards are generated daily. Check back tomorrow for more.
-        </p>
-        {totalTextChunks > 0 && (
-          <div class="h-1.5 rounded-full bg-ctp-surface2 overflow-hidden">
-            <div
-              class="h-full rounded-full bg-ctp-mauve transition-all"
-              style={`width: ${Math.round((chunksWithCards / totalTextChunks) * 100)}%`}
-            />
-          </div>
-        )}
-      </div>
-    )}
-
     <!-- Error state -->
     {isError && (
-      <div class="rounded-xl bg-ctp-red/10 px-6 py-4 text-ctp-red">
-        <p class="font-medium">Processing failed</p>
-        {job?.error && <p class="mt-1 text-sm opacity-80">{job.error}</p>}
-        <a href="/upload" class="mt-3 inline-block text-sm font-medium underline">
+      <div class="rounded bg-ed-surface-high px-6 py-4">
+        <p class="font-body text-sm font-medium text-ed-on-surface">Processing failed</p>
+        {job?.error && <p class="mt-1 font-body text-sm text-ed-on-surface-dim opacity-80">{job.error}</p>}
+        <a href="/upload" class="mt-3 inline-block font-body text-sm font-medium text-ed-primary underline">
           Try another document
         </a>
       </div>
     )}
 
-    <!-- Cards (shown during chunking, generating, and ready) -->
-    {!isPending && !isPreview && !isError && grouped.map(({ chunk, cards: chunkCards }) => (
-      <section class="space-y-3">
-        {chunk.chapter && (
-          <h2 class="text-xs font-semibold uppercase tracking-widest text-ctp-subtext0">
-            {chunk.chapter}
-          </h2>
-        )}
-        {chunk.chunkType === 'code' ? (
-          <div class="relative rounded-lg bg-ctp-mantle overflow-hidden">
-            {chunk.language && chunk.language !== 'en' && (
-              <span class="absolute right-2 top-2 text-xs text-ctp-subtext0/60 font-mono">
-                {chunk.language}
+    <!-- Hero: Processing map with funnel -->
+    {hasChunks && (estimatedTotalChunks ?? totalTextChunks) > 0 && (() => {
+      const mapTotal = estimatedTotalChunks ?? totalTextChunks
+      const textChunks = allChunks.filter((c) => c.chunkType === 'text' || c.chunkType === 'code')
+      const estimatedRemaining = Math.max(0, mapTotal - textChunks.length)
+      return (
+        <div class="rounded bg-ed-surface-high p-6 space-y-6">
+
+          <!-- Funnel numbers -->
+          <div class="flex items-end justify-between gap-2">
+            <div class="flex items-baseline gap-1">
+              {(isChunking || isGenerating) && (
+                <span class="flex items-center gap-1.5 font-body text-[0.7rem] text-ed-on-surface-muted">
+                  <span class="size-1.5 rounded-full bg-ed-primary animate-pulse" />
+                  {doc.paused ? 'Paused' : 'Processing'}
+                </span>
+              )}
+            </div>
+            {totalCards > 0 && (
+              <span class="font-body text-[0.75rem] text-ed-on-surface-muted">
+                {totalCards} card{totalCards !== 1 ? 's' : ''} generated
               </span>
             )}
-            <pre class="overflow-x-auto px-4 py-3 text-xs leading-relaxed max-h-64"><code class="text-ctp-text font-mono whitespace-pre">{chunk.content}</code></pre>
           </div>
-        ) : (
-          <div class="rounded-lg bg-ctp-surface0 px-4 py-3 text-sm text-ctp-subtext1 leading-relaxed">
-            <LatexText text={chunk.content} class="text-sm leading-relaxed text-ctp-subtext1" client:load />
+
+          <div class="grid grid-cols-4 gap-px text-center">
+            <div class="space-y-1">
+              <p class="font-display text-2xl text-ed-on-surface tabular-nums">{masteredChunkIndices.size}</p>
+              <p class="font-body text-[0.65rem] uppercase tracking-[0.15em] text-ed-on-surface-muted">Sections mastered</p>
+            </div>
+            <div class="space-y-1">
+              <p class="font-display text-2xl text-ed-on-surface tabular-nums">{seenChunkIndices.size}</p>
+              <p class="font-body text-[0.65rem] uppercase tracking-[0.15em] text-ed-on-surface-muted">Seen in your feed</p>
+            </div>
+            <div class="space-y-1">
+              <p class="font-display text-2xl text-ed-on-surface tabular-nums">{chunksWithCards}</p>
+              <p class="font-body text-[0.65rem] uppercase tracking-[0.15em] text-ed-on-surface-muted">Sections processed</p>
+            </div>
+            <div class="space-y-1">
+              <div class="flex items-center justify-center gap-1">
+                <p class="font-display text-2xl text-ed-on-surface-dim tabular-nums">
+                  {isReady ? mapTotal : `~${mapTotal}`}
+                </p>
+                {!isReady && (
+                  <span
+                    class="text-ed-on-surface-muted cursor-help"
+                    title="Estimated based on sections extracted so far and total page count"
+                  >
+                    <Icon name="mdi:information-outline" class="size-3.5" />
+                  </span>
+                )}
+              </div>
+              <p class="font-body text-[0.65rem] uppercase tracking-[0.15em] text-ed-on-surface-muted">
+                Sections in book
+              </p>
+            </div>
           </div>
-        )}
-        <div class="grid gap-3 sm:grid-cols-3">
-          {chunkCards.map((card) => (
-            <div class="rounded-xl border border-ctp-surface1 bg-ctp-surface0 p-4 space-y-2">
-              <span class={`text-xs font-semibold uppercase tracking-wide ${CARD_TYPE_COLOR[card.cardType] ?? 'text-ctp-subtext0'}`}>
-                {CARD_TYPE_LABEL[card.cardType] ?? card.cardType}
-              </span>
-              {card.cardType === 'flashcard' ? (
-                <FlashcardRenderer content={card.content as FlashcardContent} client:load />
-              ) : card.cardType === 'quiz' ? (
-                <QuizRenderer content={card.content as QuizContent} client:load />
-              ) : card.cardType === 'glossary' ? (
-                <GlossaryRenderer content={card.content as GlossaryContent} client:load />
-              ) : card.cardType === 'contrast' ? (
-                <ContrastRenderer content={card.content as ContrastContent} client:load />
-              ) : card.cardType === 'passage' ? (
-                <PassageRenderer content={card.content as PassageContent} client:load />
-              ) : (
-                <LatexText text={(card.content as BodyContent).body ?? ''} class="text-sm leading-relaxed text-ctp-text" client:load />
-              )}
+
+          <!-- The map -->
+          <div class="flex flex-wrap gap-px">
+            {/* Real chunks — colored by state */}
+            {textChunks.map((chunk) => {
+              const isMastered = masteredChunkIndices.has(chunk.chunkIndex)
+              const isSeen = seenChunkIndices.has(chunk.chunkIndex)
+              const hasCards = chunkIndicesWithCards.has(chunk.chunkIndex)
+              return (
+                <div
+                  class:list={[
+                    'size-2 rounded-sm',
+                    isMastered ? 'bg-ed-primary' :
+                    isSeen ? 'bg-ed-primary/60' :
+                    hasCards ? 'bg-ed-primary-container' :
+                    'bg-ed-outline-dim',
+                  ]}
+                  title={`Section ${chunk.chunkIndex + 1}${chunk.chapter ? ` · ${chunk.chapter}` : ''}${isMastered ? ' · mastered' : isSeen ? ' · seen' : hasCards ? ' · processed' : ' · not processed'}`}
+                />
+              )
+            })}
+            {/* Estimated remaining — placeholder dots */}
+            {Array.from({ length: estimatedRemaining }).map((_, i) => (
+              <div
+                class="size-2 rounded-sm bg-ed-surface-container"
+                title={`Section ~${textChunks.length + i + 1} · not yet extracted`}
+              />
+            ))}
+          </div>
+
+          <!-- Legend -->
+          <div class="flex flex-wrap gap-x-4 gap-y-1 font-body text-[0.65rem] text-ed-on-surface-muted">
+            <span class="flex items-center gap-1.5">
+              <span class="size-2 rounded-sm bg-ed-primary" />
+              Mastered
+            </span>
+            <span class="flex items-center gap-1.5">
+              <span class="size-2 rounded-sm bg-ed-primary/60" />
+              Seen in feed
+            </span>
+            <span class="flex items-center gap-1.5">
+              <span class="size-2 rounded-sm bg-ed-primary-container" />
+              Processed
+            </span>
+            <span class="flex items-center gap-1.5">
+              <span class="size-2 rounded-sm bg-ed-surface-container" />
+              Not yet processed
+            </span>
+          </div>
+
+          <p class="font-body text-[0.7rem] text-ed-on-surface-muted italic">
+            Each cell is one section of the book. Your cards are drawn only from the highlighted sections. Each may generate multiple cards.
+          </p>
+
+          {(isChunking || isGenerating) && !doc.paused && (
+            <p class="font-body text-[0.7rem] text-ed-on-surface-muted">
+              New cards are generated daily. Check back for more.
+            </p>
+          )}
+        </div>
+      )
+    })()}
+
+    <!-- Card type distribution -->
+    {hasChunks && totalCards > 0 && (
+      <div class="rounded bg-ed-surface-high p-5 space-y-3">
+        <h2 class="font-body text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-ed-primary">Card Types</h2>
+        <div class="space-y-2">
+          {Object.entries(cardTypeCounts)
+            .sort(([, a], [, b]) => b - a)
+            .map(([type, count]) => (
+              <div class="flex items-center gap-2">
+                <span class="size-2 rounded-sm shrink-0" style={`background: ${CARD_TYPE_HUE[type] ?? '#888'}`} />
+                <span class="font-body text-sm text-ed-on-surface-dim flex-1">{CARD_TYPE_LABEL[type] ?? type}</span>
+                <span class="font-body text-sm font-medium text-ed-on-surface tabular-nums">{count}</span>
+              </div>
+            ))
+          }
+        </div>
+        <div class="h-1.5 rounded-sm overflow-hidden flex bg-ed-surface-container">
+          {Object.entries(cardTypeCounts)
+            .sort(([, a], [, b]) => b - a)
+            .map(([type, count]) => (
+              <div
+                class="h-full"
+                style={`width: ${(count / totalCards) * 100}%; background: ${CARD_TYPE_HUE[type] ?? '#888'}`}
+                title={`${CARD_TYPE_LABEL[type]}: ${count}`}
+              />
+            ))
+          }
+        </div>
+      </div>
+    )}
+
+    <!-- Sample cards: one per type, Feed-style -->
+    {hasChunks && sampleCards.length > 0 && (
+      <div class="space-y-6">
+        <h2 class="font-body text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-ed-primary">
+          Sample Cards
+        </h2>
+        <div class="flex flex-col gap-8">
+          {sampleCards.map(({ card, chunk }) => (
+            <div>
+              <div class="mb-2">
+                <span class="font-body text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-ed-primary">
+                  {CARD_TYPE_LABEL[card.cardType] ?? card.cardType}
+                </span>
+              </div>
+              <div class={`rounded p-6 ${card.cardType === 'flashcard' ? 'bg-ed-surface-dim' : 'bg-ed-surface-high'}`}>
+                {card.cardType === 'discover' ? (
+                  <div class="space-y-3">
+                    {(card.content as BodyContent).title && (
+                      <h3 class="font-display text-xl leading-snug text-ed-on-surface">
+                        {(card.content as BodyContent).title}
+                      </h3>
+                    )}
+                    <LatexText text={(card.content as BodyContent).body ?? ''} class="font-body text-sm leading-relaxed text-ed-on-surface-dim" client:load />
+                  </div>
+                ) : card.cardType === 'flashcard' ? (
+                  <FlashcardRenderer content={card.content as FlashcardContent} client:load />
+                ) : card.cardType === 'quiz' ? (
+                  <QuizRenderer content={card.content as QuizContent} client:load />
+                ) : card.cardType === 'glossary' ? (
+                  <GlossaryRenderer content={card.content as GlossaryContent} client:load />
+                ) : card.cardType === 'contrast' ? (
+                  <ContrastRenderer content={card.content as ContrastContent} client:load />
+                ) : card.cardType === 'passage' ? (
+                  <PassageRenderer content={card.content as PassageContent} client:load />
+                ) : (
+                  <LatexText text={(card.content as BodyContent).body ?? ''} class="font-display text-[0.95rem] leading-relaxed text-ed-on-surface" client:load />
+                )}
+                {chunk.chapter && (
+                  <div class="mt-4 flex items-center gap-1.5 text-ed-on-surface-muted">
+                    <svg class="size-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                    </svg>
+                    <span class="truncate font-body text-[0.65rem] tracking-wide">{chunk.chapter}</span>
+                  </div>
+                )}
+              </div>
             </div>
           ))}
         </div>
-      </section>
-    ))}
+      </div>
+    )}
 
-    {!isPending && !isPreview && !isChunking && !isGenerating && !isError && grouped.length === 0 && (
-      <div class="rounded-xl border border-ctp-surface1 bg-ctp-surface0 px-6 py-4 text-center space-y-1">
+    {isReady && sampleCards.length === 0 && (
+      <div class="rounded bg-ed-surface-high px-6 py-5 text-center space-y-1">
         {strategy.cardTypes.length === 0 ? (
           <>
-            <p class="text-ctp-text font-medium">Reading mode</p>
-            <p class="text-sm text-ctp-subtext0">No cards for this document — just reading.</p>
+            <p class="font-display text-lg text-ed-on-surface">Reading mode</p>
+            <p class="font-body text-sm text-ed-on-surface-muted">No cards for this document — just reading.</p>
           </>
         ) : (
-          <p class="text-ctp-subtext0">No cards generated for this document.</p>
+          <p class="font-body text-sm text-ed-on-surface-muted">No cards generated for this document.</p>
         )}
       </div>
     )}
@@ -241,16 +615,97 @@ const strategy = resolveCardStrategy(
 </Layout>
 
 <script>
-  document.querySelector('[data-delete-doc]')?.addEventListener('click', async (e) => {
+  // Edit title
+  const titleDisplay = document.getElementById('title-display')!
+  const titleEdit = document.getElementById('title-edit')!
+  const titleInput = document.getElementById('title-input') as HTMLInputElement
+
+  function startEditing() {
+    titleDisplay.classList.add('hidden')
+    titleEdit.classList.remove('hidden')
+    titleEdit.classList.add('flex')
+    titleInput.focus()
+    titleInput.select()
+  }
+
+  function stopEditing() {
+    titleEdit.classList.add('hidden')
+    titleEdit.classList.remove('flex')
+    titleDisplay.classList.remove('hidden')
+  }
+
+  document.querySelector('[data-action="edit-title"]')?.addEventListener('click', startEditing)
+  document.querySelector('[data-action="cancel-title"]')?.addEventListener('click', () => {
+    titleInput.value = titleDisplay.querySelector('h1')!.textContent!
+    stopEditing()
+  })
+
+  async function saveTitle() {
+    const docId = document.querySelector<HTMLElement>('[data-action="save-title"]')!.dataset.docId
+    const newTitle = titleInput.value.trim()
+    if (!newTitle) return
+    const res = await fetch(`/api/documents/${docId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: newTitle }),
+    })
+    if (res.ok) {
+      titleDisplay.querySelector('h1')!.textContent = newTitle
+      document.title = `${newTitle} — Scroll Reader`
+      stopEditing()
+    } else {
+      alert('Failed to update title.')
+    }
+  }
+
+  document.querySelector('[data-action="save-title"]')?.addEventListener('click', saveTitle)
+  titleInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') saveTitle()
+    if (e.key === 'Escape') {
+      titleInput.value = titleDisplay.querySelector('h1')!.textContent!
+      stopEditing()
+    }
+  })
+
+  // Delete
+  document.querySelector('[data-action="delete"]')?.addEventListener('click', async (e) => {
     const btn = e.currentTarget as HTMLElement
     const docId = btn.dataset.docId
     if (!confirm('Delete this document and all its cards?')) return
-
     const res = await fetch(`/api/documents/${docId}`, { method: 'DELETE' })
-    if (res.ok) {
-      window.location.href = '/library'
-    } else {
-      alert('Failed to delete document.')
-    }
+    if (res.ok) window.location.href = '/library'
+    else alert('Failed to delete document.')
   })
+
+  // Pause / Resume
+  for (const btn of document.querySelectorAll('[data-action="pause"], [data-action="resume"]')) {
+    btn.addEventListener('click', async (e) => {
+      const el = e.currentTarget as HTMLElement
+      const docId = el.dataset.docId
+      const action = el.dataset.action // 'pause' or 'resume'
+      const res = await fetch(`/api/documents/${docId}/pause`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paused: action === 'pause' }),
+      })
+      if (res.ok) window.location.reload()
+      else alert(`Failed to ${action} processing.`)
+    })
+  }
+
+  // Priority
+  for (const btn of document.querySelectorAll('[data-action="priority"]')) {
+    btn.addEventListener('click', async (e) => {
+      const el = e.currentTarget as HTMLElement
+      const docId = el.dataset.docId
+      const priority = el.dataset.priority
+      const res = await fetch(`/api/documents/${docId}/priority`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ priority }),
+      })
+      if (res.ok) window.location.reload()
+      else alert('Failed to update priority.')
+    })
+  }
 </script>

@@ -504,13 +504,14 @@ export async function processUser(userId: string, tier: Tier): Promise<number> {
 
   const staleThreshold = new Date(Date.now() - LOCK_EXPIRY_MS)
 
-  // Fetch active documents that are not locked by another machine
+  // Fetch active documents that are not locked by another machine and not paused
   const activeDocs = await db
     .select()
     .from(documents)
     .where(and(
       eq(documents.userId, userId),
       inArray(documents.processingStatus, ['chunking', 'generating']),
+      eq(documents.paused, false),
       or(
         isNull(documents.lockedBy),
         eq(documents.lockedBy, MACHINE_ID),
@@ -521,10 +522,15 @@ export async function processUser(userId: string, tier: Tier): Promise<number> {
 
   if (activeDocs.length === 0) return 0
 
-  // Priority doc = oldest by createdAt
-  const priorityDocId = activeDocs.reduce((oldest, doc) =>
-    doc.createdAt! < oldest.createdAt! ? doc : oldest,
-  ).id
+  // Priority doc = pinned > active > normal, then oldest by createdAt
+  const PRIORITY_RANK: Record<string, number> = { pinned: 0, active: 1, normal: 2 }
+  const priorityDocId = activeDocs.reduce((best, doc) => {
+    const bestRank = PRIORITY_RANK[best.priority] ?? 2
+    const docRank = PRIORITY_RANK[doc.priority] ?? 2
+    if (docRank < bestRank) return doc
+    if (docRank === bestRank && doc.createdAt! < best.createdAt!) return doc
+    return best
+  }).id
 
   let totalGenerated = 0
   const exhausted = new Set<string>()

@@ -453,9 +453,9 @@ export default function Feed() {
                                 )
                               }
                               return (
-                                <p class="rounded bg-ed-surface-container px-3 py-2 font-body text-xs leading-relaxed text-ed-on-surface-dim">
+                                <div class="max-h-64 overflow-y-auto rounded bg-ed-surface-container px-3 py-2 font-body text-xs leading-relaxed text-ed-on-surface-dim whitespace-pre-line text-justify">
                                   {c.content}
-                                </p>
+                                </div>
                               )
                             })()}
                           </Show>

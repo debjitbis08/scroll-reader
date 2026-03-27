@@ -5,6 +5,30 @@ import { documents } from '@scroll-reader/db'
 import { createSupabaseServer } from '../../../lib/supabase.ts'
 import { deleteDocument, deleteDocumentImages } from '../../../lib/storage.ts'
 
+export const PATCH: APIRoute = async ({ params, request, cookies }) => {
+  const supabase = createSupabaseServer(request, cookies)
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return new Response(null, { status: 401 })
+
+  const docId = params.id!
+  const body = await request.json()
+  const title = typeof body.title === 'string' ? body.title.trim() : null
+
+  if (!title) return new Response(JSON.stringify({ error: 'Title is required' }), { status: 400 })
+
+  const [doc] = await db
+    .select({ id: documents.id })
+    .from(documents)
+    .where(and(eq(documents.id, docId), eq(documents.userId, user.id)))
+    .limit(1)
+
+  if (!doc) return new Response(null, { status: 404 })
+
+  await db.update(documents).set({ title }).where(eq(documents.id, docId))
+
+  return new Response(JSON.stringify({ title }), { status: 200 })
+}
+
 export const DELETE: APIRoute = async ({ params, request, cookies }) => {
   const supabase = createSupabaseServer(request, cookies)
   const { data: { user } } = await supabase.auth.getUser()
