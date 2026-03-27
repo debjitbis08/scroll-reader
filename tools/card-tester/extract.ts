@@ -84,8 +84,12 @@ async function callPython(scriptPath: string, input: Record<string, string>): Pr
     proc.stdout.on('data', (d: Buffer) => { stdout += d.toString() })
     proc.stderr.on('data', (d: Buffer) => { stderr += d.toString() })
     proc.on('close', (code) => {
-      if (code !== 0) {
-        console.warn(`[figure-extract] exited ${code}: ${stderr.trim()}`)
+      // PyMuPDF may print warnings to stderr and exit with non-zero/null code
+      // but still produce valid JSON on stdout — use stdout if it looks like JSON
+      if (stdout.trim().startsWith('[')) {
+        resolve(stdout)
+      } else if (code !== 0) {
+        console.warn(`[figure-extract] exited ${code}: ${stderr.trim().slice(0, 200)}`)
         resolve('[]')
       } else {
         resolve(stdout)
@@ -198,15 +202,17 @@ if (figures.length > 0) {
   elements = merged
 }
 
-// Filter by page range
+// Filter by page range — track current page so images inherit context
 if (pageStart > 0 && ext === '.pdf') {
+  let currentPage = 1
   elements = elements.filter((el) => {
     if (el.type === 'text' || el.type === 'code') {
       const m = el.chapter?.match(/^Page\s+(\d+)$/i)
-      const page = m ? parseInt(m[1], 10) : 1
-      return page >= pageStart && page <= pageEnd
+      if (m) currentPage = parseInt(m[1], 10)
+      return currentPage >= pageStart && currentPage <= pageEnd
     }
-    return true // keep images (they've been placed at correct positions)
+    // Images inherit the page of the preceding text element
+    return currentPage >= pageStart && currentPage <= pageEnd
   })
 }
 

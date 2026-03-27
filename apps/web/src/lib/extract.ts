@@ -124,18 +124,23 @@ async function callFigureExtractor(filePath: string, outputDir: string): Promise
     proc.stderr.on('data', (d: Buffer) => { stderr += d.toString() })
 
     proc.on('close', (code) => {
+      // PyMuPDF may print warnings to stderr and exit with non-zero/null code
+      // but still produce valid JSON on stdout — use stdout if parseable
+      const trimmed = stdout.trim()
+      if (trimmed.startsWith('[')) {
+        try {
+          resolve(JSON.parse(trimmed) as FigureElement[])
+          return
+        } catch {
+          // fall through
+        }
+      }
       if (code !== 0) {
-        // Non-fatal: if figure extraction fails, we still have the Rust output
-        console.warn(`[figure-extract] exited ${code}: ${stderr.trim()}`)
-        resolve([])
-        return
-      }
-      try {
-        resolve(JSON.parse(stdout) as FigureElement[])
-      } catch {
+        console.warn(`[figure-extract] exited ${code}: ${stderr.trim().slice(0, 200)}`)
+      } else {
         console.warn(`[figure-extract] invalid JSON output`)
-        resolve([])
       }
+      resolve([])
     })
 
     proc.on('error', () => {
