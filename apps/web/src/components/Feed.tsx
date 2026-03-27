@@ -193,24 +193,20 @@ export default function Feed() {
   const [hasMore, setHasMore] = createSignal(true)
   const [error, setError] = createSignal<string | null>(null)
   let sentinelRef: HTMLDivElement | undefined
-  let observer: IntersectionObserver | undefined
 
   async function loadMore() {
     if (loading() || !hasMore()) return
     setLoading(true)
     try {
       const existingIds = cards().map((c) => c.card.id)
-      // Send only the most recent 100 IDs to keep the URL reasonable
-      const excludeIds = existingIds.slice(-100)
-      const excludeParam = excludeIds.length > 0 ? `&exclude=${excludeIds.join(',')}` : ''
+      const excludeParam = existingIds.length > 0 ? `&exclude=${existingIds.join(',')}` : ''
       const res = await fetch(`/api/feed?limit=${BATCH_SIZE}${excludeParam}`)
       if (!res.ok) throw new Error(`Failed to load feed: ${res.status}`)
       const batch: FeedCard[] = await res.json()
-      if (batch.length < BATCH_SIZE) setHasMore(false)
+      if (batch.length === 0) setHasMore(false)
       // Deduplicate in case of any overlap
       const existingSet = new Set(existingIds)
       const newCards = batch.filter((c) => !existingSet.has(c.card.id))
-      if (newCards.length === 0 && batch.length > 0) setHasMore(false)
       setCards((prev) => [...prev, ...newCards])
       setError(null)
     } catch (e) {
@@ -218,48 +214,53 @@ export default function Feed() {
     } finally {
       setLoading(false)
       setInitialLoaded(true)
+      // If sentinel is still visible after loading (content didn't fill viewport),
+      // schedule another check since no scroll event will fire.
+      requestAnimationFrame(checkSentinel)
     }
   }
 
-  // Viewport ownership scroll handler
-  const handleScroll = throttle(() => {
+  function checkSentinel() {
+    if (!sentinelRef || loading() || !hasMore()) return
+    const rect = sentinelRef.getBoundingClientRect()
+    if (rect.top < window.innerHeight + 600) {
+      loadMore()
+    }
+  }
+
+  // Combined scroll handler: impression tracking + infinite scroll sentinel check
+  const handleScrollAndSentinel = throttle(() => {
+    // Impression tracking
     const owner = getOwnerCard(
       Array.from(document.querySelectorAll('[data-card-id]')),
     )
-    if (!owner) return
-
-    const cardId = (owner as HTMLElement).dataset.cardId!
-    if (cardId !== impressionState.currentCardId) {
-      if (impressionState.currentCardId && impressionState.startTime) {
-        const duration = Date.now() - impressionState.startTime
-        bufferImpression(impressionState.currentCardId, duration, impressionState.currentSrDue)
+    if (owner) {
+      const cardId = (owner as HTMLElement).dataset.cardId!
+      if (cardId !== impressionState.currentCardId) {
+        if (impressionState.currentCardId && impressionState.startTime) {
+          const duration = Date.now() - impressionState.startTime
+          bufferImpression(impressionState.currentCardId, duration, impressionState.currentSrDue)
+        }
+        impressionState.currentCardId = cardId
+        impressionState.currentSrDue = (owner as HTMLElement).dataset.srDue === 'true'
+        impressionState.startTime = Date.now()
       }
-      impressionState.currentCardId = cardId
-      impressionState.currentSrDue = (owner as HTMLElement).dataset.srDue === 'true'
-      impressionState.startTime = Date.now()
     }
+
+    // Infinite scroll
+    checkSentinel()
   }, 100)
 
   onMount(() => {
     loadMore()
 
-    observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) loadMore()
-      },
-      { rootMargin: '200px' },
-    )
-
-    if (sentinelRef) observer.observe(sentinelRef)
-
-    window.addEventListener('scroll', handleScroll, { passive: true })
+    window.addEventListener('scroll', handleScrollAndSentinel, { passive: true })
     const flushInterval = setInterval(flushImpressions, FLUSH_INTERVAL_MS)
     document.addEventListener('visibilitychange', onVisibilityChange)
     window.addEventListener('pagehide', flushCurrentAndBuffer)
 
     onCleanup(() => {
-      observer?.disconnect()
-      window.removeEventListener('scroll', handleScroll)
+      window.removeEventListener('scroll', handleScrollAndSentinel)
       clearInterval(flushInterval)
       document.removeEventListener('visibilitychange', onVisibilityChange)
       window.removeEventListener('pagehide', flushCurrentAndBuffer)
