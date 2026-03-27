@@ -1,4 +1,4 @@
-import type { AIProvider } from './index.ts'
+import type { AIProvider, ImagePart } from './index.ts'
 import { OLLAMA_MODEL, OLLAMA_BASE_URL } from 'astro:env/server'
 
 interface OllamaResponse {
@@ -15,11 +15,15 @@ export class OllamaProvider implements AIProvider {
     this.baseUrl = OLLAMA_BASE_URL
   }
 
-  async generate(prompt: string): Promise<string> {
+  async generate(prompt: string, images?: ImagePart[]): Promise<string> {
+    const body: Record<string, unknown> = { model: this.model, prompt, stream: false }
+    if (images && images.length > 0) {
+      body.images = images.map((img) => img.base64)
+    }
     const res = await fetch(`${this.baseUrl}/api/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: this.model, prompt, stream: false }),
+      body: JSON.stringify(body),
     })
 
     if (!res.ok) {

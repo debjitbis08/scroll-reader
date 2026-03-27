@@ -8,6 +8,7 @@ import QuizRenderer from './cards/QuizRenderer.tsx'
 import GlossaryRenderer from './cards/GlossaryRenderer.tsx'
 import ContrastRenderer from './cards/ContrastRenderer.tsx'
 import PassageRenderer from './cards/PassageRenderer.tsx'
+import CardImages from './cards/CardImages.tsx'
 import type { CardContent, BodyContent, FlashcardContent, QuizContent, GlossaryContent, ContrastContent, PassageContent } from '@scroll-reader/shared-types'
 
 interface FeedCard {
@@ -32,6 +33,7 @@ interface FeedCard {
   actions: string[]
   isSrDue: boolean
   wordCount: number
+  chunkImageUrls: { url: string; alt: string }[]
 }
 
 // --- Impression tracking ---
@@ -327,6 +329,16 @@ export default function Feed() {
                       <PassageRenderer content={item.card.content as PassageContent} />
                     </Match>
                   </Switch>
+                  <Show when={
+                    Array.isArray((item.card.content as Record<string, unknown>).images) &&
+                    ((item.card.content as Record<string, unknown>).images as number[]).length > 0 &&
+                    item.chunkImageUrls.length > 0
+                  }>
+                    <CardImages
+                      indices={(item.card.content as Record<string, unknown>).images as number[]}
+                      chunkImageUrls={item.chunkImageUrls}
+                    />
+                  </Show>
                   </div>
 
                 {/* Source */}

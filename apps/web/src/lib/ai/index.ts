@@ -2,12 +2,17 @@ import { GeminiProvider } from './gemini.ts'
 import { OllamaProvider } from './ollama.ts'
 import { AI_PROVIDER } from 'astro:env/server'
 
+export interface ImagePart {
+  mimeType: string
+  base64: string
+}
+
 // Single interface for all AI providers.
 // No provider-specific logic may appear outside this module.
 export interface AIProvider {
   readonly name: 'gemini' | 'ollama'
   readonly model: string
-  generate(prompt: string): Promise<string>
+  generate(prompt: string, images?: ImagePart[]): Promise<string>
 }
 
 export function createProvider(): AIProvider {

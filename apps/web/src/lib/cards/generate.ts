@@ -1,4 +1,4 @@
-import type { AIProvider } from '../ai/index.ts'
+import type { AIProvider, ImagePart } from '../ai/index.ts'
 import type { Document, Chunk, InsertCard } from '@scroll-reader/db'
 import type { CardType, CardStrategy, CardContent, DocumentType, ReadingGoal } from '@scroll-reader/shared-types'
 import { resolveCardStrategy } from '@scroll-reader/shared-types'
@@ -23,6 +23,7 @@ export async function generateCardsForChunk(
   doc: Document,
   provider: AIProvider,
   cardTypes?: CardType[],
+  images?: { base64: string; mimeType: string; alt: string }[],
 ): Promise<InsertCard[]> {
   const strategy: CardStrategy = cardTypes
     ? { cardTypes, chunkInterval: 1 }
@@ -31,8 +32,14 @@ export async function generateCardsForChunk(
         (doc.readingGoal ?? 'reflective') as ReadingGoal,
       )
 
-  const prompt = buildSmartPrompt(chunk, prevChunk, doc, strategy)
-  const response = await provider.generate(prompt)
+  const imageAlts = images?.map((img) => img.alt)
+  const imageParts: ImagePart[] | undefined = images?.map((img) => ({
+    base64: img.base64,
+    mimeType: img.mimeType,
+  }))
+
+  const prompt = buildSmartPrompt(chunk, prevChunk, doc, strategy, imageAlts)
+  const response = await provider.generate(prompt, imageParts)
   const aiCards = parseAIResponse(response, strategy)
 
   return aiCards.map((card) => ({

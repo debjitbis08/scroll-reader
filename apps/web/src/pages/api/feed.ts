@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro'
 import { eq, and, sql, inArray, notInArray, desc, or } from 'drizzle-orm'
 import { db } from '../../lib/db.ts'
-import { cards, chunks, documents, cardActions, cardScores, feedEvents } from '@scroll-reader/db'
+import { cards, chunks, chunkImages, documents, cardActions, cardScores, feedEvents } from '@scroll-reader/db'
 import { createSupabaseServer } from '../../lib/supabase.ts'
 
 type CardType = 'discover' | 'connect' | 'raw_commentary' | 'flashcard' | 'quiz' | 'glossary' | 'contrast' | 'passage'
@@ -348,6 +348,34 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
     actionMap.get(a.cardId)!.push(a.action)
   }
 
+  // Load chunk images for cards that reference images in content
+  const allRows = [...srPairs, ...selectedRegular]
+  const chunkIdsNeedingImages = new Set(
+    allRows
+      .filter((r) => {
+        const content = r.card.content as Record<string, unknown> | null
+        return content && Array.isArray(content.images) && content.images.length > 0
+      })
+      .map((r) => r.chunk.id),
+  )
+
+  const chunkImageRows = chunkIdsNeedingImages.size > 0
+    ? await db
+        .select()
+        .from(chunkImages)
+        .where(inArray(chunkImages.chunkId, [...chunkIdsNeedingImages]))
+        .orderBy(chunkImages.position)
+    : []
+
+  // Build proxy URLs (cached by browser + edge) instead of signed URLs
+  const chunkImageMap = new Map<string, { url: string; alt: string; position: number }[]>()
+  for (const img of chunkImageRows) {
+    const url = `/api/images/${img.storagePath}`
+    const list = chunkImageMap.get(img.chunkId) ?? []
+    list.push({ url, alt: img.altText ?? '', position: img.position })
+    chunkImageMap.set(img.chunkId, list)
+  }
+
   function toFeedItem(r: FeedRow) {
     return {
       card: r.card,
@@ -356,6 +384,7 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
       actions: actionMap.get(r.card.id) ?? [],
       isSrDue: r.isSrDue,
       wordCount: r.wordCount ?? 0,
+      chunkImageUrls: chunkImageMap.get(r.chunk.id) ?? [],
     }
   }
 

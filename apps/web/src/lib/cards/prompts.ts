@@ -22,6 +22,7 @@ export function buildSmartPrompt(
   prevChunk: Chunk | null,
   doc: Document,
   strategy?: CardStrategy | null,
+  imageAlts?: string[],
 ): string {
   const docLabel = doc.title ?? 'Untitled'
 
@@ -55,13 +56,22 @@ CODE-SPECIFIC INSTRUCTIONS:
 `
     : ''
 
+  const hasImages = imageAlts && imageAlts.length > 0
+  const imageBlock = hasImages
+    ? `\nThis passage has ${imageAlts.length} associated figure(s) attached below. You can see them. The figures are indexed as:
+${imageAlts.map((alt, i) => `  [${i}] ${alt}`).join('\n')}
+
+When a figure is relevant to a card, include an "images" array in the content object with the 0-based indices of the figures to display with that card. Only include figures that are directly relevant to that specific card — not every card needs figures.
+`
+    : ''
+
   return `${contextBlock}${passageBlock}
 
 You are a reading companion AI. Analyze the ${isCodeChunk ? 'code sample' : 'passage'} above and generate reading cards.
 
 SUGGESTED CARD TYPES (you may adjust based on the content):
 ${typeDescriptions}
-${codeInstructions}
+${codeInstructions}${imageBlock}
 INSTRUCTIONS:
 1. First, understand what kind of content this is (prose, reference table, notation, formula, code sample, etc.).
 2. ALWAYS generate a "discover" card first if it is in the suggested types — it is the primary card type. Then add other types only if the content warrants them.
@@ -76,22 +86,24 @@ INSTRUCTIONS:
 Respond with ONLY a JSON array. Each element has "type" and "content" (an object whose shape depends on the type):
 
 For "discover", "raw_commentary", "connect":
-  {"type":"discover", "content": {"body":"The key insight is..."}}
+  {"type":"discover", "content": {"body":"The key insight is...", "images":[0]}}
 
 For "flashcard":
-  {"type":"flashcard", "content": {"question":"What is...?", "answer":"It is..."}}
+  {"type":"flashcard", "content": {"question":"What is...?", "answer":"It is...", "images":[0]}}
 
 For "quiz":
-  {"type":"quiz", "content": {"question":"Which of the following...?", "options":["A...","B...","C...","D..."], "correct":0, "explanations":["Why A...","Why B...","Why C...","Why D..."]}}
+  {"type":"quiz", "content": {"question":"Which of the following...?", "options":["A...","B...","C...","D..."], "correct":0, "explanations":["Why A...","Why B...","Why C...","Why D..."], "images":[0]}}
 
 For "glossary":
   {"type":"glossary", "content": {"term":"Term", "definition":"Definition as used here", "etymology":"Optional origin", "related":["related1","related2"]}}
 
 For "contrast":
-  {"type":"contrast", "content": {"itemA":"Concept A", "itemB":"Concept B", "dimensions":["dim1","dim2","dim3"], "dimensionA":["A trait1","A trait2","A trait3"], "dimensionB":["B trait1","B trait2","B trait3"]}}
+  {"type":"contrast", "content": {"itemA":"Concept A", "itemB":"Concept B", "dimensions":["dim1","dim2","dim3"], "dimensionA":["A trait1","A trait2","A trait3"], "dimensionB":["B trait1","B trait2","B trait3"], "images":[0,1]}}
 
 For "passage":
   {"type":"passage", "content": {"excerpt":"The verbatim excerpt...", "commentary":"Why this matters."}}
+
+The "images" array is OPTIONAL on all types — only include it when figures are directly relevant to that specific card.
 
 Allowed types: ${JSON.stringify(suggestedTypes)}
 If no cards are appropriate, return: []

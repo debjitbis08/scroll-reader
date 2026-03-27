@@ -1,9 +1,18 @@
 import type { APIRoute } from 'astro'
-import { getImageSignedUrl } from '../../../lib/storage.ts'
+import { downloadDocument } from '../../../lib/storage.ts'
+
+const MIME_TYPES: Record<string, string> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+  '.svg': 'image/svg+xml',
+}
 
 /**
- * Generates a signed URL for a stored image and redirects to it.
- * This avoids exposing the Supabase service role key to the client.
+ * Image proxy — downloads from Supabase storage and serves with
+ * Cache-Control headers so Fly.io and the browser cache the result.
  *
  * GET /api/images/{userId}/{documentId}/images/{filename}
  */
@@ -19,8 +28,17 @@ export const GET: APIRoute = async ({ params, locals }) => {
   }
 
   try {
-    const url = await getImageSignedUrl(storagePath)
-    return Response.redirect(url, 302)
+    const buffer = await downloadDocument(storagePath)
+    const ext = storagePath.substring(storagePath.lastIndexOf('.'))
+    const contentType = MIME_TYPES[ext] ?? 'application/octet-stream'
+
+    return new Response(new Uint8Array(buffer), {
+      headers: {
+        'Content-Type': contentType,
+        'Cache-Control': 'private, max-age=86400',
+        'ETag': `"${storagePath}"`,
+      },
+    })
   } catch {
     return new Response(null, { status: 404 })
   }

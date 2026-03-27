@@ -324,8 +324,8 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
           })
           .where(eq(documents.id, doc.id))
 
-        // Clean up temp image directory
-        await rm(imageDir, { recursive: true, force: true }).catch(() => {})
+        // Defer image directory cleanup until after card generation
+        // so we can read images from disk instead of re-downloading from Supabase
 
         // Delete storage file only when fully chunked
         if (fullyChunkedNow) {
@@ -377,7 +377,43 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
         if (budgetLeft <= 0) break
 
         const prevChunk: Chunk | null = allChunks[allChunks.indexOf(chunk) - 1] ?? null
-        const newCards = await generateCardsForChunk(chunk, prevChunk, doc as Document, provider, cardTypes)
+
+        // Load associated images for multimodal card generation
+        // Try local disk first (from chunking phase), fall back to Supabase
+        const chunkImgs = await db
+          .select()
+          .from(chunkImages)
+          .where(eq(chunkImages.chunkId, chunk.id))
+          .orderBy(chunkImages.position)
+
+        let images: { base64: string; mimeType: string; alt: string }[] | undefined
+        if (chunkImgs.length > 0) {
+          images = []
+          for (const img of chunkImgs) {
+            try {
+              // Try local file first (avoids Supabase egress)
+              const filename = basename(img.storagePath)
+              const localPath = `${imageDir}/${filename}`
+              let buffer: Buffer
+              try {
+                buffer = await readFile(localPath)
+              } catch {
+                // Not on disk — download from Supabase
+                buffer = await downloadDocument(img.storagePath)
+              }
+              images.push({
+                base64: buffer.toString('base64'),
+                mimeType: img.mimeType,
+                alt: img.altText ?? '',
+              })
+            } catch {
+              // Image load failed — skip
+            }
+          }
+          if (images.length === 0) images = undefined
+        }
+
+        const newCards = await generateCardsForChunk(chunk, prevChunk, doc as Document, provider, cardTypes, images)
         attempted.add(chunk.id)
 
         if (newCards.length > 0) {
@@ -431,6 +467,9 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
     } else {
       console.log(`[pipeline] progress: doc=${doc.id} cards=${docCardCount?.count}, pending=${stillPending.length}`)
     }
+
+    // Clean up temp image directory now that card generation is done
+    await rm(imageDir, { recursive: true, force: true }).catch(() => {})
 
     return cardsGenerated
   } catch (err) {

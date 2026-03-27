@@ -75,10 +75,15 @@ console.log(`Strategy: ${values.type}/${values.goal} → [${strategy.cardTypes.j
 
 // ── AI Provider (standalone, no Astro deps) ──
 
+interface ImagePart {
+  mimeType: string
+  base64: string
+}
+
 interface AIProvider {
   name: string
   model: string
-  generate(prompt: string): Promise<string>
+  generate(prompt: string, images?: ImagePart[]): Promise<string>
 }
 
 function createProvider(): AIProvider {
@@ -94,12 +99,26 @@ function createProvider(): AIProvider {
     return {
       name: 'gemini',
       model,
-      async generate(prompt: string): Promise<string> {
+      async generate(prompt: string, images?: ImagePart[]): Promise<string> {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`
+
+        // Build multimodal parts: text prompt + inline images
+        const parts: Record<string, unknown>[] = [{ text: prompt }]
+        if (images) {
+          for (const img of images) {
+            parts.push({
+              inline_data: {
+                mime_type: img.mimeType,
+                data: img.base64,
+              },
+            })
+          }
+        }
+
         const res = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+          body: JSON.stringify({ contents: [{ parts }] }),
         })
         if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`)
         const data = await res.json() as { candidates: { content: { parts: { text: string }[] } }[] }
@@ -114,11 +133,16 @@ function createProvider(): AIProvider {
     return {
       name: 'ollama',
       model,
-      async generate(prompt: string): Promise<string> {
+      async generate(prompt: string, images?: ImagePart[]): Promise<string> {
+        const body: Record<string, unknown> = { model, prompt, stream: false }
+        // Ollama supports images for multimodal models (llava, etc.)
+        if (images && images.length > 0) {
+          body.images = images.map((img) => img.base64)
+        }
         const res = await fetch(`${baseUrl}/api/generate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model, prompt, stream: false }),
+          body: JSON.stringify(body),
         })
         if (!res.ok) throw new Error(`Ollama ${res.status}: ${await res.text()}`)
         const data = await res.json() as { response: string }
@@ -169,10 +193,22 @@ function buildPrompt(
     ? `\nThis is a CODE chunk. Focus on what the code does, key patterns, and concepts demonstrated. Use inline \`code\` formatting for identifiers.\n`
     : ''
 
+  const hasImages = chunk.images.length > 0
+  const imageList = hasImages
+    ? chunk.images.map((img, i) => `  [${i}] ${img.alt}`).join('\n')
+    : ''
+  const imageInstructions = hasImages
+    ? `\nThis passage has ${chunk.images.length} associated figure(s) attached below. You can see them. The figures are indexed as:
+${imageList}
+
+When a figure is relevant to a card, include an "images" array in the content object with the 0-based indices of the figures to display with that card. Only include figures that are directly relevant to that specific card — not every card needs figures.
+`
+    : ''
+
   return `You are an expert reading companion that creates flashcards, quiz questions, and study materials from book passages.
 
 ${contextBlock}${passageBlock}
-${codeInstructions}
+${codeInstructions}${imageInstructions}
 SUGGESTED CARD TYPES (you may adjust based on the content):
 ${typeDescriptions}
 
@@ -190,22 +226,24 @@ INSTRUCTIONS:
 Respond with ONLY a JSON array. Each element has "type" and "content" (an object whose shape depends on the type):
 
 For "discover", "raw_commentary", "connect":
-  {"type":"discover", "content": {"body":"The key insight is..."}}
+  {"type":"discover", "content": {"body":"The key insight is...", "images":[0]}}
 
 For "flashcard":
-  {"type":"flashcard", "content": {"question":"What is...?", "answer":"It is..."}}
+  {"type":"flashcard", "content": {"question":"What is...?", "answer":"It is...", "images":[0]}}
 
 For "quiz":
-  {"type":"quiz", "content": {"question":"Which of...?", "options":["A","B","C","D"], "correct":0, "explanations":["Why A","Why B","Why C","Why D"]}}
+  {"type":"quiz", "content": {"question":"Which of...?", "options":["A","B","C","D"], "correct":0, "explanations":["Why A","Why B","Why C","Why D"], "images":[0]}}
 
 For "glossary":
   {"type":"glossary", "content": {"term":"Term", "definition":"Definition", "etymology":"Origin (optional)", "related":["term1","term2"]}}
 
 For "contrast":
-  {"type":"contrast", "content": {"itemA":"X", "itemB":"Y", "dimensions":["dim1","dim2"], "dimensionA":["x1","x2"], "dimensionB":["y1","y2"]}}
+  {"type":"contrast", "content": {"itemA":"X", "itemB":"Y", "dimensions":["dim1","dim2"], "dimensionA":["x1","x2"], "dimensionB":["y1","y2"], "images":[0,1]}}
 
 For "passage":
   {"type":"passage", "content": {"excerpt":"Verbatim text...", "commentary":"Why it matters."}}
+
+The "images" array is OPTIONAL on all types — only include it when figures are relevant to that specific card. Glossary cards typically don't need figures.
 
 ALLOWED TYPES: ${strategy.cardTypes.join(', ')}
 
@@ -279,11 +317,28 @@ for (let i = 0; i < eligibleChunks.length; i++) {
   const chunkIndex = chunks.indexOf(chunk)
   const prevChunk = chunkIndex > 0 ? chunks[chunkIndex - 1] : null
 
-  process.stdout.write(`  Generating cards for chunk ${i + 1}/${eligibleChunks.length}...`)
+  const imgCount = chunk.images.length
+  process.stdout.write(`  Generating cards for chunk ${i + 1}/${eligibleChunks.length}${imgCount > 0 ? ` (${imgCount} image${imgCount > 1 ? 's' : ''})` : ''}...`)
 
   try {
     const prompt = buildPrompt(chunk, prevChunk, docTitle, strategy)
-    const response = await provider.generate(prompt)
+
+    // Load images from disk for multimodal
+    const imageParts: ImagePart[] = []
+    for (const img of chunk.images) {
+      try {
+        const imgPath = join(outDir, img.file)
+        const buffer = await readFile(imgPath)
+        imageParts.push({
+          mimeType: img.mime,
+          base64: buffer.toString('base64'),
+        })
+      } catch {
+        // Image file not found — skip
+      }
+    }
+
+    const response = await provider.generate(prompt, imageParts.length > 0 ? imageParts : undefined)
     const cards = parseResponse(response, strategy)
 
     for (const card of cards) {
