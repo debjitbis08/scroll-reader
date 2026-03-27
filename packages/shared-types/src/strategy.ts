@@ -4,7 +4,7 @@ type StrategyKey = `${DocumentType}:${ReadingGoal}`
 
 const STRATEGY_MAP: Record<string, CardStrategy> = {
   // Fiction
-  'fiction:casual':     { cardTypes: [],                                                          chunkInterval: 1 },
+  'fiction:casual':     { cardTypes: ['passage'],                                                  chunkInterval: 3 },
   'fiction:reflective': { cardTypes: ['discover', 'passage'],                                     chunkInterval: 3 },
   'fiction:study':      { cardTypes: ['discover', 'passage', 'glossary'],                         chunkInterval: 2 },
 

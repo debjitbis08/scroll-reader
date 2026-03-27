@@ -2,8 +2,8 @@ import type { Document, Chunk } from '@scroll-reader/db'
 import type { CardType, CardStrategy } from '@scroll-reader/shared-types'
 
 const CARD_TYPE_DESCRIPTIONS: Record<CardType, string> = {
-  discover: 'Discover — one surprising or illuminating insight from the passage that a reader would find worth sitting with. 2-3 sentences. Optionally include a short, evocative title (3-6 words) if the insight lends itself to a headline.',
-  raw_commentary: 'Notes — a brief, direct marginal note, the kind a thoughtful reader scribbles in the margin. Specific to the text. 2-3 sentences.',
+  discover: 'Discover — distill the core idea or argument of the passage into a vivid, self-contained summary. The reader should come away understanding what the passage says and why it matters. 2-4 sentences. Optionally include a short, evocative title (3-6 words).',
+  raw_commentary: 'Notes — a sharp marginal note: question an assumption, surface a tension, connect to a broader idea, or reframe what the passage takes for granted. Opinionated and specific, not a summary. 1-3 sentences.',
   connect: 'Connect — links this passage to ideas from elsewhere in the book or other works.',
   flashcard: 'Flashcard — a question about the transferable concept or principle illustrated in the passage, NOT about specific datasets, examples, or named entities used to explain it. Ask about the underlying idea ("What is the purpose of principal components?") not the example ("What did they do with the NCI60 dataset?"). Answer should be 1-3 sentences.',
   quiz: 'Quiz — a multiple choice question about a transferable concept or principle, with exactly 4 options (A-D), one correct answer (0-indexed), and a brief explanation for each option. Frame questions around the general idea, not specific examples or datasets from the text.',
