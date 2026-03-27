@@ -187,6 +187,7 @@ function ActionButton(props: {
 export default function Feed() {
   const [cards, setCards] = createSignal<FeedCard[]>([])
   const [loading, setLoading] = createSignal(false)
+  const [initialLoaded, setInitialLoaded] = createSignal(false)
   const [hasMore, setHasMore] = createSignal(true)
   const [error, setError] = createSignal<string | null>(null)
   let sentinelRef: HTMLDivElement | undefined
@@ -214,6 +215,7 @@ export default function Feed() {
       setError(e instanceof Error ? e.message : 'Failed to load feed')
     } finally {
       setLoading(false)
+      setInitialLoaded(true)
     }
   }
 
@@ -522,7 +524,7 @@ export default function Feed() {
         }}
       </For>
 
-      <Show when={cards().length === 0 && !loading() && !error()}>
+      <Show when={cards().length === 0 && initialLoaded() && !error()}>
         <div class="flex flex-col items-center gap-4 py-20 text-center">
           <p class="font-display text-lg text-ed-on-surface-dim">No cards in your feed yet.</p>
           <a
@@ -536,11 +538,12 @@ export default function Feed() {
 
       <div ref={sentinelRef} class="h-1" />
 
-      <Show when={loading()}>
+      <Show when={loading() || !initialLoaded()}>
         <div class="flex justify-center py-6">
           <div class="size-5 animate-spin rounded-full border-2 border-ed-outline border-t-ed-primary" />
         </div>
       </Show>
+
     </div>
   )
 }

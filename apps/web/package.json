@@ -12,6 +12,7 @@
   "dependencies": {
     "@astrojs/node": "^9.0.0",
     "@astrojs/solid-js": "^4.0.0",
+    "@iconify-icon/solid": "^3.0.3",
     "@iconify-json/fa6-solid": "^1.2.4",
     "@iconify-json/mdi": "^1.2.0",
     "@scroll-reader/db": "workspace:*",

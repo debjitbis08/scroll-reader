@@ -56,13 +56,29 @@ function parseAIResponse(
     .replace(/```\s*/g, '')
     .trim()
 
+  // AI models output LaTeX like \times, \theta, \frac, \beta, \nabla inside
+  // JSON strings. JSON.parse treats \t as tab, \b as backspace, \f as
+  // form-feed, \n as newline, \r as CR — corrupting LaTeX commands.
+  // Strategy: escape all backslashes, then restore the valid JSON escapes
+  // that aren't part of LaTeX (e.g. actual newlines between JSON fields).
+  const escaped = cleaned
+    .replace(/\\\\/g, '\x00DOUBLE\x00')       // protect already-escaped \\
+    .replace(/\\"/g, '\x00QUOTE\x00')          // protect \"
+    .replace(/\\\//g, '\x00SLASH\x00')         // protect \/
+    .replace(/\\u([0-9a-fA-F]{4})/g, '\x00U$1\x00') // protect \uXXXX
+    .replace(/\\/g, '\\\\')                    // escape all remaining backslashes
+    .replace(/\x00DOUBLE\x00/g, '\\\\')        // restore \\
+    .replace(/\x00QUOTE\x00/g, '\\"')          // restore \"
+    .replace(/\x00SLASH\x00/g, '\\/')          // restore \/
+    .replace(/\x00U([0-9a-fA-F]{4})\x00/g, '\\u$1') // restore \uXXXX
+
   let cards: unknown[]
 
   try {
-    cards = JSON.parse(cleaned)
+    cards = JSON.parse(escaped)
   } catch {
     // Try to find a JSON array anywhere in the response
-    const match = cleaned.match(/\[[\s\S]*\]/)
+    const match = escaped.match(/\[[\s\S]*\]/)
     if (match) {
       try {
         cards = JSON.parse(match[0])

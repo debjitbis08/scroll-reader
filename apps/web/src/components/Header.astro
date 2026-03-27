@@ -10,17 +10,31 @@ const user = Astro.locals.user
       <Icon name="fa6-solid:scroll" class="size-5 text-ed-primary" />
       <span class="font-display text-lg tracking-tight text-ed-on-surface">Scroll Reader</span>
     </a>
-    <div class="flex items-center gap-2">
+
+    {/* Desktop nav */}
+    <div class="hidden items-center gap-2 md:flex">
       {user && (
         <>
-          <a href="/library" class="font-body text-sm text-ed-on-surface-muted hover:text-ed-on-surface transition-colors">Library</a>
+          <a href="/library" class="px-2 font-body text-sm text-ed-on-surface-muted hover:text-ed-on-surface transition-colors">Library</a>
           <a
             href="/upload"
-            class="flex items-center gap-1.5 rounded bg-ed-primary px-3 py-1.5 font-body text-sm font-medium text-ed-on-primary transition-colors hover:bg-ed-primary/80"
+            class="flex items-center gap-1.5 rounded bg-ed-primary px-3 py-1.5 font-body text-sm font-medium text-ed-on-primary transition-colors hover:bg-ed-primary/80 mx-2"
           >
             <Icon name="mdi:plus" class="size-4" />
             Upload
           </a>
+        </>
+      )}
+      <button
+        data-theme-toggle
+        class="rounded p-2 text-ed-on-surface-muted transition-colors hover:text-ed-on-surface"
+      >
+        <Icon name="fa6-solid:sun" class="size-5 theme-icon hidden" data-theme-icon="latte" />
+        <Icon name="fa6-solid:moon" class="size-5 theme-icon hidden" data-theme-icon="mocha" />
+        <Icon name="fa6-solid:desktop" class="size-5 theme-icon" data-theme-icon="auto" />
+      </button>
+      {user && (
+        <>
           <form method="POST" action="/api/auth/logout">
             <button
               type="submit"
@@ -32,14 +46,81 @@ const user = Astro.locals.user
           </form>
         </>
       )}
+    </div>
+
+    {/* Mobile hamburger button */}
+    <div class="relative md:hidden">
       <button
-        data-theme-toggle
+        id="mobile-menu-btn"
         class="rounded p-2 text-ed-on-surface-muted transition-colors hover:text-ed-on-surface"
+        aria-label="Open menu"
       >
-        <Icon name="fa6-solid:sun" class="size-5 theme-icon hidden" data-theme-icon="latte" />
-        <Icon name="fa6-solid:moon" class="size-5 theme-icon hidden" data-theme-icon="mocha" />
-        <Icon name="fa6-solid:desktop" class="size-5 theme-icon" data-theme-icon="auto" />
+        <Icon name="mdi:menu" class="size-5" id="hamburger-icon" />
+        <Icon name="mdi:close" class="size-5 hidden" id="close-icon" />
       </button>
+
+      {/* Floating dropdown menu */}
+      <div id="mobile-menu" class="absolute right-0 top-full mt-2 hidden w-48 rounded-lg border border-ed-outline-dim bg-ed-surface-high p-1.5 shadow-lg">
+        {user && (
+          <>
+            <a href="/library" class="flex items-center gap-3 rounded px-3 py-2.5 font-body text-sm text-ed-on-surface-dim transition-colors hover:bg-ed-surface hover:text-ed-on-surface">
+              <Icon name="mdi:bookshelf" class="size-5" />
+              Library
+            </a>
+            <a href="/upload" class="flex items-center gap-3 rounded px-3 py-2.5 font-body text-sm text-ed-on-surface-dim transition-colors hover:bg-ed-surface hover:text-ed-on-surface">
+              <Icon name="mdi:plus" class="size-5" />
+              Upload
+            </a>
+          </>
+        )}
+        <button
+          data-theme-toggle
+          class="flex w-full items-center gap-3 rounded px-3 py-2.5 font-body text-sm text-ed-on-surface-dim transition-colors hover:bg-ed-surface hover:text-ed-on-surface"
+        >
+          <Icon name="fa6-solid:sun" class="size-5 theme-icon hidden" data-theme-icon="latte" />
+          <Icon name="fa6-solid:moon" class="size-5 theme-icon hidden" data-theme-icon="mocha" />
+          <Icon name="fa6-solid:desktop" class="size-5 theme-icon" data-theme-icon="auto" />
+          Theme
+        </button>
+        {user && (
+          <>
+            <form method="POST" action="/api/auth/logout">
+              <button
+                type="submit"
+                class="flex w-full items-center gap-3 rounded px-3 py-2.5 font-body text-sm text-ed-on-surface-dim transition-colors hover:bg-ed-surface hover:text-ed-on-surface"
+              >
+                <Icon name="mdi:logout" class="size-5" />
+                Log out
+              </button>
+            </form>
+          </>
+        )}
+      </div>
     </div>
   </div>
 </header>
+
+<script>
+  const btn = document.getElementById('mobile-menu-btn')!
+  const menu = document.getElementById('mobile-menu')!
+  const hamburgerIcon = document.getElementById('hamburger-icon')!
+  const closeIcon = document.getElementById('close-icon')!
+
+  btn.addEventListener('click', () => {
+    const open = !menu.classList.contains('hidden')
+    menu.classList.toggle('hidden', open)
+    hamburgerIcon.classList.toggle('hidden', !open)
+    closeIcon.classList.toggle('hidden', open)
+    btn.setAttribute('aria-label', open ? 'Open menu' : 'Close menu')
+  })
+
+  // Close menu when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!menu.classList.contains('hidden') && !(e.target as Element).closest('header')) {
+      menu.classList.add('hidden')
+      hamburgerIcon.classList.remove('hidden')
+      closeIcon.classList.add('hidden')
+      btn.setAttribute('aria-label', 'Open menu')
+    }
+  })
+</script>

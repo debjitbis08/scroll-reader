@@ -11,13 +11,13 @@ export default function ContrastRenderer(props: Props) {
     <div class="space-y-4">
       {/* Title */}
       <h3 class="font-display text-xl font-normal text-ed-on-surface">
-        {props.content.itemA} <span class="font-body text-sm text-ed-on-surface-muted">vs.</span> {props.content.itemB}
+        <LatexText text={props.content.itemA} class="inline" /> <span class="font-body text-sm text-ed-on-surface-muted">vs.</span> <LatexText text={props.content.itemB} class="inline" />
       </h3>
 
       {/* Items with accent borders */}
       <div class="space-y-3">
         <div class="border-l-2 border-ed-primary pl-4 py-1">
-          <p class="font-body text-xs font-semibold italic text-ed-on-surface mb-1">{props.content.itemA}</p>
+          <LatexText text={props.content.itemA} class="font-body text-xs font-semibold italic text-ed-on-surface mb-1" />
           <For each={props.content.dimensions}>
             {(dim, i) => (
               <LatexText
@@ -29,7 +29,7 @@ export default function ContrastRenderer(props: Props) {
         </div>
 
         <div class="border-l-2 border-ed-on-surface-muted pl-4 py-1">
-          <p class="font-body text-xs font-semibold italic text-ed-on-surface mb-1">{props.content.itemB}</p>
+          <LatexText text={props.content.itemB} class="font-body text-xs font-semibold italic text-ed-on-surface mb-1" />
           <For each={props.content.dimensions}>
             {(dim, i) => (
               <LatexText

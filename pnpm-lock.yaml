@@ -23,6 +23,9 @@ importers:
       '@astrojs/solid-js':
         specifier: ^4.0.0
         version: 4.4.4(@types/node@22.19.11)(lightningcss@1.31.1)(solid-js@1.9.11)
+      '@iconify-icon/solid':
+        specifier: ^3.0.3
+        version: 3.0.3(solid-js@1.9.11)
       '@iconify-json/fa6-solid':
         specifier: ^1.2.4
         version: 1.2.4
@@ -1038,6 +1041,11 @@ packages:
     engines: {node: '>=18'}
     cpu: [x64]
     os: [win32]
+
+  '@iconify-icon/solid@3.0.3':
+    resolution: {integrity: sha512-VUM8/gscfrU0e6dUWjitdsJrNzYoY1bGTp1+gfZIAbvo+tIGcP9bD3WAvFb6pHaCYL/5X6erZUUn8pL0c0xX9Q==}
+    peerDependencies:
+      solid-js: '>=1.0.0'
 
   '@iconify-json/fa6-solid@1.2.4':
     resolution: {integrity: sha512-LmDNNdJVyvF5mPm1yxWvL8KjCc/E8LzoqnF1LNTVpyY2ZJRUlGOWuPIThdbuFBF2IovgttkIyumhyqfmlHdwKg==}
@@ -2255,6 +2263,9 @@ packages:
   iceberg-js@0.8.1:
     resolution: {integrity: sha512-1dhVQZXhcHje7798IVM+xoo/1ZdVfzOMIc8/rgVSijRK38EDqOJoGula9N/8ZI5RD8QTxNQtK/Gozpr+qUqRRA==}
     engines: {node: '>=20.0.0'}
+
+  iconify-icon@3.0.2:
+    resolution: {integrity: sha512-DYPAumiUeUeT/GHT8x2wrAVKn1FqZJqFH0Y5pBefapWRreV1BBvqBVMb0020YQ2njmbR59r/IathL2d2OrDrxA==}
 
   iconv-lite@0.6.3:
     resolution: {integrity: sha512-4fCk79wshMdzMp2rH06qWrJE4iolqLhCUH+OiuIgU++RB0+94NlDL81atO7GX55uUKueo0txHNtvEyI6D7WdMw==}
@@ -4164,6 +4175,11 @@ snapshots:
   '@esbuild/win32-x64@0.27.3':
     optional: true
 
+  '@iconify-icon/solid@3.0.3(solid-js@1.9.11)':
+    dependencies:
+      iconify-icon: 3.0.2
+      solid-js: 1.9.11
+
   '@iconify-json/fa6-solid@1.2.4':
     dependencies:
       '@iconify/types': 2.0.0
@@ -5500,6 +5516,10 @@ snapshots:
       - supports-color
 
   iceberg-js@0.8.1: {}
+
+  iconify-icon@3.0.2:
+    dependencies:
+      '@iconify/types': 2.0.0
 
   iconv-lite@0.6.3:
     dependencies:

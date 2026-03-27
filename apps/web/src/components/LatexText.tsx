@@ -18,9 +18,23 @@ export default function LatexText(props: Props) {
   )
 }
 
+function restoreLatexEscapes(text: string): string {
+  // When LaTeX like \times, \beta, \frac is stored in JSON, escape sequences
+  // (\t → tab, \b → backspace, \f → form-feed, \n → newline, \r → CR)
+  // corrupt the LaTeX. Restore them within math delimiters.
+  return text.replace(/\$\$[\s\S]*?\$\$|\$(?:[^$\\]|\\.)*?\$/g, (match) => {
+    return match
+      .replace(/\x08/g, '\\b')  // backspace → \b (e.g. \beta, \binom)
+      .replace(/\t/g, '\\t')    // tab → \t (e.g. \times, \theta)
+      .replace(/\n/g, '\\n')    // newline → \n (e.g. \nabla, \nu)
+      .replace(/\r/g, '\\r')    // CR → \r (e.g. \rho, \right)
+      .replace(/\f/g, '\\f')    // form-feed → \f (e.g. \frac, \forall)
+  })
+}
+
 function renderLatex(text: string): string {
   // Process display math first ($$...$$), then inline math ($...$)
-  let result = text
+  let result = restoreLatexEscapes(text)
 
   // Display math: $$...$$
   result = result.replace(/\$\$([\s\S]*?)\$\$/g, (_match, tex) => {

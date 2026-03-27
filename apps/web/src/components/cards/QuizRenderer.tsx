@@ -19,9 +19,7 @@ export default function QuizRenderer(props: Props) {
   return (
     <div class="space-y-5">
       {/* Question — italic serif in quotes */}
-      <p class="font-display text-lg italic leading-snug text-ed-on-surface">
-        "{props.content.question}"
-      </p>
+      <LatexText text={`"${props.content.question}"`} class="font-display text-xl italic leading-snug text-ed-on-surface" />
 
       {/* Pill-shaped options */}
       <div class="space-y-2">
@@ -49,9 +47,7 @@ export default function QuizRenderer(props: Props) {
                   <LatexText text={option.replace(/^[A-Da-d][).]\s*/, '')} class="inline text-left" />
                 </button>
                 <Show when={isAnswered() && (isSelected() || isCorrect()) && props.content.explanations?.[i()]}>
-                  <p class="mt-1.5 ml-4 font-body text-xs text-ed-on-surface-muted leading-relaxed">
-                    {props.content.explanations[i()]}
-                  </p>
+                  <LatexText text={props.content.explanations[i()]} class="mt-1.5 ml-4 font-body text-xs text-ed-on-surface-muted leading-relaxed" />
                 </Show>
               </div>
             )
