@@ -271,22 +271,27 @@ fn extract_pdf_via_html(path: &str, output_dir: Option<&Path>) -> Option<Vec<Doc
     let root = document.root_element();
     let mono_fonts = build_mono_font_ids(&root, &fontspec_sel);
 
-    for page_el in document.select(&page_sel) {
-        let page_num = page_el
+    // Use a sequential physical index for lopdf (which keys pages 1..N by
+    // physical position), and the XML `number` attribute only as a display
+    // label.  pdftohtml can emit duplicate `number` values when the PDF has
+    // logical page-number resets (common in textbooks with front matter +
+    // chapters), which would otherwise cause the same physical page to be
+    // extracted multiple times.
+    for (seq_idx, page_el) in document.select(&page_sel).enumerate() {
+        let physical_page: u32 = (seq_idx + 1) as u32; // 1-based, matches lopdf keys
+
+        let display_num = page_el
             .value()
             .attr("number")
             .and_then(|n| n.parse::<u32>().ok())
-            .unwrap_or(0);
-        if page_num == 0 {
-            continue;
-        }
+            .unwrap_or(physical_page);
 
-        let chapter = format!("Page {page_num}");
+        let chapter = format!("Page {display_num}");
 
         // Extract images for this page (from lopdf)
         if let Some(ref doc) = pdf_doc {
-            if let Some(&page_id) = doc.get_pages().get(&page_num) {
-                let page_images = extract_page_images(doc, page_id, page_num, output_dir, &mut seen_images);
+            if let Some(&page_id) = doc.get_pages().get(&physical_page) {
+                let page_images = extract_page_images(doc, page_id, physical_page, output_dir, &mut seen_images);
                 elements.extend(page_images);
             }
         }
