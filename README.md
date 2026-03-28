@@ -2,7 +2,7 @@
 
 You're going to scroll anyway. Might as well scroll your books.
 
-Scroll Reader turns your personal library into a doom-scroll feed. Upload an EPUB, PDF, or paper — an AI reads it and generates a feed of questions, reflections, definitions, and connections. The feed adapts to how you engage, spacing cards you need to revisit and retiring the ones that stuck.
+Scroll Reader turns your personal library into a doom-scroll feed. Upload an EPUB or PDF. An AI reads it and generates a feed of notes, questions, flashcards, definitions, and connections. The feed adapts to how you engage, spacing cards you need to revisit and retiring the ones that stuck.
 
 Built for people who have more books than time, and more time on their phones than they'd like.
 

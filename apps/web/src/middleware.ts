@@ -7,6 +7,11 @@ import { processCron } from './lib/pipeline.ts'
 startCronTimer(processCron)
 
 export const onRequest = defineMiddleware(async (context, next) => {
+  // Skip auth for prerendered pages (request.headers is unavailable)
+  if (context.isPrerendered) {
+    return next()
+  }
+
   const supabase = createSupabaseServer(context.request, context.cookies)
   const {
     data: { user },

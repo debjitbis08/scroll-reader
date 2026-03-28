@@ -2,7 +2,9 @@
 import '../styles/global.css'
 import 'katex/dist/katex.min.css'
 import { Icon } from 'astro-icon/components'
-import DemoFeed from '../components/DemoFeed.tsx'
+import DemoFeedComponent from '../components/DemoFeed.tsx'
+
+export const prerender = true;
 ---
 
 <html lang="en">
@@ -61,7 +63,7 @@ import DemoFeed from '../components/DemoFeed.tsx'
       </div>
 
       <section class="mx-auto w-full max-w-2xl px-4 py-8">
-        <DemoFeed dataUrl="/demo-cards.json" client:load />
+        <DemoFeedComponent dataUrl="/demo-cards.json" client:load />
       </section>
     </main>
 
