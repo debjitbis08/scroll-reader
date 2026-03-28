@@ -1,0 +1,530 @@
+[
+  {
+    "card": {
+      "id": "demo-001",
+      "cardType": "discover",
+      "content": {
+        "title": "The Descent into the Maelstrom",
+        "body": "Poe's narrator describes a terrifying whirlpool off the Norwegian coast — but the real discovery is the **calm observation** that saves the fisherman's life. By watching which objects sink and which float, he deduces that cylindrical shapes resist the current longer. Rationality in the face of chaos becomes the story's quiet thesis."
+      }
+    },
+    "chunk": {
+      "id": "chunk-001",
+      "content": "Between Lofoden and Moskoe, the depth of the water is between thirty-six and forty fathoms; but on the other side, toward Ver the bottom can scarcely be reached by the plumb-line. The whirling of the channel is sometimes so great, that the noise of the water may be heard at a distance of several leagues.",
+      "chapter": "A Descent into the Maelstrom",
+      "chunkIndex": 3,
+      "chunkType": "text",
+      "language": null
+    },
+    "document": {
+      "id": "doc-poe",
+      "title": "Tales of Mystery and Imagination",
+      "author": "Edgar Allan Poe"
+    },
+    "actions": [],
+    "isSrDue": false,
+    "wordCount": 52,
+    "chunkImageUrls": [],
+    "adjacentChunks": {
+      "2": {
+        "content": "We had now reached the summit of the loftiest crag. For some minutes the old man seemed too much exhausted to speak. \"Not long ago,\" said he at length, \"I could have guided you on this route as well as the youngest of my sons; but, about three years past, there happened to me an event such as never happened before to mortal man.\"",
+        "chunkType": "text",
+        "chunkIndex": 2,
+        "chapter": "A Descent into the Maelstrom",
+        "language": null
+      },
+      "4": {
+        "content": "This latter circumstance is to be especially borne in mind when we consider the vast velocity with which the descent takes place. The attempts which have been made to \"sound\" the vortex, even during a calm, have all proved fruitless. The bottom of the earth seemed suddenly to have given way.",
+        "chunkType": "text",
+        "chunkIndex": 4,
+        "chapter": "A Descent into the Maelstrom",
+        "language": null
+      }
+    }
+  },
+  {
+    "card": {
+      "id": "demo-002",
+      "cardType": "flashcard",
+      "content": {
+        "question": "In Darwin's theory, what mechanism drives the adaptation of species to their environment over generations?",
+        "answer": "**Natural selection** — individuals with traits better suited to their environment are more likely to survive and reproduce, passing those advantageous traits to offspring. Over many generations, this differential survival shapes populations to be increasingly well-adapted to their ecological niches."
+      }
+    },
+    "chunk": {
+      "id": "chunk-002",
+      "content": "Can it, then, be thought improbable, seeing that variations useful to man have undoubtedly occurred, that other variations useful in some way to each being in the great and complex battle of life, should sometimes occur in the course of thousands of generations?",
+      "chapter": "Chapter IV: Natural Selection",
+      "chunkIndex": 12,
+      "chunkType": "text",
+      "language": null
+    },
+    "document": {
+      "id": "doc-darwin",
+      "title": "On the Origin of Species",
+      "author": "Charles Darwin"
+    },
+    "actions": [],
+    "isSrDue": true,
+    "wordCount": 44,
+    "chunkImageUrls": [],
+    "adjacentChunks": {
+      "11": {
+        "content": "If such do occur, can we doubt (remembering that many more individuals are born than can possibly survive) that individuals having any advantage, however slight, over others, would have the best chance of surviving and of procreating their kind?",
+        "chunkType": "text",
+        "chunkIndex": 11,
+        "chapter": "Chapter IV: Natural Selection",
+        "language": null
+      },
+      "13": {
+        "content": "If such variations do occur, can we doubt that individuals having any advantage, however slight, over others, would have the best chance of surviving? This principle of preservation, I have called, for the sake of brevity, Natural Selection.",
+        "chunkType": "text",
+        "chunkIndex": 13,
+        "chapter": "Chapter IV: Natural Selection",
+        "language": null
+      }
+    }
+  },
+  {
+    "card": {
+      "id": "demo-003",
+      "cardType": "passage",
+      "content": {
+        "excerpt": "It was the best of times, it was the worst of times, it was the age of wisdom, it was the age of foolishness, it was the epoch of belief, it was the epoch of incredulity, it was the season of Light, it was the season of Darkness.",
+        "commentary": "Dickens opens with the most famous parallelism in English literature. Each pair of opposites isn't merely rhetorical — it maps the political landscape of 1775: Enlightenment optimism running headlong into aristocratic decay. The sentence itself enacts the tension, refusing to resolve."
+      }
+    },
+    "chunk": {
+      "id": "chunk-003",
+      "content": "It was the best of times, it was the worst of times, it was the age of wisdom, it was the age of foolishness, it was the epoch of belief, it was the epoch of incredulity, it was the season of Light, it was the season of Darkness, it was the spring of hope, it was the winter of despair.",
+      "chapter": "Book the First: Recalled to Life",
+      "chunkIndex": 0,
+      "chunkType": "text",
+      "language": null
+    },
+    "document": {
+      "id": "doc-dickens",
+      "title": "A Tale of Two Cities",
+      "author": "Charles Dickens"
+    },
+    "actions": [],
+    "isSrDue": false,
+    "wordCount": 50,
+    "chunkImageUrls": [],
+    "adjacentChunks": {
+      "1": {
+        "content": "We had everything before us, we had nothing before us, we were all going direct to Heaven, we were all going direct the other way — in short, the period was so far like the present period, that some of its noisiest authorities insisted on its being received, for good or for evil, in the superlative degree of comparison only.",
+        "chunkType": "text",
+        "chunkIndex": 1,
+        "chapter": "Book the First: Recalled to Life",
+        "language": null
+      }
+    }
+  },
+  {
+    "card": {
+      "id": "demo-004",
+      "cardType": "quiz",
+      "content": {
+        "question": "InErta Ale, what geological feature does the narrator observe in the Ethiopian desert?",
+        "options": [
+          "A persistent lava lake in a volcanic caldera",
+          "A massive underground river system",
+          "A fossilized ancient forest",
+          "A salt flat covering a dormant volcano"
+        ],
+        "correct": 0,
+        "explanations": [
+          "Correct — Erta Ale is one of only a handful of volcanoes on Earth with a persistent lava lake, located in the Danakil Depression of Ethiopia.",
+          "While underground water exists in the Danakil Depression, the narrator's focus is on the volcanic activity, not hydrology.",
+          "The Danakil Depression is one of the hottest places on Earth and far too inhospitable for forests, ancient or modern.",
+          "Erta Ale is an active volcano, not dormant — its defining feature is the continuously churning lava lake."
+        ]
+      }
+    },
+    "chunk": {
+      "id": "chunk-004",
+      "content": "The lava lake of Erta Ale is one of the longest-existing in the world. The volcano is situated in the Danakil Depression, a tectonic triple junction where three plates are pulling apart. The resulting geological activity creates one of the most alien landscapes on the planet.",
+      "chapter": "The Danakil Depression",
+      "chunkIndex": 7,
+      "chunkType": "text",
+      "language": null
+    },
+    "document": {
+      "id": "doc-geology",
+      "title": "Volcanoes of the World",
+      "author": null
+    },
+    "actions": [],
+    "isSrDue": false,
+    "wordCount": 45,
+    "chunkImageUrls": [],
+    "adjacentChunks": {
+      "6": {
+        "content": "The Afar Triangle is a geological depression caused by the Afar Triple Junction, which is part of the Great Rift Valley in East Africa. It is one of only two places on Earth where a mid-ocean ridge can be studied on land.",
+        "chunkType": "text",
+        "chunkIndex": 6,
+        "chapter": "The Danakil Depression",
+        "language": null
+      },
+      "8": {
+        "content": "Temperatures in the Danakil Depression regularly exceed 50°C, making it one of the hottest inhabited places on Earth. The Afar people have nonetheless lived here for centuries, mining salt from the vast evaporite deposits left by ancient seas.",
+        "chunkType": "text",
+        "chunkIndex": 8,
+        "chapter": "The Danakil Depression",
+        "language": null
+      }
+    }
+  },
+  {
+    "card": {
+      "id": "demo-005",
+      "cardType": "glossary",
+      "content": {
+        "term": "Categorical Imperative",
+        "definition": "A central concept in Kant's moral philosophy: an unconditional moral law that applies to all rational beings regardless of their desires. The most famous formulation states: \"Act only according to that maxim whereby you can at the same time will that it should become a universal law.\"",
+        "etymology": "From Latin *categoricus* (unconditional) + *imperativus* (commanding). Kant coined the German *kategorischer Imperativ* in his 1785 *Groundwork of the Metaphysics of Morals*.",
+        "related": ["Deontological Ethics", "Maxim", "Universalizability", "Autonomy"]
+      }
+    },
+    "chunk": {
+      "id": "chunk-005",
+      "content": "There is therefore but one categorical imperative, namely, this: Act only on that maxim whereby thou canst at the same time will that it should become a universal law. Now if all imperatives of duty can be deduced from this one imperative as from their principle, then we shall be able to show what we understand by it.",
+      "chapter": "Second Section",
+      "chunkIndex": 22,
+      "chunkType": "text",
+      "language": null
+    },
+    "document": {
+      "id": "doc-kant",
+      "title": "Groundwork of the Metaphysics of Morals",
+      "author": "Immanuel Kant"
+    },
+    "actions": [],
+    "isSrDue": false,
+    "wordCount": 55,
+    "chunkImageUrls": [],
+    "adjacentChunks": {
+      "21": {
+        "content": "The conception of an objective principle, in so far as it is obligatory for a will, is called a command (of reason), and the formula of the command is called an imperative. All imperatives are expressed by the word ought, and thereby indicate the relation of an objective law of reason to a will.",
+        "chunkType": "text",
+        "chunkIndex": 21,
+        "chapter": "Second Section",
+        "language": null
+      },
+      "23": {
+        "content": "Since the universality of the law according to which effects are produced constitutes what is properly called nature in the most general sense, the imperative of duty may be expressed thus: Act as if the maxim of thy action were to become by thy will a universal law of nature.",
+        "chunkType": "text",
+        "chunkIndex": 23,
+        "chapter": "Second Section",
+        "language": null
+      }
+    }
+  },
+  {
+    "card": {
+      "id": "demo-006",
+      "cardType": "contrast",
+      "content": {
+        "itemA": "Euclidean Geometry",
+        "itemB": "Non-Euclidean Geometry",
+        "dimensions": ["Parallel postulate", "Surface curvature", "Triangle angle sum", "Historical origin"],
+        "dimensionA": [
+          "Through a point not on a line, exactly one parallel line exists",
+          "Zero (flat plane)",
+          "Always exactly 180°",
+          "Euclid's *Elements*, c. 300 BCE"
+        ],
+        "dimensionB": [
+          "Through a point, zero or infinitely many parallels may exist",
+          "Positive (spherical) or negative (hyperbolic)",
+          "Greater than 180° (spherical) or less than 180° (hyperbolic)",
+          "Lobachevsky, Bolyai, and Riemann, 19th century"
+        ]
+      }
+    },
+    "chunk": {
+      "id": "chunk-006",
+      "content": "For over two thousand years, mathematicians attempted to prove Euclid's fifth postulate from the other four. The discovery that consistent geometries exist in which the parallel postulate fails was one of the most profound revolutions in the history of mathematics, opening the door to Riemannian geometry and eventually Einstein's general relativity.",
+      "chapter": "Chapter 8: Beyond Euclid",
+      "chunkIndex": 41,
+      "chunkType": "text",
+      "language": null
+    },
+    "document": {
+      "id": "doc-math",
+      "title": "A History of Mathematics",
+      "author": null
+    },
+    "actions": [],
+    "isSrDue": false,
+    "wordCount": 48,
+    "chunkImageUrls": [],
+    "adjacentChunks": {
+      "40": {
+        "content": "Euclid's fifth postulate — the parallel postulate — states that given a line and a point not on that line, there is exactly one line through the point that is parallel to the given line. This seemingly obvious statement troubled mathematicians for millennia.",
+        "chunkType": "text",
+        "chunkIndex": 40,
+        "chapter": "Chapter 8: Beyond Euclid",
+        "language": null
+      },
+      "42": {
+        "content": "Nikolai Lobachevsky published the first account of hyperbolic geometry in 1829, showing that a perfectly consistent geometry arises when we assume that through a point not on a line, infinitely many parallels exist. Meanwhile, Bernhard Riemann explored the opposite case: no parallel lines at all, as on the surface of a sphere.",
+        "chunkType": "text",
+        "chunkIndex": 42,
+        "chapter": "Chapter 8: Beyond Euclid",
+        "language": null
+      }
+    }
+  },
+  {
+    "card": {
+      "id": "demo-007",
+      "cardType": "raw_commentary",
+      "content": {
+        "body": "Shelley's creature is often called \"Frankenstein\" in popular culture, but in the novel he is never given a name. This namelessness is thematically loaded — the creature exists outside the social contract, denied identity by the very person who created him. Victor Frankenstein's refusal to name his creation mirrors his refusal to take responsibility for it."
+      }
+    },
+    "chunk": {
+      "id": "chunk-007",
+      "content": "I started from my sleep with horror; a cold dew covered my forehead, my teeth chattered, and every limb became convulsed; when, by the dim and yellow light of the moon, as it forced its way through the window shutters, I beheld the wretch — the miserable monster whom I had created.",
+      "chapter": "Chapter 5",
+      "chunkIndex": 18,
+      "chunkType": "text",
+      "language": null
+    },
+    "document": {
+      "id": "doc-shelley",
+      "title": "Frankenstein; or, The Modern Prometheus",
+      "author": "Mary Shelley"
+    },
+    "actions": [],
+    "isSrDue": false,
+    "wordCount": 55,
+    "chunkImageUrls": [],
+    "adjacentChunks": {
+      "17": {
+        "content": "I had worked hard for nearly two years, for the sole purpose of infusing life into an inanimate body. For this I had deprived myself of rest and health. I had desired it with an ardour that far exceeded moderation; but now that I had finished, the beauty of the dream vanished, and breathless horror and disgust filled my heart.",
+        "chunkType": "text",
+        "chunkIndex": 17,
+        "chapter": "Chapter 5",
+        "language": null
+      },
+      "19": {
+        "content": "He held up the curtain of the bed; and his eyes, if eyes they may be called, were fixed on me. His jaws opened, and he muttered some inarticulate sounds, while a grin wrinkled his cheeks. He might have spoken, but I did not hear; one hand was stretched out, seemingly to detain me, but I escaped and rushed downstairs.",
+        "chunkType": "text",
+        "chunkIndex": 19,
+        "chapter": "Chapter 5",
+        "language": null
+      }
+    }
+  },
+  {
+    "card": {
+      "id": "demo-008",
+      "cardType": "discover",
+      "content": {
+        "title": "The Unreasonable Effectiveness of Mathematics",
+        "body": "Euclid developed geometry as an abstract system of axioms and proofs around 300 BCE — with no thought of physics. Two millennia later, Einstein used **Riemannian geometry** (a descendant of Euclid's work) to describe the curvature of spacetime itself. Mathematics developed for its own sake keeps turning out to describe the physical universe with uncanny precision, a phenomenon Eugene Wigner famously called \"unreasonable.\""
+      }
+    },
+    "chunk": {
+      "id": "chunk-008",
+      "content": "The miracle of the appropriateness of the language of mathematics for the formulation of the laws of physics is a wonderful gift which we neither understand nor deserve. We should be grateful for it and hope that it will remain valid in future research.",
+      "chapter": "Conclusion",
+      "chunkIndex": 35,
+      "chunkType": "text",
+      "language": null
+    },
+    "document": {
+      "id": "doc-wigner",
+      "title": "The Unreasonable Effectiveness of Mathematics in the Natural Sciences",
+      "author": "Eugene Wigner"
+    },
+    "actions": [],
+    "isSrDue": false,
+    "wordCount": 42,
+    "chunkImageUrls": [],
+    "adjacentChunks": {
+      "34": {
+        "content": "It is difficult to avoid the impression that a miracle confronts us here, quite comparable in its striking nature to the miracle that the human mind can string a thousand arguments together without getting itself into contradictions, or to the two miracles of the existence of laws of nature and of the human mind's capacity to divine them.",
+        "chunkType": "text",
+        "chunkIndex": 34,
+        "chapter": "Conclusion",
+        "language": null
+      }
+    }
+  },
+  {
+    "card": {
+      "id": "demo-009",
+      "cardType": "flashcard",
+      "content": {
+        "question": "What literary device does Homer use at the opening of *The Odyssey* that became a hallmark of the epic tradition?",
+        "answer": "**In medias res** — beginning the narrative in the middle of the action. *The Odyssey* opens with Odysseus stranded on Calypso's island, ten years into his journey home. The earlier events (the Trojan War, the Cyclops, Circe) are revealed later through flashback, creating narrative tension and dramatic irony."
+      }
+    },
+    "chunk": {
+      "id": "chunk-009",
+      "content": "Tell me, O muse, of that ingenious hero who travelled far and wide after he had sacked the famous town of Troy. Many cities did he visit, and many were the nations with whose manners and customs he was acquainted; moreover he suffered much by sea while trying to save his own life and bring his men safely home.",
+      "chapter": "Book I",
+      "chunkIndex": 0,
+      "chunkType": "text",
+      "language": null
+    },
+    "document": {
+      "id": "doc-homer",
+      "title": "The Odyssey",
+      "author": "Homer (trans. Samuel Butler)"
+    },
+    "actions": [],
+    "isSrDue": false,
+    "wordCount": 52,
+    "chunkImageUrls": [],
+    "adjacentChunks": {
+      "1": {
+        "content": "But he could not save them, for they perished through their own sheer folly in eating the cattle of the Sun-god Hyperion; so the god prevented them from ever reaching home. Tell me, too, about all these things, O daughter of Jove, from whatsoever source you may know them.",
+        "chunkType": "text",
+        "chunkIndex": 1,
+        "chapter": "Book I",
+        "language": null
+      }
+    }
+  },
+  {
+    "card": {
+      "id": "demo-010",
+      "cardType": "passage",
+      "content": {
+        "excerpt": "All happy families are alike; each unhappy family is unhappy in its own way.",
+        "commentary": "Tolstoy's opening line to *Anna Karenina* has become a principle in its own right — the \"Anna Karenina principle\" in science describes how success requires many factors to align, while failure can stem from the absence of any single one. The sentence is a thesis statement for the entire novel: the Oblonsky household is in chaos, and each thread of unhappiness will be traced to its own specific cause."
+      }
+    },
+    "chunk": {
+      "id": "chunk-010",
+      "content": "All happy families are alike; each unhappy family is unhappy in its own way. Everything was in confusion in the Oblonsky household. The wife had discovered that the husband was carrying on an intrigue with a French girl, who had been a governess in their family.",
+      "chapter": "Part One, Chapter I",
+      "chunkIndex": 0,
+      "chunkType": "text",
+      "language": null
+    },
+    "document": {
+      "id": "doc-tolstoy",
+      "title": "Anna Karenina",
+      "author": "Leo Tolstoy"
+    },
+    "actions": [],
+    "isSrDue": false,
+    "wordCount": 43,
+    "chunkImageUrls": [],
+    "adjacentChunks": {
+      "1": {
+        "content": "The wife had announced that she could not go on living in the same house with him. This situation had already lasted three days, and not only the husband and wife themselves, but all the members of their family and household, were painfully conscious of it.",
+        "chunkType": "text",
+        "chunkIndex": 1,
+        "chapter": "Part One, Chapter I",
+        "language": null
+      }
+    }
+  },
+  {
+    "card": {
+      "id": "demo-011",
+      "cardType": "quiz",
+      "content": {
+        "question": "According to Thoreau in *Walden*, why did he go to live in the woods?",
+        "options": [
+          "To live deliberately and front only the essential facts of life",
+          "To escape debts and legal troubles in Concord",
+          "To conduct a scientific study of Walden Pond's ecosystem",
+          "To prepare for a career as a professional surveyor"
+        ],
+        "correct": 0,
+        "explanations": [
+          "Correct — Thoreau's famous statement: \"I went to the woods because I wished to live deliberately, to front only the essential facts of life, and see if I could not learn what it had to teach.\"",
+          "Thoreau had no significant debts. His stay at Walden was a philosophical experiment, not a financial escape.",
+          "While Thoreau did observe nature closely, his purpose was philosophical self-examination, not scientific research.",
+          "Thoreau did work as a surveyor, but this had nothing to do with his retreat to Walden Pond."
+        ]
+      }
+    },
+    "chunk": {
+      "id": "chunk-011",
+      "content": "I went to the woods because I wished to live deliberately, to front only the essential facts of life, and see if I could not learn what it had to teach, and not, when I came to die, discover that I had not lived.",
+      "chapter": "Where I Lived, and What I Lived For",
+      "chunkIndex": 5,
+      "chunkType": "text",
+      "language": null
+    },
+    "document": {
+      "id": "doc-thoreau",
+      "title": "Walden",
+      "author": "Henry David Thoreau"
+    },
+    "actions": [],
+    "isSrDue": false,
+    "wordCount": 40,
+    "chunkImageUrls": [],
+    "adjacentChunks": {
+      "4": {
+        "content": "I went to the woods because I wished to live deliberately. I did not wish to live what was not life, living is so dear; nor did I wish to practise resignation, unless it was quite necessary. I wanted to live deep and suck out all the marrow of life.",
+        "chunkType": "text",
+        "chunkIndex": 4,
+        "chapter": "Where I Lived, and What I Lived For",
+        "language": null
+      },
+      "6": {
+        "content": "I did not wish to live what was not life, living is so dear; nor did I wish to practise resignation, unless it was quite necessary. I wanted to live deep and suck out all the marrow of life, to live so sturdily and Spartan-like as to put to rout all that was not life.",
+        "chunkType": "text",
+        "chunkIndex": 6,
+        "chapter": "Where I Lived, and What I Lived For",
+        "language": null
+      }
+    }
+  },
+  {
+    "card": {
+      "id": "demo-012",
+      "cardType": "glossary",
+      "content": {
+        "term": "Sublime",
+        "definition": "In aesthetics, an experience of awe and terror provoked by vastness, power, or infinity that exceeds the mind's capacity to comprehend. Unlike beauty (which is orderly and pleasing), the sublime overwhelms — think mountain peaks, thunderstorms, or the starry sky. Edmund Burke and Immanuel Kant gave the concept its most influential philosophical treatments.",
+        "etymology": "From Latin *sublimis* (uplifted, exalted), possibly from *sub* (up to) + *limen* (threshold) — literally, \"up to the threshold\" of comprehension.",
+        "related": ["Aesthetic Experience", "The Beautiful", "Negative Pleasure", "Romanticism"]
+      }
+    },
+    "chunk": {
+      "id": "chunk-012",
+      "content": "The passion caused by the great and sublime in nature, when those causes operate most powerfully, is astonishment: and astonishment is that state of the soul in which all its motions are suspended, with some degree of horror.",
+      "chapter": "Part II: Of the Sublime",
+      "chunkIndex": 14,
+      "chunkType": "text",
+      "language": null
+    },
+    "document": {
+      "id": "doc-burke",
+      "title": "A Philosophical Enquiry into the Sublime and Beautiful",
+      "author": "Edmund Burke"
+    },
+    "actions": [],
+    "isSrDue": false,
+    "wordCount": 38,
+    "chunkImageUrls": [],
+    "adjacentChunks": {
+      "13": {
+        "content": "Whatever is fitted in any sort to excite the ideas of pain and danger; that is to say, whatever is in any sort terrible, or is conversant about terrible objects, or operates in a manner analogous to terror, is a source of the sublime.",
+        "chunkType": "text",
+        "chunkIndex": 13,
+        "chapter": "Part II: Of the Sublime",
+        "language": null
+      },
+      "15": {
+        "content": "In this case the mind is so entirely filled with its object, that it cannot entertain any other, nor by consequence reason on that object which employs it. Hence arises the great power of the sublime, that, far from being produced by them, it anticipates our reasonings, and hurries us on by an irresistible force.",
+        "chunkType": "text",
+        "chunkIndex": 15,
+        "chapter": "Part II: Of the Sublime",
+        "language": null
+      }
+    }
+  }
+]

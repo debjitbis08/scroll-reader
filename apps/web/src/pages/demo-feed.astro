@@ -1,0 +1,259 @@
+---
+import '../styles/global.css'
+import 'katex/dist/katex.min.css'
+import { Icon } from 'astro-icon/components'
+import DemoFeed from '../components/DemoFeed.tsx'
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Demo Feed — Scroll Reader</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,600;1,6..72,300;1,6..72,400;1,6..72,600&family=Inter:wght@300;400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <script is:inline>
+      ;(function () {
+        var t = localStorage.getItem('ctp-theme') || 'auto'
+        if (t === 'mocha' || t === 'latte') document.documentElement.classList.add(t)
+        document.documentElement.dataset.theme =
+          t === 'latte' ? 'light' : t === 'mocha' ? 'dark' : 'auto'
+      })()
+    </script>
+  </head>
+  <body class="min-h-screen bg-ed-surface text-ed-on-surface antialiased">
+
+    <!-- NAV (matches landing page) -->
+    <nav class="lp-nav">
+      <a href="/" class="lp-logo">Scroll Reader</a>
+      <button class="lp-theme-toggle lp-theme-toggle-mobile" data-theme-toggle aria-label="Toggle theme">
+        <Icon name="fa6-solid:sun" class="lp-theme-icon" data-theme-icon="latte" />
+        <Icon name="fa6-solid:moon" class="lp-theme-icon" data-theme-icon="mocha" />
+        <Icon name="fa6-solid:desktop" class="lp-theme-icon" data-theme-icon="auto" />
+      </button>
+      <ul class="lp-nav-links">
+        <li><a href="/#why">Why Scroll?</a></li>
+        <li><a href="/#how">How it works</a></li>
+        <li>
+          <button class="lp-theme-toggle" data-theme-toggle aria-label="Toggle theme">
+            <Icon name="fa6-solid:sun" class="lp-theme-icon" data-theme-icon="latte" />
+            <Icon name="fa6-solid:moon" class="lp-theme-icon" data-theme-icon="mocha" />
+            <Icon name="fa6-solid:desktop" class="lp-theme-icon" data-theme-icon="auto" />
+          </button>
+        </li>
+        <li><a href="/login">Sign In</a></li>
+        <li><a href="/register" class="lp-nav-cta">Start Reading</a></li>
+      </ul>
+    </nav>
+
+    <!-- DEMO FEED -->
+    <main class="pt-24 min-h-screen">
+      <div class="mx-auto max-w-xl px-4 pb-8 text-center">
+        <p class="font-body text-[0.7rem] font-semibold uppercase tracking-[0.25em] text-ed-on-surface-muted mb-4">Live Demo</p>
+        <h1 class="font-display text-3xl font-normal italic text-ed-on-surface mb-3">See your feed in action</h1>
+        <p class="font-body text-sm font-light text-ed-on-surface-dim leading-relaxed">
+          Real cards generated from public domain books. Scroll, tap, quiz yourself — everything works.
+        </p>
+      </div>
+
+      <section class="mx-auto w-full max-w-2xl px-4 py-8">
+        <DemoFeed dataUrl="/demo-cards.json" client:load />
+      </section>
+    </main>
+
+    <!-- FOOTER (matches landing page) -->
+    <footer class="lp-footer">
+      <div class="lp-footer-left">
+        <a href="/" class="lp-footer-logo">Scroll Reader</a>
+        <span class="lp-footer-tagline">Read deeply. Scroll freely.</span>
+      </div>
+      <ul class="lp-footer-links">
+        <li><a href="/privacy">Privacy</a></li>
+        <li><a href="/terms">Terms</a></li>
+        <li><span class="lp-footer-copy">&copy; {new Date().getFullYear()}</span></li>
+      </ul>
+    </footer>
+
+  </body>
+</html>
+
+<style is:global>
+  /* ─── Landing-style NAV (copied from LandingLayout) ─── */
+  .lp-nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    padding: 1.25rem 3rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: color-mix(in srgb, var(--ed-surface) 85%, transparent);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--ed-outline);
+  }
+
+  .lp-logo {
+    font-family: 'Newsreader', Georgia, serif;
+    font-size: 1.25rem;
+    font-style: italic;
+    font-weight: 400;
+    color: var(--ed-on-surface);
+    text-decoration: none;
+  }
+
+  .lp-nav-links {
+    list-style: none;
+    display: flex;
+    gap: 2.5rem;
+    align-items: center;
+  }
+
+  .lp-theme-toggle {
+    background: none;
+    border: none;
+    padding: 0.35rem;
+    cursor: pointer;
+    color: var(--ed-on-surface-muted);
+    transition: color 0.2s;
+    display: flex;
+    align-items: center;
+  }
+
+  .lp-theme-toggle:hover { color: var(--ed-on-surface); }
+  .lp-theme-toggle-mobile { display: none; }
+
+  .lp-theme-icon { width: 1.1rem; height: 1.1rem; }
+
+  .lp-nav-links a {
+    font-size: 0.8rem;
+    color: var(--ed-on-surface-muted);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+
+  .lp-nav-links a:hover { color: var(--ed-on-surface); }
+
+  .lp-nav-cta {
+    font-size: 0.75rem !important;
+    font-weight: 500 !important;
+    letter-spacing: 0.04em;
+    color: var(--ed-on-primary) !important;
+    background: var(--ed-primary);
+    padding: 0.5rem 1.25rem;
+    border-radius: 0.25rem;
+    transition: opacity 0.2s;
+  }
+
+  .lp-nav-cta:hover { opacity: 0.85; color: var(--ed-on-primary) !important; }
+
+  /* ─── Landing-style FOOTER ─── */
+  .lp-footer {
+    padding: 2.5rem 3rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .lp-footer-left {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .lp-footer-logo {
+    font-family: 'Newsreader', Georgia, serif;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--ed-on-surface);
+    text-decoration: none;
+  }
+
+  .lp-footer-tagline {
+    font-family: 'Newsreader', Georgia, serif;
+    font-size: 0.8rem;
+    font-style: italic;
+    color: var(--ed-on-surface-muted);
+  }
+
+  .lp-footer-links {
+    list-style: none;
+    display: flex;
+    gap: 2rem;
+    align-items: center;
+  }
+
+  .lp-footer-links a {
+    font-size: 0.65rem;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ed-on-surface-muted);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+
+  .lp-footer-links a:hover { color: var(--ed-primary); }
+
+  .lp-footer-copy {
+    font-size: 0.65rem;
+    color: var(--ed-on-surface-muted);
+    letter-spacing: 0.05em;
+  }
+
+  /* ─── Responsive ─── */
+  @media (max-width: 768px) {
+    .lp-nav { padding: 1rem 1.5rem; }
+    .lp-nav-links { display: none; }
+    .lp-theme-toggle-mobile { display: flex; margin-left: auto; }
+    .lp-footer { flex-direction: column; gap: 1.5rem; text-align: center; }
+    .lp-footer-links { flex-wrap: wrap; justify-content: center; }
+  }
+</style>
+
+<script>
+  const THEMES = ['auto', 'latte', 'mocha'] as const
+  type Theme = (typeof THEMES)[number]
+
+  function getTheme(): Theme {
+    return (localStorage.getItem('ctp-theme') as Theme) ?? 'auto'
+  }
+
+  function applyTheme(theme: Theme): void {
+    const html = document.documentElement
+    html.classList.remove('latte', 'mocha')
+    if (theme !== 'auto') html.classList.add(theme)
+    localStorage.setItem('ctp-theme', theme)
+    html.dataset.theme =
+      theme === 'latte' ? 'light' : theme === 'mocha' ? 'dark' : 'auto'
+    updateToggles(theme)
+  }
+
+  function updateToggles(theme: Theme): void {
+    document.querySelectorAll<HTMLElement>('[data-theme-toggle]').forEach((el) => {
+      el.dataset.currentTheme = theme
+      el.setAttribute('aria-label', `Theme: ${theme}`)
+    })
+    document.querySelectorAll<HTMLElement>('[data-theme-icon]').forEach((icon) => {
+      icon.classList.toggle('hidden', icon.dataset.themeIcon !== theme)
+    })
+  }
+
+  function initToggles(): void {
+    document.querySelectorAll<HTMLElement>('[data-theme-toggle]').forEach((el) => {
+      el.addEventListener('click', () => {
+        const idx = THEMES.indexOf(getTheme())
+        applyTheme(THEMES[(idx + 1) % THEMES.length])
+      })
+    })
+    updateToggles(getTheme())
+  }
+
+  initToggles()
+</script>

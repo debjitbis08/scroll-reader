@@ -7,50 +7,61 @@ const error = Astro.url.searchParams.get('error')
 ---
 
 <Layout title="Sign in — Scroll Reader">
-  <main class="flex min-h-screen items-center justify-center">
-    <div class="w-full max-w-sm space-y-6 p-6">
-      <h1 class="text-2xl font-bold">Sign in</h1>
+  <main class="flex min-h-[calc(100vh-4rem)] items-center justify-center px-4">
+    <div class="w-full max-w-sm space-y-8 py-12">
+      <div class="space-y-2">
+        <h1 class="font-display text-3xl font-semibold tracking-wide text-ed-on-surface">
+          Sign in
+        </h1>
+        <p class="font-body text-sm text-ed-on-surface-muted">
+          Welcome back to your library.
+        </p>
+      </div>
 
       {error && (
-        <p class="rounded-lg bg-ctp-red/10 px-4 py-2 text-sm text-ctp-red">
+        <p class="rounded bg-red-900/10 px-4 py-2 font-body text-sm text-red-400">
           {error === 'missing_fields' ? 'Email and password are required.' : error}
         </p>
       )}
 
-      <form method="POST" action="/api/auth/login" class="space-y-4">
+      <form method="POST" action="/api/auth/login" class="space-y-6">
         <div class="space-y-1">
-          <label for="email" class="block text-sm font-medium text-ctp-subtext0">Email</label>
+          <label for="email" class="font-body text-xs font-medium uppercase tracking-wider text-ed-on-surface-dim">
+            Email
+          </label>
           <input
             id="email"
             name="email"
             type="email"
             required
             autocomplete="email"
-            class="w-full rounded-lg border border-ctp-surface1 bg-ctp-surface0 px-3 py-2 text-ctp-text placeholder-ctp-overlay0 focus:border-ctp-mauve focus:outline-none"
+            class="w-full border-b border-ed-outline-dim bg-transparent px-0 py-2 font-body text-lg text-ed-on-surface placeholder-ed-on-surface-muted outline-none transition-colors focus:border-ed-primary"
           />
         </div>
         <div class="space-y-1">
-          <label for="password" class="block text-sm font-medium text-ctp-subtext0">Password</label>
+          <label for="password" class="font-body text-xs font-medium uppercase tracking-wider text-ed-on-surface-dim">
+            Password
+          </label>
           <input
             id="password"
             name="password"
             type="password"
             required
             autocomplete="current-password"
-            class="w-full rounded-lg border border-ctp-surface1 bg-ctp-surface0 px-3 py-2 text-ctp-text placeholder-ctp-overlay0 focus:border-ctp-mauve focus:outline-none"
+            class="w-full border-b border-ed-outline-dim bg-transparent px-0 py-2 font-body text-lg text-ed-on-surface placeholder-ed-on-surface-muted outline-none transition-colors focus:border-ed-primary"
           />
         </div>
         <button
           type="submit"
-          class="w-full rounded-lg bg-ctp-mauve px-4 py-2 font-medium text-ctp-base transition-opacity hover:opacity-90"
+          class="w-full rounded bg-gradient-to-r from-ed-primary to-ed-primary-container px-4 py-2.5 font-body text-sm font-medium text-ed-on-primary transition-opacity hover:opacity-90"
         >
           Sign in
         </button>
       </form>
 
-      <p class="text-center text-sm text-ctp-subtext0">
+      <p class="text-center font-body text-sm text-ed-on-surface-muted">
         No account?
-        <a href="/register" class="font-medium text-ctp-mauve hover:underline">Register</a>
+        <a href="/register" class="font-medium text-ed-primary hover:underline">Register</a>
       </p>
     </div>
   </main>

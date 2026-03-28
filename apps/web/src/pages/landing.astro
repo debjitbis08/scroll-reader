@@ -11,10 +11,23 @@ import { Icon } from 'astro-icon/components';
   <!-- NAV -->
   <nav class="lp-nav">
     <a href="/" class="lp-logo">Scroll Reader</a>
+    <button class="lp-theme-toggle lp-theme-toggle-mobile" data-theme-toggle aria-label="Toggle theme">
+      <Icon name="fa6-solid:sun" class="lp-theme-icon" data-theme-icon="latte" />
+      <Icon name="fa6-solid:moon" class="lp-theme-icon" data-theme-icon="mocha" />
+      <Icon name="fa6-solid:desktop" class="lp-theme-icon" data-theme-icon="auto" />
+    </button>
     <ul class="lp-nav-links">
       <li><a href="#why">Why Scroll?</a></li>
       <li><a href="#how">How it works</a></li>
       <li><a href="#cards">Cards</a></li>
+      <li><a href="/demo-feed">Demo</a></li>
+      <li>
+        <button class="lp-theme-toggle" data-theme-toggle aria-label="Toggle theme">
+          <Icon name="fa6-solid:sun" class="lp-theme-icon" data-theme-icon="latte" />
+          <Icon name="fa6-solid:moon" class="lp-theme-icon" data-theme-icon="mocha" />
+          <Icon name="fa6-solid:desktop" class="lp-theme-icon" data-theme-icon="auto" />
+        </button>
+      </li>
       <li><a href="/login">Sign In</a></li>
       <li><a href="/register" class="lp-nav-cta">Start Reading</a></li>
     </ul>
@@ -25,13 +38,11 @@ import { Icon } from 'astro-icon/components';
     <div class="lp-hero-text">
       <h1>Scroll your<br><em>books,</em> not<br>the timeline.</h1>
       <p class="lp-hero-sub">
-        Upload your EPUBs and PDFs. Get a scrollable feed of cards — quotes,
-        questions, comparisons, definitions — all generated from what you
-        actually own.
+        You're going to scroll anyway. Might as well scroll your books.
       </p>
       <div class="lp-cta-row">
         <a href="/register" class="lp-btn-primary">Start Reading</a>
-        <a href="#how" class="lp-btn-ghost">See how it works</a>
+        <a href="/demo-feed" class="lp-btn-ghost">Try the demo</a>
       </div>
     </div>
     <div class="lp-hero-visual">
@@ -61,26 +72,32 @@ import { Icon } from 'astro-icon/components';
     <h2>How it works</h2>
     <div class="lp-steps">
       <div class="lp-step">
-        <div class="lp-step-icon">
-          <Icon name="mdi:file-upload-outline" />
+        <div class="lp-step-heading">
+          <div class="lp-step-icon">
+            <Icon name="mdi:file-upload-outline" />
+          </div>
+          <h3>1. Upload your documents</h3>
         </div>
-        <h3>1. Upload your documents</h3>
         <p>
 Drop in an EPUB or PDF. We pull out the text, divide it into sections, and pick up images along the way.
         </p>
       </div>
       <div class="lp-step">
-        <div class="lp-step-icon">
-          <Icon name="mdi:sparkles-outline" />
+        <div class="lp-step-heading">
+          <div class="lp-step-icon">
+            <Icon name="mdi:sparkles-outline" />
+          </div>
+          <h3>2. AI builds your feed</h3>
         </div>
-        <h3>2. AI builds your feed</h3>
         <p>We send passages to Google's Gemini model, which generates cards — a quiz question, a pulled quote, a concept comparison, a glossary term.
       </div>
       <div class="lp-step">
-        <div class="lp-step-icon">
-          <Icon name="mdi:scroll-text-outline" />
+        <div class="lp-step-heading">
+          <div class="lp-step-icon">
+            <Icon name="mdi:scroll-text-outline" />
+          </div>
+          <h3>3. Scroll through your library</h3>
         </div>
-        <h3>3. Scroll through your library</h3>
         <p>
           Cards appear in a vertical feed. Read one, skip one, save one. How you scroll shapes what comes back and when.
         </p>
@@ -177,6 +194,8 @@ Drop in an EPUB or PDF. We pull out the text, divide it into sections, and pick 
     <p class="lp-deploy-future">
       <strong>Coming later:</strong> A self-hosted Docker version for people who
       want their data on their own machine, and a desktop app with offline support.
+    </p>
+    <p class="lp-deploy-future" style="display: none;">
       If either of those matters to you, <a href="#">leave your email</a> and
       we'll let you know when they're ready.
     </p>
@@ -197,9 +216,8 @@ Drop in an EPUB or PDF. We pull out the text, divide it into sections, and pick 
     </div>
     <ul class="lp-footer-links">
       <li><a href="https://github.com/debjitbis08/scroll-reader" target="_blank">GitHub</a></li>
-      <li><a href="#">Privacy</a></li>
-      <li><a href="#">Terms</a></li>
-      <li><a href="#">Licensing</a></li>
+      <li><a href="/privacy">Privacy</a></li>
+      <li><a href="/terms">Terms</a></li>
     </ul>
     <span class="lp-footer-copy">&copy; 2026 Scroll Reader. Licensed under AGPL-3.0.</span>
   </footer>
@@ -215,6 +233,43 @@ Drop in an EPUB or PDF. We pull out the text, divide it into sections, and pick 
     }, { threshold: 0.1 });
 
     document.querySelectorAll('.lp-fade').forEach(el => observer.observe(el));
+
+    // Theme cycling: auto → latte (light) → mocha (dark) → auto
+    const THEMES = ['auto', 'latte', 'mocha'] as const;
+    type Theme = (typeof THEMES)[number];
+
+    function getTheme(): Theme {
+      return (localStorage.getItem('ctp-theme') as Theme) ?? 'auto';
+    }
+
+    function applyTheme(theme: Theme): void {
+      const html = document.documentElement;
+      html.classList.remove('latte', 'mocha');
+      if (theme !== 'auto') html.classList.add(theme);
+      localStorage.setItem('ctp-theme', theme);
+      html.dataset.theme =
+        theme === 'latte' ? 'light' : theme === 'mocha' ? 'dark' : 'auto';
+      updateIcons(theme);
+    }
+
+    function updateIcons(theme: Theme): void {
+      document.querySelectorAll<HTMLElement>('[data-theme-icon]').forEach((icon) => {
+        if (icon.dataset.themeIcon === theme) {
+          icon.setAttribute('data-active', '');
+        } else {
+          icon.removeAttribute('data-active');
+        }
+      });
+    }
+
+    document.querySelectorAll('[data-theme-toggle]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const idx = THEMES.indexOf(getTheme());
+        applyTheme(THEMES[(idx + 1) % THEMES.length]);
+      });
+    });
+
+    updateIcons(getTheme());
   </script>
 
 </LandingLayout>

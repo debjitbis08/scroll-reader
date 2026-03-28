@@ -17,6 +17,14 @@ const { title = 'Scroll Reader — Read Deeply. Scroll Freely.' } = Astro.props
       href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,600;1,6..72,300;1,6..72,400;1,6..72,600&family=Inter:wght@300;400;500;600&display=swap"
       rel="stylesheet"
     />
+    <script is:inline>
+      ;(function () {
+        var t = localStorage.getItem('ctp-theme') || 'auto'
+        if (t === 'mocha' || t === 'latte') document.documentElement.classList.add(t)
+        document.documentElement.dataset.theme =
+          t === 'latte' ? 'light' : t === 'mocha' ? 'dark' : 'auto'
+      })()
+    </script>
   </head>
   <body>
     <slot />
@@ -44,7 +52,7 @@ const { title = 'Scroll Reader — Read Deeply. Scroll Freely.' } = Astro.props
   }
 
   @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not(.latte) {
       --ed-primary: #c8c8b0;
       --ed-primary-container: #474836;
       --ed-on-primary: #404130;
@@ -59,6 +67,22 @@ const { title = 'Scroll Reader — Read Deeply. Scroll Freely.' } = Astro.props
       --ed-outline: #49473f;
       --ed-outline-dim: #49473f22;
     }
+  }
+
+  :root.mocha {
+    --ed-primary: #c8c8b0;
+    --ed-primary-container: #474836;
+    --ed-on-primary: #404130;
+    --ed-surface: #0e0e0e;
+    --ed-surface-dim: #141412;
+    --ed-surface-container: #1c1c1a;
+    --ed-surface-high: #252523;
+    --ed-surface-highest: #333330;
+    --ed-on-surface: #e7e5e5;
+    --ed-on-surface-dim: #a8a6a0;
+    --ed-on-surface-muted: #6b6860;
+    --ed-outline: #49473f;
+    --ed-outline-dim: #49473f22;
   }
 
   html { scroll-behavior: smooth; }
@@ -86,6 +110,7 @@ const { title = 'Scroll Reader — Read Deeply. Scroll Freely.' } = Astro.props
     background: color-mix(in srgb, var(--ed-surface) 85%, transparent);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--ed-outline);
   }
 
   .lp-logo {
@@ -103,6 +128,24 @@ const { title = 'Scroll Reader — Read Deeply. Scroll Freely.' } = Astro.props
     gap: 2.5rem;
     align-items: center;
   }
+
+  .lp-theme-toggle {
+    background: none;
+    border: none;
+    padding: 0.35rem;
+    cursor: pointer;
+    color: var(--ed-on-surface-muted);
+    transition: color 0.2s;
+    display: flex;
+    align-items: center;
+  }
+
+  .lp-theme-toggle:hover { color: var(--ed-on-surface); }
+
+  .lp-theme-toggle-mobile { display: none; }
+
+  .lp-theme-icon { display: none; width: 1.1rem; height: 1.1rem; }
+  .lp-theme-icon[data-active] { display: block; }
 
   .lp-nav-links a {
     font-size: 0.8rem;
@@ -136,6 +179,7 @@ const { title = 'Scroll Reader — Read Deeply. Scroll Freely.' } = Astro.props
     gap: 4rem;
     max-width: 1200px;
     margin: 0 auto;
+    text-align: center;
   }
 
   .lp-hero-text {
@@ -161,15 +205,23 @@ const { title = 'Scroll Reader — Read Deeply. Scroll Freely.' } = Astro.props
     font-size: 1.05rem;
     font-weight: 300;
     color: var(--ed-on-surface-dim);
-    max-width: 44ch;
+    /* max-width: 44ch; */
     line-height: 1.7;
     margin-bottom: 2.5rem;
+    text-align: center;
   }
 
   .lp-cta-row {
     display: flex;
     gap: 1rem;
     align-items: center;
+    justify-content: center;
+  }
+
+  @media (width >= 48rem) {
+    .lp-cta-row {
+      justify-content: center;
+    }
   }
 
   .lp-btn-primary {
@@ -300,10 +352,19 @@ const { title = 'Scroll Reader — Read Deeply. Scroll Freely.' } = Astro.props
 
   .lp-hero-img-light { display: none; }
 
-  @media (prefers-color-scheme: light) {
-    .lp-hero-img-dark { display: none; }
-    .lp-hero-img-light { display: block; }
+  /* Light by default (light tokens are default) */
+  :root:not(.mocha) .lp-hero-img-dark { display: none; }
+  :root:not(.mocha) .lp-hero-img-light { display: block; }
+
+  /* OS dark preference (when no manual class) */
+  @media (prefers-color-scheme: dark) {
+    :root:not(.latte) .lp-hero-img-dark { display: block; }
+    :root:not(.latte) .lp-hero-img-light { display: none; }
   }
+
+  /* Manual dark override */
+  :root.mocha .lp-hero-img-dark { display: block; }
+  :root.mocha .lp-hero-img-light { display: none; }
 
   /* ─── MANIFESTO ─── */
   .lp-manifesto {
@@ -414,6 +475,20 @@ const { title = 'Scroll Reader — Read Deeply. Scroll Freely.' } = Astro.props
     gap: 0.75rem;
   }
 
+  .lp-step-heading {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    margin-bottom: 0.75rem;
+  }
+
+  @media (width >= 48rem) {
+    .lp-step-heading {
+      display: block;
+      margin-bottom: 0;
+    }
+  }
+
   .lp-step-icon {
     width: 2.5rem;
     height: 2.5rem;
@@ -422,22 +497,32 @@ const { title = 'Scroll Reader — Read Deeply. Scroll Freely.' } = Astro.props
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-bottom: 1.25rem;
     font-size: 1.5rem;
     color: var(--ed-primary);
+  }
+
+  @media (width >= 48rem) {
+    .lp-step-icon {
+      margin-bottom: 1.25rem;
+    }
   }
 
   .lp-step h3 {
     font-family: 'Newsreader', Georgia, serif;
     font-size: 1.15rem;
     font-weight: 400;
-    margin-bottom: 0.5rem;
     color: var(--ed-on-surface);
+  }
+
+  @media (width >= 48rem) {
+    .lp-step h3 {
+      margin-bottom: 0.5rem;
+    }
   }
 
   .lp-step p {
     font-size: 0.85rem;
-    color: var(--ed-on-surface-muted);
+    color: var(--ed-on-surface-dim);
     font-weight: 300;
     line-height: 1.7;
   }
@@ -766,6 +851,7 @@ const { title = 'Scroll Reader — Read Deeply. Scroll Freely.' } = Astro.props
   @media (max-width: 768px) {
     .lp-nav { padding: 1rem 1.5rem; }
     .lp-nav-links { display: none; }
+    .lp-theme-toggle-mobile { display: flex; margin-left: auto; }
     .lp-hero { grid-template-columns: 1fr; padding: 7rem 1.5rem 3rem; gap: 2rem; }
     .lp-hero-visual { perspective: none; }
     .lp-hero-placeholder { transform: none; max-width: 340px; margin: 0 auto; }

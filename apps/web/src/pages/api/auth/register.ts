@@ -8,10 +8,8 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
   const email = form.get('email')?.toString() ?? ''
   const password = form.get('password')?.toString() ?? ''
   const displayName = form.get('display_name')?.toString()?.trim() || null
-  const privacy = form.get('privacy_acknowledged') === 'true'
 
   if (!email || !password) return redirect('/register?error=missing_fields')
-  if (!privacy) return redirect('/register?error=privacy_required')
 
   const supabase = createSupabaseServer(request, cookies)
   const {

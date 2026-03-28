@@ -1,0 +1,325 @@
+---
+import Layout from "../layouts/Layout.astro";
+export const prerender = true;
+---
+
+<Layout isApp={false} title="Privacy Policy">
+  <article class="policy-page">
+    <header class="policy-header">
+      <p class="policy-eyebrow">Legal</p>
+      <h1>Privacy Policy</h1>
+      <p class="policy-date">Last Revised: March, 2026</p>
+    </header>
+
+    <div class="policy-summary">
+      <h2>In short (how we handle your data)</h2>
+      <ul>
+        <li>We collect only what we need to run Scroll Reader — your name, email, and the documents you upload.</li>
+        <li>Your uploaded documents are used only to generate cards for your personal feed. We do not read them for any other purpose.</li>
+        <li>We send document passages to Google Gemini to generate cards. We do not send your name, email, or any identifying information alongside them.</li>
+        <li>We never sell or share your personal data with third parties.</li>
+        <li>If you delete your account, all your uploaded documents and generated cards are permanently deleted from our servers.</li>
+        <li>We use cookies and analytics to improve the experience; you can control these in your browser settings.</li>
+      </ul>
+      <p class="policy-summary-note">
+        This summary is for convenience only. Please read the full Privacy Policy below for complete details.
+      </p>
+    </div>
+
+      <section class="policySection">
+        <h2 data-order="2">Introduction</h2>
+        <p>
+          This Privacy Policy describes how Scroll Reader ("we", "us", "our") collects, uses, and protects
+          your information when you use our website at scrollreader.app and associated services. By using
+          Scroll Reader, you agree to the practices described here.
+        </p>
+      </section>
+
+      <section class="policySection">
+        <h2 data-order="2">Data We Collect</h2>
+        <p>We collect the following information to operate the service:</p>
+        <ul>
+          <li>
+            <strong>Name and email address</strong>: Collected when you create an account, used to identify
+            your account and send service-related communications.
+          </li>
+          <li>
+            <strong>Uploaded documents</strong>: EPUBs and PDFs you upload are stored on our servers and
+            used solely to generate your reading feed. We do not read, index, or analyse them for any
+            purpose other than card generation.
+          </li>
+          <li>
+            <strong>Generated cards</strong>: The AI-generated cards produced from your documents are stored
+            and associated with your account to power your feed and spaced repetition scheduling.
+          </li>
+          <li>
+            <strong>Engagement signals</strong>: How you interact with cards (scrolling past, engaging,
+            saving) is recorded to personalise your feed. This data is not shared with third parties.
+          </li>
+        </ul>
+        <p>
+            If you sign up using Google, we receive your name, email address, and profile picture from Google. We do not receive your Google password.
+        </p>
+      </section>
+
+      <section class="policySection">
+        <h2 data-order="2">Non-Personal Data Collection</h2>
+        <p>
+We use cookies and <a href="https://posthog.com" target="_blank" rel="noopener">PostHog</a> for product analytics — understanding which features are used and how the service performs. This data is collected in aggregate and is not sold or shared. You can manage cookie preferences through your browser settings.
+        </p>
+      </section>
+
+      <section class="policySection">
+        <h2 data-order="2">AI Usage and Data Safety</h2>
+        <p>
+          Card generation is powered by Google Gemini. When we send a passage to Gemini for processing, we
+          send only the text of the passage — not your name, email address, account ID, or any other
+          identifying information. Document passages are processed transiently; we do not instruct Google
+          to retain them for model training under our API usage.
+        </p>
+        <p>
+          Please refer to
+          <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google's Privacy Policy</a>
+          for details on how Google handles API data.
+        </p>
+      </section>
+
+      <section class="policySection">
+        <h2 data-order="2">Data Sharing</h2>
+        <p>
+          We do <strong>not</strong> sell or rent your personal data to anyone.
+        </p>
+        <p>
+          To operate Scroll Reader, we use the following service providers:
+        </p>
+        <ul>
+          <li>
+            <strong>Supabase (Authentication and Database)</strong> — Stores your account information and
+            generated cards. Uploaded documents are stored in Supabase Storage.
+          </li>
+          <li>
+            <strong>Google Gemini (AI Card Generation)</strong> — Receives anonymised document passages
+            to generate cards. Does not receive your name, email, or account details.
+          </li>
+          <li>
+            <strong>Dodo Payments (Payment Processing)</strong> — Will handle payment processing when paid
+            plans are introduced. We do not store or access your card details at any point.
+          </li>
+          <li>
+            <strong>PostHog (Analytics)</strong> — Receives anonymised usage events to help us understand how the product is used. No personal identifiers are included in analytics events.
+          </li>
+        </ul>
+        <p>
+          These providers act as processors on our behalf and are not permitted to use your data for their
+          own purposes.
+        </p>
+      </section>
+
+      <section class="policySection">
+        <h2 data-order="2">Account Deletion and Data Retention</h2>
+        <p>
+          You may delete your account at any time from your account settings or by emailing us at
+          <a href="mailto:contact@scrollreader.app">contact@scrollreader.app</a>. Upon deletion, all
+          uploaded documents and AI-generated cards associated with your account are permanently and
+          irreversibly deleted from our servers. We do not retain copies after deletion.
+        </p>
+        <p>
+          If you only delete individual documents, the cards generated from those documents are also deleted.
+        </p>
+      </section>
+
+      <section class="policySection">
+        <h2 data-order="2">Open Source</h2>
+        <p>
+          Scroll Reader is open source under the AGPL-3.0 license. If you self-host the software, your data
+          stays entirely on your own infrastructure and is not subject to this policy. This policy applies
+          only to the hosted service at scrollreader.app.
+        </p>
+      </section>
+
+      <section class="policySection">
+        <h2 data-order="2">Updates to This Policy</h2>
+        <p>
+          We may update this Privacy Policy from time to time. If we make material changes, we will notify
+          registered users by email before the changes take effect. Continued use of the service after that
+          point constitutes acceptance of the revised policy.
+        </p>
+      </section>
+
+      <section class="policySection">
+        <h2 data-order="2">Contact</h2>
+        <p>
+          If you have questions or concerns about this Privacy Policy or how we handle your data, please
+          contact us at <a href="mailto:contact@scrollreader.app">contact@scrollreader.app</a>.
+        </p>
+      </section>
+
+  </article>
+</Layout>
+
+<style>
+  @reference "tailwindcss";
+
+  /* ─── Page layout ─── */
+  .policy-page {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 6rem 2rem 4rem;
+    font-family: var(--font-body);
+    color: var(--ed-on-surface);
+    line-height: 1.8;
+  }
+
+  /* ─── Header ─── */
+  .policy-header {
+    margin-bottom: 3.5rem;
+  }
+
+  .policy-eyebrow {
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--ed-on-surface-muted);
+    margin-bottom: 1rem;
+  }
+
+  .policy-header h1 {
+    font-family: var(--font-display);
+    font-size: clamp(2.2rem, 4.5vw, 3rem);
+    font-weight: 300;
+    font-style: italic;
+    line-height: 1.15;
+    color: var(--ed-on-surface);
+    margin-bottom: 0.75rem;
+  }
+
+  .policy-date {
+    font-size: 0.85rem;
+    font-weight: 300;
+    color: var(--ed-on-surface-muted);
+  }
+
+  /* ─── Summary card ─── */
+  .policy-summary {
+    background: var(--ed-surface-high);
+    border-radius: 0.375rem;
+    padding: 2rem;
+    margin-bottom: 3rem;
+  }
+
+  .policy-summary h2 {
+    font-family: var(--font-display);
+    font-size: 1.15rem;
+    font-weight: 400;
+    font-style: italic;
+    color: var(--ed-on-surface);
+    margin-bottom: 1rem;
+  }
+
+  .policy-summary ul {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    margin-bottom: 1rem;
+  }
+
+  .policy-summary li {
+    font-size: 0.85rem;
+    font-weight: 300;
+    color: var(--ed-on-surface-dim);
+    padding-left: 1.25rem;
+    position: relative;
+  }
+
+  .policy-summary li::before {
+    content: '\2013';
+    position: absolute;
+    left: 0;
+    color: var(--ed-primary);
+  }
+
+  .policy-summary-note {
+    font-size: 0.75rem;
+    color: var(--ed-on-surface-muted);
+    font-style: italic;
+  }
+
+  /* ─── Sections ─── */
+  .policySection {
+    margin-bottom: 2.5rem;
+  }
+
+  .policySection h2 {
+    font-family: var(--font-display);
+    font-size: 1.35rem;
+    font-weight: 400;
+    color: var(--ed-on-surface);
+    margin-bottom: 0.75rem;
+  }
+
+  .policySection p {
+    font-size: 0.95rem;
+    font-weight: 300;
+    color: var(--ed-on-surface-dim);
+    margin-bottom: 1rem;
+    line-height: 1.8;
+  }
+
+  .policySection ul {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    padding-left: 0;
+  }
+
+  .policySection li {
+    font-size: 0.95rem;
+    font-weight: 300;
+    color: var(--ed-on-surface-dim);
+    padding-left: 1.25rem;
+    position: relative;
+    line-height: 1.8;
+  }
+
+  .policySection li::before {
+    content: '\2013';
+    position: absolute;
+    left: 0;
+    color: var(--ed-primary);
+  }
+
+  .policySection li > div {
+    display: inline;
+  }
+
+  .policySection strong {
+    font-weight: 500;
+    color: var(--ed-on-surface);
+  }
+
+  .policySection a {
+    color: var(--ed-primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    text-decoration-color: var(--ed-outline);
+    transition: text-decoration-color 0.2s;
+  }
+
+  .policySection a:hover {
+    text-decoration-color: var(--ed-primary);
+  }
+
+  /* ─── Responsive ─── */
+  @media (max-width: 768px) {
+    .policy-page {
+      padding: 5rem 1.5rem 3rem;
+    }
+    .policy-summary {
+      padding: 1.5rem;
+    }
+  }
+</style>
