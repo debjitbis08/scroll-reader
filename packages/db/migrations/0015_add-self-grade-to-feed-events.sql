@@ -1,0 +1,1 @@
+ALTER TABLE "feed_events" ADD COLUMN "self_grade" integer;

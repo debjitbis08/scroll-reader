@@ -1,9 +1,10 @@
 import type { APIRoute } from 'astro'
-import { eq, and, sql, inArray, notInArray, desc, or } from 'drizzle-orm'
+import { eq, and, sql, inArray, notInArray, desc } from 'drizzle-orm'
 import { db } from '../../lib/db.ts'
 import { cards, chunks, chunkImages, documents, cardActions, cardScores, feedEvents } from '@scroll-reader/db'
 import { createSupabaseServer } from '../../lib/supabase.ts'
 
+// 'connect' is defined but not yet eligible — requires the embeddings pipeline (not built yet)
 type CardType = 'discover' | 'connect' | 'raw_commentary' | 'flashcard' | 'quiz' | 'glossary' | 'contrast' | 'passage'
 
 // Cold start card type tiers
@@ -11,11 +12,10 @@ const EARLY_TYPES: CardType[] = ['discover', 'raw_commentary', 'passage']
 const MID_TYPES: CardType[] = [...EARLY_TYPES, 'flashcard', 'glossary', 'contrast']
 const ALL_TYPES: CardType[] = [...MID_TYPES, 'quiz']
 
-// Card types that never appear for casual reading goal
-const STUDY_ONLY_TYPES: CardType[] = ['flashcard', 'quiz']
 
-// Companion card types surfaced before SR-due reviews
-const COMPANION_TYPES: CardType[] = ['discover', 'raw_commentary']
+// Companion card types surfaced before SR-due reviews — any card that orients
+// the user on the chunk's content before a quiz/flashcard review
+const COMPANION_TYPES: CardType[] = ['discover', 'raw_commentary', 'passage', 'glossary']
 
 export const GET: APIRoute = async ({ request, cookies, url }) => {
   const supabase = createSupabaseServer(request, cookies)
@@ -90,7 +90,35 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
   // Uses a WHERE EXISTS subquery instead of JOIN to avoid row amplification
   // from potential duplicate card_scores rows.
 
-  const srDueCards = await db
+  // Chunk prerequisite gate: quiz/flashcard cards require the user to have
+  // at least seen (glanced or engaged) a non-quiz/flashcard card from the same chunk
+  const userId = user.id
+  const prerequisiteGate = sql`(
+    ${cards.cardType} NOT IN ('quiz', 'flashcard')
+    OR EXISTS (
+      SELECT 1 FROM feed_events fe
+      JOIN cards c2 ON c2.id = fe.card_id
+      WHERE c2.chunk_id = ${cards.chunkId}
+        AND c2.card_type NOT IN ('quiz', 'flashcard')
+        AND fe.user_id = ${userId}
+        AND fe.event_type IN ('glanced', 'engaged')
+    )
+    OR EXISTS (
+      SELECT 1 FROM card_actions ca2
+      JOIN cards c3 ON c3.id = ca2.card_id
+      WHERE c3.chunk_id = ${cards.chunkId}
+        AND c3.card_type NOT IN ('quiz', 'flashcard')
+        AND ca2.user_id = ${userId}
+        AND ca2.action = 'like'
+    )
+  )`
+
+  // SR-due cards must also respect cold-start tiers
+  const srEligibleTypes = eligibleTypes.filter(
+    (t): t is 'flashcard' | 'quiz' => t === 'flashcard' || t === 'quiz',
+  )
+
+  const srDueCards = srEligibleTypes.length === 0 ? [] : await db
     .select({
       card: cards,
       chunk: {
@@ -114,7 +142,8 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
     .where(
       and(
         eq(cards.userId, user.id),
-        inArray(cards.cardType, ['flashcard', 'quiz']),
+        inArray(cards.cardType, [...srEligibleTypes]),
+        prerequisiteGate,
         // SR-due check via subquery — no JOIN, no row amplification
         sql`EXISTS (
           SELECT 1 FROM card_scores cs
@@ -195,8 +224,11 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
       companionCardIds.add(companion.card.id)
       usedCompanionChunks.add(srCard.chunk.id)
     }
-    srPairs.push({ ...srCard, isSrDue: true })
-    srCardIds.add(srCard.card.id)
+    // Skip if this SR card was already added as a companion
+    if (!companionCardIds.has(srCard.card.id)) {
+      srPairs.push({ ...srCard, isSrDue: true })
+      srCardIds.add(srCard.card.id)
+    }
   }
 
   // --- 3. Regular feed cards ---
@@ -205,28 +237,6 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
 
   const remainingSlots = limit - srPairs.length
   const allExcludeIds = [...new Set([...excludeIds, ...srCardIds, ...companionCardIds])]
-
-  // Chunk prerequisite gate: quiz cards require engagement on a non-quiz card from same chunk
-  const userId = user.id
-  const prerequisiteGate = sql`(
-    ${cards.cardType} != 'quiz'
-    OR EXISTS (
-      SELECT 1 FROM feed_events fe
-      JOIN cards c2 ON c2.id = fe.card_id
-      WHERE c2.chunk_id = ${cards.chunkId}
-        AND c2.card_type != 'quiz'
-        AND fe.user_id = ${userId}
-        AND fe.event_type = 'engaged'
-    )
-    OR EXISTS (
-      SELECT 1 FROM card_actions ca2
-      JOIN cards c3 ON c3.id = ca2.card_id
-      WHERE c3.chunk_id = ${cards.chunkId}
-        AND c3.card_type != 'quiz'
-        AND ca2.user_id = ${userId}
-        AND ca2.action = 'like'
-    )
-  )`
 
   // Cooldown via subquery: cards with no card_scores row are always eligible.
   // Cards with scores must pass engagement-based cooldown or be SR-due.
@@ -279,12 +289,8 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
           eq(cards.userId, user.id),
           inArray(cards.cardType, [...eligibleTypes]),
           allExcludeIds.length > 0 ? notInArray(cards.id, allExcludeIds) : undefined,
-          // Casual docs: no flashcard/quiz
-          or(
-            sql`${documents.readingGoal} IS NULL`,
-            sql`${documents.readingGoal} != 'casual'`,
-            notInArray(cards.cardType, [...STUDY_ONLY_TYPES]),
-          ),
+          // Casual docs: exclude study-only types (flashcard/quiz); all other docs: allow all
+          sql`${documents.readingGoal} IS DISTINCT FROM 'casual' OR ${cards.cardType} NOT IN ('flashcard', 'quiz')`,
           cooldownSubquery,
           prerequisiteGate,
         ))
@@ -315,7 +321,10 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
   // Score regular cards: affinity * random jitter
   const scored = regularCards.map((r) => {
     const scores = scoreMap.get(r.card.id)
-    const affinity = affinityMap.get(r.card.cardType) ?? 0.5 // default 50% for unseen types
+    const knownAffinity = affinityMap.get(r.card.cardType)
+    // Never-tried types get an exploration bonus (0.7) so they surface more
+    // than low-engagement types but less than proven high-engagement ones
+    const affinity = knownAffinity ?? 0.7
     const neverShown = !scores || scores.timesShown === 0
     // Boost never-shown cards so new content surfaces
     const noveltyBoost = neverShown ? 1.5 : 1.0
@@ -325,7 +334,94 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
 
   // Sort by score descending, take what we need
   scored.sort((a, b) => b.score - a.score)
-  const selectedRegular = scored.slice(0, remainingSlots)
+  // Deduplicate — same card ID should never appear twice in the feed
+  const seenIds = new Set<string>(allExcludeIds)
+  const deduped = scored.filter((r) => {
+    if (seenIds.has(r.card.id)) return false
+    seenIds.add(r.card.id)
+    return true
+  })
+  const selectedRegular = deduped.slice(0, remainingSlots)
+
+  // --- 4b. Ensure quiz/flashcard cards have an intro companion in the batch ---
+  // If a quiz/flashcard was selected but no discover/passage/glossary card from
+  // the same chunk is in the batch, pull one in so users see context first.
+  const INTRO_TYPES: CardType[] = ['discover', 'raw_commentary', 'passage']
+  const NEEDS_INTRO: CardType[] = ['quiz', 'flashcard']
+  const selectedChunkTypes = new Map<string, Set<string>>()
+  for (const r of selectedRegular) {
+    const types = selectedChunkTypes.get(r.card.chunkId!) ?? new Set()
+    types.add(r.card.cardType)
+    selectedChunkTypes.set(r.card.chunkId!, types)
+  }
+  // Also count SR pairs — if a companion was already served for this chunk, no need to add another
+  for (const r of srPairs) {
+    const types = selectedChunkTypes.get(r.card.chunkId!) ?? new Set()
+    types.add(r.card.cardType)
+    selectedChunkTypes.set(r.card.chunkId!, types)
+  }
+
+  const chunksNeedingIntro: string[] = []
+  for (const [chunkId, types] of selectedChunkTypes) {
+    const hasStudyCard = NEEDS_INTRO.some((t) => types.has(t))
+    const hasIntroCard = INTRO_TYPES.some((t) => types.has(t))
+    if (hasStudyCard && !hasIntroCard) chunksNeedingIntro.push(chunkId)
+  }
+
+  if (chunksNeedingIntro.length > 0) {
+    // Check the over-fetched pool first before hitting DB
+    const introFromPool = new Map<string, (typeof deduped)[number]>()
+    for (const r of deduped) {
+      if (
+        r.card.chunkId &&
+        chunksNeedingIntro.includes(r.card.chunkId) &&
+        INTRO_TYPES.includes(r.card.cardType as CardType) &&
+        !introFromPool.has(r.card.chunkId)
+      ) {
+        introFromPool.set(r.card.chunkId, r)
+      }
+    }
+
+    // For chunks not found in the pool, fetch from DB
+    const stillNeeding = chunksNeedingIntro.filter((id) => !introFromPool.has(id))
+    const dbIntroCards = stillNeeding.length > 0
+      ? await db
+          .selectDistinctOn([cards.chunkId], {
+            card: cards,
+            chunk: {
+              id: chunks.id,
+              content: chunks.content,
+              chapter: chunks.chapter,
+              chunkIndex: chunks.chunkIndex,
+              chunkType: chunks.chunkType,
+              language: chunks.language,
+            },
+            document: {
+              id: documents.id,
+              title: documents.title,
+              author: documents.author,
+            },
+            wordCount: chunks.wordCount,
+          })
+          .from(cards)
+          .innerJoin(chunks, eq(cards.chunkId, chunks.id))
+          .innerJoin(documents, eq(chunks.documentId, documents.id))
+          .where(and(
+            eq(cards.userId, user.id),
+            inArray(cards.chunkId, stillNeeding),
+            inArray(cards.cardType, [...INTRO_TYPES]),
+          ))
+          .orderBy(cards.chunkId, cards.createdAt)
+      : []
+
+    // Inject intro cards into the selected set
+    for (const r of [...introFromPool.values()]) {
+      selectedRegular.push(r)
+    }
+    for (const r of dbIntroCards) {
+      selectedRegular.push({ ...r, score: 0 })
+    }
+  }
 
   // --- 5. Merge and build response ---
 
@@ -389,9 +485,27 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
   }
 
   // SR pairs first (companion + review card), then regular cards
+  // Within regular cards, ensure discover/notes appear before quiz/flashcard per chunk
+  const CARD_TYPE_ORDER: Record<string, number> = {
+    discover: 0, raw_commentary: 1, passage: 2, glossary: 3, contrast: 4, connect: 5, flashcard: 6, quiz: 7,
+  }
+  const regularItems = selectedRegular.map((r) => toFeedItem({ ...r, isSrDue: false }))
+  // Stable sort: within the same chunk, order by card type tier; across chunks, preserve score order
+  const chunkFirstSeen = new Map<string, number>()
+  for (let i = 0; i < regularItems.length; i++) {
+    const cid = regularItems[i].chunk.id
+    if (!chunkFirstSeen.has(cid)) chunkFirstSeen.set(cid, i)
+  }
+  regularItems.sort((a, b) => {
+    const aChunkPos = chunkFirstSeen.get(a.chunk.id) ?? 0
+    const bChunkPos = chunkFirstSeen.get(b.chunk.id) ?? 0
+    if (aChunkPos !== bChunkPos) return aChunkPos - bChunkPos
+    return (CARD_TYPE_ORDER[a.card.cardType] ?? 5) - (CARD_TYPE_ORDER[b.card.cardType] ?? 5)
+  })
+
   const result = [
     ...srPairs.map(toFeedItem),
-    ...selectedRegular.map((r) => toFeedItem({ ...r, isSrDue: false })),
+    ...regularItems,
   ]
 
   return new Response(JSON.stringify(result), {

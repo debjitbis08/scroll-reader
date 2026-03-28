@@ -43,20 +43,40 @@ interface PendingImpression {
   durationMs: number
   wasSrDue: boolean
   timestamp: number
+  selfGrade?: number        // SM-2 grade from flashcard self-grade buttons
+  quizSelectedIndex?: number // original option index the user tapped
 }
 
 const FLUSH_INTERVAL_MS = 10_000
 const MAX_BUFFER_SIZE = 20
 
+// Per-card grade data set by flashcard/quiz interactions, consumed when the impression is buffered
+const cardGrades = new Map<string, { selfGrade?: number; quizSelectedIndex?: number }>()
+// Track which flashcards were revealed (for scroll-away fallback → grade 3)
+const flashcardRevealed = new Set<string>()
+
 const impressionState = {
   currentCardId: null as string | null,
+  currentCardType: null as string | null,
   currentSrDue: false,
   startTime: null as number | null,
   buffer: [] as PendingImpression[],
 }
 
 function bufferImpression(cardId: string, durationMs: number, wasSrDue: boolean) {
-  impressionState.buffer.push({ cardId, durationMs, wasSrDue, timestamp: Date.now() })
+  const grades = cardGrades.get(cardId)
+  const imp: PendingImpression = { cardId, durationMs, wasSrDue, timestamp: Date.now() }
+
+  if (grades) {
+    if (grades.selfGrade !== undefined) imp.selfGrade = grades.selfGrade
+    if (grades.quizSelectedIndex !== undefined) imp.quizSelectedIndex = grades.quizSelectedIndex
+    cardGrades.delete(cardId)
+  } else if (flashcardRevealed.has(cardId)) {
+    // Revealed but scrolled away without grading → grade 3 ("correct with effort")
+    imp.selfGrade = 3
+  }
+
+  impressionState.buffer.push(imp)
   if (impressionState.buffer.length >= MAX_BUFFER_SIZE) {
     flushImpressions()
   }
@@ -242,6 +262,7 @@ export default function Feed() {
           bufferImpression(impressionState.currentCardId, duration, impressionState.currentSrDue)
         }
         impressionState.currentCardId = cardId
+        impressionState.currentCardType = (owner as HTMLElement).dataset.cardType ?? null
         impressionState.currentSrDue = (owner as HTMLElement).dataset.srDue === 'true'
         impressionState.startTime = Date.now()
       }
@@ -288,6 +309,7 @@ export default function Feed() {
             <Show when={!dismissed()}>
               <div
                 data-card-id={item.card.id}
+                data-card-type={item.card.cardType}
                 data-sr-due={item.isSrDue ? 'true' : 'false'}
               >
                 {/* Card type label — outside the box */}
@@ -315,10 +337,20 @@ export default function Feed() {
                       </div>
                     </Match>
                     <Match when={item.card.cardType === 'flashcard'}>
-                      <FlashcardRenderer content={item.card.content as FlashcardContent} />
+                      <FlashcardRenderer
+                        content={item.card.content as FlashcardContent}
+                        onReveal={() => flashcardRevealed.add(item.card.id)}
+                        onGrade={(grade) => {
+                          flashcardRevealed.delete(item.card.id)
+                          cardGrades.set(item.card.id, { selfGrade: grade })
+                        }}
+                      />
                     </Match>
                     <Match when={item.card.cardType === 'quiz'}>
-                      <QuizRenderer content={item.card.content as QuizContent} />
+                      <QuizRenderer
+                        content={item.card.content as QuizContent}
+                        onAnswer={(idx) => cardGrades.set(item.card.id, { quizSelectedIndex: idx })}
+                      />
                     </Match>
                     <Match when={item.card.cardType === 'glossary'}>
                       <GlossaryRenderer content={item.card.content as GlossaryContent} />

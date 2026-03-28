@@ -4,6 +4,7 @@ import type { QuizContent } from '@scroll-reader/shared-types'
 
 interface Props {
   content: QuizContent
+  onAnswer?: (selectedIndex: number) => void
 }
 
 const OPTION_LABELS = ['A', 'B', 'C', 'D']
@@ -21,6 +22,7 @@ export default function QuizRenderer(props: Props) {
   function select(originalIndex: number) {
     if (selected() !== null) return
     setSelected(originalIndex)
+    props.onAnswer?.(originalIndex)
   }
 
   return (

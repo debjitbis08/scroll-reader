@@ -195,6 +195,7 @@ export const feedEvents = pgTable('feed_events', {
   cardId: uuid('card_id').references(() => cards.id),
   eventType: feedEventTypeEnum('event_type').notNull(),
   dwellMs: integer('dwell_ms'),
+  selfGrade: integer('self_grade'), // SM-2 grade 0–5 when user self-graded (flashcard/quiz)
   timeOfDay: integer('time_of_day'),
   dayOfWeek: integer('day_of_week'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),

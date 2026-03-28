@@ -10,6 +10,8 @@ interface ImpressionPayload {
   durationMs: number
   wasSrDue: boolean
   timestamp: number
+  selfGrade?: number        // SM-2 grade 0–5 from flashcard self-grade buttons
+  quizSelectedIndex?: number // original option index the user tapped
 }
 
 function classifyEngagement(durationMs: number): 'scrolled_past' | 'glanced' | 'engaged' {
@@ -24,6 +26,8 @@ const ENGAGEMENT_TO_SM2: Record<string, SM2Grade> = {
   glanced: 2,        // saw it but didn't engage — incorrect but familiar
   engaged: 4,        // read it through — correct after hesitation (EF-neutral)
 }
+
+const VALID_SM2_GRADES = new Set([0, 1, 2, 3, 4, 5])
 
 export const POST: APIRoute = async ({ request, cookies }) => {
   const supabase = createSupabaseServer(request, cookies)
@@ -48,25 +52,33 @@ export const POST: APIRoute = async ({ request, cookies }) => {
   const now = new Date()
 
   // Classify and insert feed_events
-  const eventRows = batch.map((imp) => ({
-    userId: user.id,
-    cardId: imp.cardId,
-    eventType: classifyEngagement(imp.durationMs) as 'scrolled_past' | 'glanced' | 'engaged',
-    dwellMs: imp.durationMs,
-    timeOfDay: now.getHours(),
-    dayOfWeek: now.getDay(),
-  }))
+  const eventRows = batch.map((imp) => {
+    // Sanitize selfGrade
+    const selfGrade = typeof imp.selfGrade === 'number' && VALID_SM2_GRADES.has(imp.selfGrade)
+      ? imp.selfGrade
+      : null
+
+    return {
+      userId: user.id,
+      cardId: imp.cardId,
+      eventType: classifyEngagement(imp.durationMs) as 'scrolled_past' | 'glanced' | 'engaged',
+      dwellMs: imp.durationMs,
+      selfGrade,
+      timeOfDay: now.getHours(),
+      dayOfWeek: now.getDay(),
+    }
+  })
 
   await db.insert(feedEvents).values(eventRows)
 
   // Upsert card_scores per unique card
   const scoreUpdates = new Map<string, { shown: number; engaged: number; skipped: number }>()
   for (const row of eventRows) {
-    const existing = scoreUpdates.get(row.cardId) ?? { shown: 0, engaged: 0, skipped: 0 }
+    const existing = scoreUpdates.get(row.cardId!) ?? { shown: 0, engaged: 0, skipped: 0 }
     existing.shown++
     if (row.eventType === 'engaged') existing.engaged++
     if (row.eventType === 'scrolled_past') existing.skipped++
-    scoreUpdates.set(row.cardId, existing)
+    scoreUpdates.set(row.cardId!, existing)
   }
 
   for (const [cardId, counts] of scoreUpdates) {
@@ -91,14 +103,16 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       })
   }
 
-  // SR updates for SR-due cards
-  const srImpressions = batch.filter((imp) => imp.wasSrDue)
+  // SR updates for SR-eligible cards that have a self-grade or are SR-due
+  const srImpressions = batch.filter((imp) =>
+    imp.wasSrDue || imp.selfGrade !== undefined || imp.quizSelectedIndex !== undefined,
+  )
   for (const imp of srImpressions) {
     const engagementType = classifyEngagement(imp.durationMs)
 
-    // Verify card is SR-eligible (flashcard or quiz)
+    // Fetch card type + content (content needed for quiz answer verification)
     const [card] = await db
-      .select({ cardType: cards.cardType })
+      .select({ cardType: cards.cardType, content: cards.content })
       .from(cards)
       .where(eq(cards.id, imp.cardId))
       .limit(1)
@@ -120,7 +134,18 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
     if (!scores) continue
 
-    const grade = ENGAGEMENT_TO_SM2[engagementType]
+    // Determine SM-2 grade: self-grade > quiz answer > dwell-based
+    let grade: SM2Grade
+    if (typeof imp.selfGrade === 'number' && VALID_SM2_GRADES.has(imp.selfGrade)) {
+      grade = imp.selfGrade as SM2Grade
+    } else if (typeof imp.quizSelectedIndex === 'number' && card.cardType === 'quiz') {
+      const content = card.content as { correct?: number } | null
+      const isCorrect = content && imp.quizSelectedIndex === content.correct
+      grade = isCorrect ? 5 : 1
+    } else {
+      grade = ENGAGEMENT_TO_SM2[engagementType]
+    }
+
     const result = sm2(grade, {
       repetition: scores.srRepetition,
       interval: scores.srIntervalDays ?? 1,

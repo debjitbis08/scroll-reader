@@ -3,22 +3,23 @@ import type { CardType } from '@scroll-reader/shared-types'
 export const SR_ELIGIBLE_TYPES: CardType[] = ['flashcard', 'quiz']
 
 /**
- * SM-2 quality grades mapped from our engagement signals:
+ * SM-2 quality grades (0–5):
  *
- *   0 — scrolled_past on SR-due card (total failure, didn't attempt)
- *   2 — glanced on SR-due card (saw it but didn't engage, incorrect but familiar)
- *   4 — engaged on SR-due card (correct after hesitation, EF-neutral)
- *   5 — like on SR-eligible card (active positive signal, perfect recall)
+ * Dwell-based (fallback when no self-grade):
+ *   0 — scrolled_past (<1.5s, total failure)
+ *   2 — glanced (1.5–4s, saw but didn't engage)
+ *   4 — engaged (4s+, EF-neutral)
  *
- * Grade 1 (incorrect but familiar) and 3 (correct with significant effort)
- * are not distinguishable from our current signals. Grade 3 could map to a
- * future "didn't understand" button.
+ * Self-grade (flashcard reveal → grade buttons):
+ *   1 — "Didn't know" (incorrect)
+ *   3 — "Kinda" / revealed but ungraded (correct with effort)
+ *   5 — "Got it" / like action (perfect recall)
  *
- * EF impact: grade 4 is the neutral point (EF unchanged). This prevents
- * EF inflation from normal successful recalls — only an explicit "like"
- * boosts EF.
+ * Quiz (answer selection):
+ *   1 — wrong answer
+ *   5 — correct answer
  */
-export type SM2Grade = 0 | 2 | 4 | 5
+export type SM2Grade = 0 | 1 | 2 | 3 | 4 | 5
 
 export interface SM2State {
   repetition: number   // n — consecutive successful recalls (grade >= 3)
