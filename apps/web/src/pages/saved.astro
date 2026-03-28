@@ -1,0 +1,19 @@
+---
+import Layout from '../layouts/Layout.astro'
+import AppNav from '../components/AppNav.astro'
+import SavedCards from '../components/SavedCards.tsx'
+
+const user = Astro.locals.user
+if (!user) return Astro.redirect('/login')
+---
+
+<Layout title="Saved — Scroll Reader">
+  <main class="min-h-screen bg-ed-surface">
+    <div class="flex">
+      <AppNav active="saved" />
+      <section class="mx-auto w-full max-w-2xl px-4 py-8">
+        <SavedCards client:load />
+      </section>
+    </div>
+  </main>
+</Layout>
