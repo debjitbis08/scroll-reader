@@ -41,6 +41,10 @@ ENV SUPABASE_ANON_KEY=placeholder
 ENV DATABASE_URL=postgresql://placeholder:placeholder@localhost:5432/placeholder
 ENV CRON_SECRET=placeholder
 
+# Client-context env var — inlined at build time, pass via --build-arg
+ARG CF_TURNSTILE_SITE_KEY
+ENV CF_TURNSTILE_SITE_KEY=$CF_TURNSTILE_SITE_KEY
+
 RUN pnpm --filter @scroll-reader/web build
 
 # Stage 3: Runtime
