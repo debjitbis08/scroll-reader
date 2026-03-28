@@ -202,7 +202,7 @@ const READING_GOAL_LABEL: Record<string, string> = {
   study: 'Study',
 }
 const DOC_TYPE_LABEL: Record<string, string> = {
-  book: 'Book', paper: 'Paper', article: 'Article', manual: 'Manual',
+  book: 'Book', paper: 'Paper', article: 'Article', manual: 'Textbook',
   note: 'Note', scripture: 'Scripture', other: 'Other', fiction: 'Fiction',
 }
 const CARD_TYPE_LABEL: Record<string, string> = {
@@ -233,7 +233,7 @@ const CARD_TYPE_HUE: Record<string, string> = {
 ---
 
 <Layout title={`${doc.title} — Scroll Reader`}>
-  <div class="mx-auto max-w-3xl space-y-8 px-4 py-12">
+  <div class="mx-auto max-w-3xl space-y-8 px-4 py-8 md:py-12">
 
     <!-- Back link -->
     <a href="/library" class="inline-flex items-center gap-1.5 font-body text-[0.75rem] tracking-wide text-ed-on-surface-muted hover:text-ed-primary transition-colors">
@@ -242,10 +242,10 @@ const CARD_TYPE_HUE: Record<string, string> = {
     </a>
 
     <!-- Header: title + quick actions -->
-    <div class="flex items-start justify-between gap-4">
+    <div class="flex flex-col md:flex-col items-start justify-between gap-4">
       <div class="min-w-0">
         <div id="title-display">
-          <h1 class="font-display text-3xl leading-tight text-ed-on-surface">{doc.title}</h1>
+          <h1 class="font-display text-xl md:text-3xl leading-tight text-ed-on-surface">{doc.title}</h1>
         </div>
         <div class="hidden items-center gap-2" id="title-edit">
           <input
@@ -333,7 +333,7 @@ const CARD_TYPE_HUE: Record<string, string> = {
           {uploadDate}
         </span>
       )}
-      <span class="flex items-center gap-1">
+      <span class="flex items-start gap-1 mt-2">
         <Icon name="mdi:cards-outline" class="size-3.5" />
         {describeStrategy(strategy)}
       </span>

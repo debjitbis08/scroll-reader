@@ -41,7 +41,7 @@ const DOC_TYPE_ICON: Record<string, string> = {
   fiction: "mdi:book-open-variant",
   paper: "mdi:file-document-outline",
   article: "mdi:newspaper-variant-outline",
-  manual: "mdi:cog-outline",
+  manual: "mdi:book-education-outline",
   note: "mdi:note-text-outline",
   scripture: "mdi:book-cross",
   other: "mdi:file-document-outline",
@@ -56,7 +56,7 @@ const READING_GOAL_LABEL: Record<string, string> = {
 
 <Layout title="Library — Scroll Reader">
   <main class="min-h-screen">
-    <section class="mx-auto max-w-3xl px-4 py-10">
+    <section class="mx-auto max-w-3xl px-4 py-8 md:py-12">
       {
         docs.length === 0 ? (
           <div class="flex flex-col items-center gap-5 py-20 text-center">
@@ -96,7 +96,7 @@ const READING_GOAL_LABEL: Record<string, string> = {
                   <li>
                     <a
                       href={`/doc/${doc.id}`}
-                      class="group flex items-center gap-4 rounded bg-ed-surface-high px-5 py-4 transition-colors hover:bg-ed-surface-highest"
+                      class="group flex items-start gap-2 md:gap-4 rounded bg-ed-surface-high px-3 md:px-5 py-4 transition-colors hover:bg-ed-surface-highest"
                     >
                       <Icon
                         name={
