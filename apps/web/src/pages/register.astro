@@ -1,5 +1,6 @@
 ---
 import Layout from '../layouts/Layout.astro'
+import { CF_TURNSTILE_SITE_KEY } from 'astro:env/client'
 
 if (Astro.locals.user) return Astro.redirect('/')
 
@@ -8,6 +9,7 @@ const errorMsg: Record<string, string> = {
   missing_fields: 'Email and password are required.',
   privacy_required: 'You must acknowledge the privacy notice to continue.',
   signup_failed: 'Sign-up failed. Please try again.',
+  captcha_failed: 'Captcha verification failed. Please try again.',
 }
 ---
 
@@ -69,6 +71,9 @@ const errorMsg: Record<string, string> = {
             class="w-full border-b border-ed-outline bg-transparent px-0 py-2 font-body text-lg text-ed-on-surface placeholder-ed-on-surface-muted outline-none transition-colors focus:border-ed-primary"
           />
         </div>
+
+        <div class="cf-turnstile" data-size="flexible" data-sitekey={CF_TURNSTILE_SITE_KEY}></div>
+        <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" defer></script>
 
         <button
           type="submit"

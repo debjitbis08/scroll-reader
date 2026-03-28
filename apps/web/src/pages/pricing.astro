@@ -1,0 +1,631 @@
+---
+import LandingLayout from '../layouts/LandingLayout.astro'
+import { Icon } from 'astro-icon/components'
+---
+
+<LandingLayout title="Pricing — Scroll Reader">
+
+  <!-- NAV -->
+  <nav class="lp-nav">
+    <a href="/" class="lp-logo">Scroll Reader</a>
+    <button class="lp-theme-toggle lp-theme-toggle-mobile" data-theme-toggle aria-label="Toggle theme">
+      <Icon name="fa6-solid:sun" class="lp-theme-icon" data-theme-icon="latte" />
+      <Icon name="fa6-solid:moon" class="lp-theme-icon" data-theme-icon="mocha" />
+      <Icon name="fa6-solid:desktop" class="lp-theme-icon" data-theme-icon="auto" />
+    </button>
+    <ul class="lp-nav-links">
+      <li><a href="/landing#why">Why Scroll?</a></li>
+      <li><a href="/landing#how">How it works</a></li>
+      <li><a href="/landing#cards">Cards</a></li>
+      <li><a href="/demo-feed">Demo</a></li>
+      <li>
+        <button class="lp-theme-toggle" data-theme-toggle aria-label="Toggle theme">
+          <Icon name="fa6-solid:sun" class="lp-theme-icon" data-theme-icon="latte" />
+          <Icon name="fa6-solid:moon" class="lp-theme-icon" data-theme-icon="mocha" />
+          <Icon name="fa6-solid:desktop" class="lp-theme-icon" data-theme-icon="auto" />
+        </button>
+      </li>
+      <li><a href="/login">Sign In</a></li>
+      <li><a href="/register" class="lp-nav-cta">Start Reading</a></li>
+    </ul>
+  </nav>
+
+  <!-- PRICING HERO -->
+  <section class="pr-hero">
+    <p class="lp-eyebrow">Pricing</p>
+    <h1>The whole feed, <em>free.</em><br>More room when you need it.</h1>
+  </section>
+
+  <!-- PRICING CARDS -->
+  <section class="pr-cards">
+    <div class="pr-card">
+      <div class="pr-card-header">
+        <h3>Free</h3>
+        <div class="pr-price">
+          <span class="pr-price-amount">$0</span>
+          <span class="pr-price-period">forever</span>
+        </div>
+        <p class="pr-card-desc">For readers who want to start with what they have.</p>
+      </div>
+      <ul class="pr-features">
+        <li>
+          <Icon name="mdi:check" class="pr-check" />
+          <span><strong>500 MB</strong> document storage</span>
+        </li>
+        <li>
+          <Icon name="mdi:check" class="pr-check" />
+          <span><strong>100 cards</strong> generated per day</span>
+        </li>
+        <li class="pr-note">New cards are created by the processing pipeline. Your existing feed and saved cards are always available regardless of this limit.</li>
+        <li>
+          <Icon name="mdi:check" class="pr-check" />
+          <span>All 7 card types</span>
+        </li>
+        <li>
+          <Icon name="mdi:check" class="pr-check" />
+          <span>EPUB &amp; PDF uploads</span>
+        </li>
+        <li>
+          <Icon name="mdi:check" class="pr-check" />
+          <span>Spaced repetition feed</span>
+        </li>
+        <li>
+          <Icon name="mdi:check" class="pr-check" />
+          <span>Collections &amp; saved cards</span>
+        </li>
+      </ul>
+      <a href="/register" class="pr-btn pr-btn-ghost">Get started</a>
+    </div>
+
+    <div class="pr-card pr-card-featured pr-card-soon">
+      <span class="pr-badge-soon">Coming soon</span>
+      <div class="pr-card-header">
+        <h3>Plus</h3>
+        <div class="pr-price">
+          <span class="pr-price-period">Pricing TBD</span>
+        </div>
+        <p class="pr-card-desc">For serious readers with growing libraries.</p>
+      </div>
+      <ul class="pr-features">
+        <li>
+          <Icon name="mdi:check" class="pr-check" />
+          <span><strong>5 GB</strong> document storage</span>
+        </li>
+        <li>
+          <Icon name="mdi:check" class="pr-check" />
+          <span><strong>500 cards</strong> generated per day</span>
+        </li>
+        <li>
+          <Icon name="mdi:check" class="pr-check" />
+          <span>Everything in Free</span>
+        </li>
+        <li>
+          <Icon name="mdi:check" class="pr-check" />
+          <span>Priority processing queue</span>
+        </li>
+      </ul>
+      <span class="pr-btn pr-btn-disabled">Coming soon</span>
+    </div>
+  </section>
+
+  <!-- OTHER WAYS TO RUN -->
+  <section class="pr-alt">
+    <p class="lp-eyebrow">Other ways to read</p>
+    <h2>Run it <em>your</em> way</h2>
+    <div class="pr-alt-grid">
+
+      <div class="pr-alt-card pr-alt-card-muted">
+        <span class="pr-badge-soon">Coming later</span>
+        <div class="pr-alt-icon">
+          <Icon name="mdi:docker" />
+        </div>
+        <h4>Self-Hosted</h4>
+        <p class="pr-alt-price">Free &amp; open source</p>
+        <p class="pr-alt-desc">
+          Run the entire stack on your own machine. One <code>docker compose up</code> after
+          configuring your <code>.env</code>. Your documents never leave your server.
+        </p>
+        <ul class="pr-alt-features">
+          <li>Full AGPL-3.0 source code</li>
+          <li>Bring your own AI provider</li>
+          <li>No storage or card limits</li>
+          <li>Bring your own database and auth</li>
+        </ul>
+        <span class="pr-btn pr-btn-disabled">Coming later</span>
+      </div>
+
+      <div class="pr-alt-card pr-alt-card-muted">
+        <span class="pr-badge-soon">Coming later</span>
+        <div class="pr-alt-heading">
+          <div class="pr-alt-icon">
+            <Icon name="mdi:monitor" />
+          </div>
+          <div>
+            <h4>Desktop Companion</h4>
+            <p class="pr-alt-price">Your Data Stays Local</p>
+          </div>
+        </div>
+        <p class="pr-alt-desc">
+          No server to manage. Your documents stay on your machine. The desktop app and your web feed are both free.
+        </p>
+        <p class="pr-alt-desc">
+          Your documents stay on your machine. Cards sync encrypted to your feed.
+        </p>
+        <ul class="pr-alt-features">
+          <li>Process with your own AI (Ollama, Gemini, etc.)</li>
+          <li>macOS, Windows &amp; Linux</li>
+        </ul>
+        <span class="pr-btn pr-btn-disabled">Coming later</span>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="pr-faq">
+    <h2>Common questions</h2>
+    <div class="pr-faq-grid">
+      <div class="pr-faq-item">
+        <h4>Can I use it without paying?</h4>
+        <p>Yes. The free tier is not a trial. It's a permanent plan with generous limits for most readers.</p>
+      </div>
+      <div class="pr-faq-item">
+        <h4>What happens if I hit my daily card limit?</h4>
+        <p>Your existing feed keeps working. You just won't get new cards until the next day. Saved cards and your library are always available.</p>
+      </div>
+      <div class="pr-faq-item">
+        <h4>What counts toward storage?</h4>
+        <p>Only the original files you upload (EPUBs and PDFs). Generated cards and metadata don't count.</p>
+      </div>
+      <div class="pr-faq-item">
+        <h4>Is the code open source?</h4>
+        <p>Yes. Scroll Reader is licensed under <strong>AGPL-3.0</strong>. You can self-host the entire stack.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- FINAL CTA -->
+  <section class="lp-cta lp-fade">
+    <h2>Your library is already full.</h2>
+    <p>This just makes it scrollable.</p>
+    <a href="/register" class="lp-btn-primary">Upload your first book &rarr;</a>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="lp-footer">
+    <div class="lp-footer-left">
+      <a href="/" class="lp-footer-logo">Scroll Reader</a>
+      <span class="lp-footer-tagline">Put down the feed. Pick up your library.</span>
+    </div>
+    <ul class="lp-footer-links">
+      <li><a href="https://github.com/debjitbis08/scroll-reader" target="_blank">GitHub</a></li>
+      <li><a href="/privacy">Privacy</a></li>
+      <li><a href="/terms">Terms</a></li>
+    </ul>
+    <span class="lp-footer-copy">&copy; 2026 Scroll Reader. Licensed under AGPL-3.0.</span>
+  </footer>
+
+  <script>
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          e.target.classList.add('visible');
+          observer.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.1 });
+
+    document.querySelectorAll('.lp-fade').forEach(el => observer.observe(el));
+
+    // Theme cycling: auto → latte (light) → mocha (dark) → auto
+    const THEMES = ['auto', 'latte', 'mocha'] as const;
+    type Theme = (typeof THEMES)[number];
+
+    function getTheme(): Theme {
+      return (localStorage.getItem('ctp-theme') as Theme) ?? 'auto';
+    }
+
+    function applyTheme(theme: Theme): void {
+      const html = document.documentElement;
+      html.classList.remove('latte', 'mocha');
+      if (theme !== 'auto') html.classList.add(theme);
+      localStorage.setItem('ctp-theme', theme);
+      html.dataset.theme =
+        theme === 'latte' ? 'light' : theme === 'mocha' ? 'dark' : 'auto';
+      updateIcons(theme);
+    }
+
+    function updateIcons(theme: Theme): void {
+      document.querySelectorAll<HTMLElement>('[data-theme-icon]').forEach((icon) => {
+        if (icon.dataset.themeIcon === theme) {
+          icon.setAttribute('data-active', '');
+        } else {
+          icon.removeAttribute('data-active');
+        }
+      });
+    }
+
+    document.querySelectorAll('[data-theme-toggle]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const idx = THEMES.indexOf(getTheme());
+        applyTheme(THEMES[(idx + 1) % THEMES.length]);
+      });
+    });
+
+    updateIcons(getTheme());
+  </script>
+
+</LandingLayout>
+
+<style is:global>
+  /* ─── PRICING HERO ─── */
+  .pr-hero {
+    padding: 10rem 3rem 4rem;
+    text-align: center;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  .pr-hero h1 {
+    font-family: 'Newsreader', Georgia, serif;
+    font-size: clamp(2.5rem, 5vw, 4rem);
+    font-weight: 300;
+    line-height: 1.1;
+    color: var(--ed-on-surface);
+    margin-bottom: 1.5rem;
+  }
+
+  .pr-hero h1 em {
+    font-style: italic;
+    color: var(--ed-primary);
+  }
+
+  .pr-hero-sub {
+    font-size: 1.05rem;
+    font-weight: 300;
+    color: var(--ed-on-surface-dim);
+    line-height: 1.7;
+    max-width: 48ch;
+    margin: 0 auto;
+  }
+
+  /* ─── PRICING CARDS ─── */
+  .pr-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 3rem 3rem 6rem;
+  }
+
+  .pr-card {
+    background: var(--ed-surface-high);
+    border-radius: 0.25rem;
+    padding: 2.25rem 2rem;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .pr-card-featured {
+    background: var(--ed-surface-highest);
+    position: relative;
+  }
+
+  .pr-card-header {
+    margin-bottom: 2rem;
+  }
+
+  .pr-card-header h3 {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ed-primary);
+    margin-bottom: 0.75rem;
+  }
+
+  .pr-price {
+    display: flex;
+    align-items: baseline;
+    gap: 0.35rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .pr-price-amount {
+    font-family: 'Newsreader', Georgia, serif;
+    font-size: 3rem;
+    font-weight: 400;
+    line-height: 1;
+    color: var(--ed-on-surface);
+  }
+
+  .pr-price-period {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 300;
+    color: var(--ed-on-surface-muted);
+  }
+
+  .pr-card-desc {
+    font-size: 0.85rem;
+    font-weight: 300;
+    color: var(--ed-on-surface-dim);
+    line-height: 1.6;
+  }
+
+  /* ─── FEATURES LIST ─── */
+  .pr-features {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    flex: 1;
+    margin-bottom: 2rem;
+  }
+
+  .pr-features li {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    font-size: 0.85rem;
+    font-weight: 300;
+    color: var(--ed-on-surface-dim);
+    line-height: 1.5;
+  }
+
+  .pr-features li strong {
+    font-weight: 600;
+    color: var(--ed-on-surface);
+  }
+
+  .pr-check {
+    width: 1rem;
+    height: 1rem;
+    color: var(--ed-primary);
+    flex-shrink: 0;
+    margin-top: 0.15rem;
+  }
+
+  /* ─── BUTTONS ─── */
+  .pr-btn {
+    display: block;
+    text-align: center;
+    padding: 0.75rem;
+    border-radius: 0.25rem;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    text-decoration: none;
+    transition: opacity 0.2s, border-color 0.2s, color 0.2s;
+    margin-top: auto;
+  }
+
+  .pr-btn-primary {
+    background: var(--ed-primary);
+    color: var(--ed-on-primary);
+  }
+
+  .pr-btn-primary:hover {
+    opacity: 0.85;
+  }
+
+  .pr-btn-ghost {
+    border: 1px solid var(--ed-outline);
+    color: var(--ed-on-surface-dim);
+    background: transparent;
+  }
+
+  .pr-btn-ghost:hover {
+    border-color: var(--ed-primary);
+    color: var(--ed-primary);
+  }
+
+  /* ─── FAQ ─── */
+  .pr-faq {
+    padding: 4rem 3rem 6rem;
+    max-width: 800px;
+    margin: 0 auto;
+  }
+
+  .pr-faq h2 {
+    font-family: 'Newsreader', Georgia, serif;
+    font-size: clamp(1.6rem, 3vw, 2.2rem);
+    font-weight: 400;
+    text-align: center;
+    margin-bottom: 3rem;
+    color: var(--ed-on-surface);
+  }
+
+  .pr-faq-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2.5rem 3rem;
+  }
+
+  .pr-faq-item h4 {
+    font-family: 'Newsreader', Georgia, serif;
+    font-size: 1rem;
+    font-weight: 400;
+    font-style: italic;
+    color: var(--ed-on-surface);
+    margin-bottom: 0.5rem;
+  }
+
+  .pr-faq-item p {
+    font-size: 0.85rem;
+    font-weight: 300;
+    color: var(--ed-on-surface-dim);
+    line-height: 1.7;
+  }
+
+  .pr-faq-item p strong {
+    font-weight: 600;
+    color: var(--ed-on-surface);
+  }
+
+  /* ─── INLINE NOTE ─── */
+  .pr-note {
+    font-size: 0.75rem !important;
+    font-style: italic;
+    color: var(--ed-on-surface-muted) !important;
+    line-height: 1.55;
+    padding-left: 1.6rem;
+  }
+
+  /* ─── COMING SOON BADGE ─── */
+  .pr-badge-soon {
+    display: inline-block;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.6rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ed-on-surface-muted);
+    background: var(--ed-surface-container);
+    padding: 0.2rem 0.6rem;
+    border-radius: 2px;
+    margin-bottom: 1rem;
+  }
+
+  .pr-card-soon {
+    opacity: 0.7;
+  }
+
+  .pr-btn-disabled {
+    display: block;
+    text-align: center;
+    padding: 0.75rem;
+    border-radius: 0.25rem;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    margin-top: auto;
+    color: var(--ed-on-surface-muted);
+    background: var(--ed-surface-container);
+    cursor: default;
+  }
+
+  /* ─── ALTERNATIVE SECTION ─── */
+  .pr-alt {
+    padding: 4rem 3rem 6rem;
+    max-width: 800px;
+    margin: 0 auto;
+    text-align: center;
+  }
+
+  .pr-alt h2 {
+    font-family: 'Newsreader', Georgia, serif;
+    font-size: clamp(1.8rem, 3.5vw, 2.5rem);
+    font-weight: 400;
+    color: var(--ed-on-surface);
+    margin-bottom: 3rem;
+  }
+
+  .pr-alt h2 em {
+    font-style: italic;
+    color: var(--ed-primary);
+  }
+
+  .pr-alt-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    text-align: left;
+  }
+
+  .pr-alt-card {
+    background: var(--ed-surface-high);
+    border-radius: 0.25rem;
+    padding: 2.25rem 2rem;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .pr-alt-card-muted {
+    opacity: 0.7;
+  }
+
+  .pr-alt-icon {
+    width: 2.5rem;
+    height: 2.5rem;
+    background: var(--ed-surface-highest);
+    border-radius: 0.375rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    color: var(--ed-primary);
+    margin-bottom: 1.25rem;
+  }
+
+  .pr-alt-card h4 {
+    font-family: 'Newsreader', Georgia, serif;
+    font-size: 1.25rem;
+    font-weight: 400;
+    color: var(--ed-on-surface);
+    margin-bottom: 0.25rem;
+  }
+
+  .pr-alt-price {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ed-primary);
+    margin-bottom: 1rem;
+  }
+
+  .pr-alt-desc {
+    font-size: 0.85rem;
+    font-weight: 300;
+    color: var(--ed-on-surface-dim);
+    line-height: 1.7;
+    margin-bottom: 1.25rem;
+  }
+
+  .pr-alt-desc code {
+    font-size: 0.8rem;
+    background: var(--ed-surface-highest);
+    padding: 0.1rem 0.35rem;
+    border-radius: 2px;
+  }
+
+  .pr-alt-features {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 2rem;
+    flex: 1;
+  }
+
+  .pr-alt-features li {
+    font-size: 0.8rem;
+    font-weight: 300;
+    color: var(--ed-on-surface-dim);
+    padding-left: 1.1rem;
+    position: relative;
+  }
+
+  .pr-alt-features li::before {
+    content: '\2013';
+    position: absolute;
+    left: 0;
+    color: var(--ed-on-surface-muted);
+  }
+
+  /* ─── RESPONSIVE ─── */
+  @media (max-width: 768px) {
+    .pr-hero { padding: 8rem 1.5rem 3rem; }
+    .pr-cards { grid-template-columns: 1fr; padding: 2rem 1.5rem 4rem; max-width: 400px; }
+    .pr-alt { padding: 3rem 1.5rem 5rem; }
+    .pr-alt-grid { grid-template-columns: 1fr; max-width: 400px; margin: 0 auto; }
+    .pr-faq { padding: 3rem 1.5rem 4rem; }
+    .pr-faq-grid { grid-template-columns: 1fr; gap: 2rem; }
+  }
+</style>

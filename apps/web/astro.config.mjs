@@ -35,6 +35,8 @@ export default defineConfig({
       EXTRACTOR_BIN: envField.string({ context: 'server', access: 'secret', optional: true }),
       FIGURE_EXTRACT_BIN: envField.string({ context: 'server', access: 'secret', optional: true }),
       CRON_SECRET: envField.string({ context: 'server', access: 'secret' }),
+      CF_TURNSTILE_SITE_KEY: envField.string({ context: 'client', access: 'public' }),
+      CF_TURNSTILE_SECRET_KEY: envField.string({ context: 'server', access: 'secret' }),
     },
   },
   vite: {
