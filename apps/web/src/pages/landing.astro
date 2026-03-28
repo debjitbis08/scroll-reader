@@ -1,5 +1,9 @@
 ---
+import { Image } from 'astro:assets'
 import LandingLayout from '../layouts/LandingLayout.astro'
+import FeedDarkImg from '../assets/images/feed-dark.png';
+import FeedLightImg from '../assets/images/feed-light.png';
+import { Icon } from 'astro-icon/components';
 ---
 
 <LandingLayout>
@@ -33,7 +37,8 @@ import LandingLayout from '../layouts/LandingLayout.astro'
     <div class="lp-hero-visual">
       <!-- Placeholder for future screenshot/video of the feed -->
       <div class="lp-hero-placeholder">
-        Feed preview coming soon
+        <Image src={FeedDarkImg} alt="Screenshot of the feed" class="lp-hero-img lp-hero-img-dark" loading="eager" />
+        <Image src={FeedLightImg} alt="Screenshot of the feed" class="lp-hero-img lp-hero-img-light" loading="eager" />
       </div>
     </div>
   </section>
@@ -43,13 +48,11 @@ import LandingLayout from '../layouts/LandingLayout.astro'
     <p class="lp-eyebrow">The Manifesto</p>
     <h2>Designed for <em>depth,</em><br>not engagement.</h2>
     <p class="lp-manifesto-body">
-      Social feeds are designed to keep you scrolling. Scroll Reader uses that
-      same impulse to move you through your own library instead.
+      Social feeds are designed to keep you scrolling.
+      Scroll Reader turns that same habit toward your own library instead.
     </p>
     <p class="lp-manifesto-body">
       No ads. No algorithmic recommendations. No content you didn't choose.
-      Just the books you already have, broken into pieces small enough to read
-      between things.
     </p>
   </section>
 
@@ -58,19 +61,29 @@ import LandingLayout from '../layouts/LandingLayout.astro'
     <h2>How it works</h2>
     <div class="lp-steps">
       <div class="lp-step">
-        <div class="lp-step-icon">&#128196;</div>
+        <div class="lp-step-icon">
+          <Icon name="mdi:file-upload-outline" />
+        </div>
         <h3>1. Upload your documents</h3>
-        <p>Drop in an EPUB or PDF. We extract the text and structure. Formatting-heavy documents like textbooks or papers may not parse perfectly — we skip chunks we can't handle cleanly.</p>
+        <p>
+Drop in an EPUB or PDF. We pull out the text, divide it into sections, and pick up images along the way.
+        </p>
       </div>
       <div class="lp-step">
-        <div class="lp-step-icon">&#9672;</div>
-        <h3>2. Gemini builds your feed</h3>
-        <p>We send passages to Google's Gemini model, which generates cards — a quiz question, a pulled quote, a concept comparison, a glossary term. You don't control which cards appear; the model decides what's interesting.</p>
+        <div class="lp-step-icon">
+          <Icon name="mdi:sparkles-outline" />
+        </div>
+        <h3>2. AI builds your feed</h3>
+        <p>We send passages to Google's Gemini model, which generates cards — a quiz question, a pulled quote, a concept comparison, a glossary term.
       </div>
       <div class="lp-step">
-        <div class="lp-step-icon">&#9638;</div>
+        <div class="lp-step-icon">
+          <Icon name="mdi:scroll-text-outline" />
+        </div>
         <h3>3. Scroll through your library</h3>
-        <p>Cards appear in a vertical feed. Read one, skip one, save one. That's the whole loop.</p>
+        <p>
+          Cards appear in a vertical feed. Read one, skip one, save one. How you scroll shapes what comes back and when.
+        </p>
       </div>
     </div>
   </section>
@@ -82,29 +95,69 @@ import LandingLayout from '../layouts/LandingLayout.astro'
     </div>
     <div class="lp-card-grid">
       <div class="lp-card-type">
-        <div class="lp-card-type-icon">&#9647;</div>
+        <div class="lp-card-type-heading">
+        <div class="lp-card-type-icon">
+          <Icon name="mdi:telescope" />
+        </div>
+        <h4>Discover</h4>
+        </div>
+        <p>The core idea of the passage, distilled. What it says and why it's worth knowing.</p>
+      </div>
+      <div class="lp-card-type">
+        <div class="lp-card-type-heading">
+        <div class="lp-card-type-icon">
+          <Icon name="mdi:pencil-outline" />
+        </div>
+        <h4>Notes</h4>
+        </div>
+        <p>
+          A marginal note: a tension surfaced, an assumption questioned, a connection made. Opinionated.
+        </p>
+      </div>
+      <div class="lp-card-type">
+        <div class="lp-card-type-heading">
+        <div class="lp-card-type-icon">
+          <Icon name="mdi:format-quote-open" />
+        </div>
         <h4>Passage</h4>
-        <p>A significant excerpt from your text, surfaced with brief context.</p>
+        </div>
+        <p>The exact words from your text. Surfaced when the excerpt is worth sitting with on its own.</p>
       </div>
       <div class="lp-card-type">
-        <div class="lp-card-type-icon">&#9673;</div>
+        <div class="lp-card-type-heading">
+        <div class="lp-card-type-icon">
+          <Icon name="mdi:help-circle-outline" />
+        </div>
         <h4>Quiz</h4>
-        <p>A multiple choice question on a concept from the passage.</p>
+        </div>
+        <p>A multiple-choice question on a concept from the passage. Four options, one right answer, explanations for each.</p>
       </div>
       <div class="lp-card-type">
-        <div class="lp-card-type-icon">&#9700;</div>
+        <div class="lp-card-type-heading">
+        <div class="lp-card-type-icon">
+          <Icon name="mdi:card-text-outline" />
+        </div>
         <h4>Active Recall</h4>
-        <p>An open question. Tap to reveal the answer.</p>
+        </div>
+        <p>A question with a hidden answer. Tests whether you've actually absorbed the idea.</p>
       </div>
       <div class="lp-card-type">
-        <div class="lp-card-type-icon">&#9670;</div>
-        <h4>Contrast</h4>
-        <p>Two ideas from the same text set side by side.</p>
+        <div class="lp-card-type-heading">
+          <div class="lp-card-type-icon">
+            <Icon name="mdi:scale-balance" />
+          </div>
+          <h4>Contrast</h4>
+        </div>
+        <p>Two ideas from the passage set against each other. What's the difference, and why does it matter.</p>
       </div>
       <div class="lp-card-type">
-        <div class="lp-card-type-icon">&#9830;</div>
+        <div class="lp-card-type-heading">
+        <div class="lp-card-type-icon">
+          <Icon name="mdi:book-open-page-variant-outline" />
+        </div>
         <h4>Glossary</h4>
-        <p>A term from the text, defined. Source and page noted.</p>
+        </div>
+        <p>A term from the text, defined as the author uses it. Etymology where it's interesting.</p>
       </div>
     </div>
     <p class="lp-card-grid-note">More card types are in progress.</p>
@@ -143,8 +196,9 @@ import LandingLayout from '../layouts/LandingLayout.astro'
       <span class="lp-footer-tagline">Put down the feed. Pick up your library.</span>
     </div>
     <ul class="lp-footer-links">
-      <li><a href="#">GitHub</a></li>
+      <li><a href="https://github.com/debjitbis08/scroll-reader" target="_blank">GitHub</a></li>
       <li><a href="#">Privacy</a></li>
+      <li><a href="#">Terms</a></li>
       <li><a href="#">Licensing</a></li>
     </ul>
     <span class="lp-footer-copy">&copy; 2026 Scroll Reader. Licensed under AGPL-3.0.</span>
