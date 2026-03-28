@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro'
 import { eq, and, sql, inArray, notInArray, desc } from 'drizzle-orm'
 import { db } from '../../lib/db.ts'
-import { cards, chunks, chunkImages, documents, cardActions, cardScores, feedEvents } from '@scroll-reader/db'
+import { cards, chunks, chunkImages, documents, cardActions, cardScores, feedEvents, collections, collectionDocuments } from '@scroll-reader/db'
 import { createSupabaseServer } from '../../lib/supabase.ts'
 
 // 'connect' is defined but not yet eligible — requires the embeddings pipeline (not built yet)
@@ -30,6 +30,27 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
     .split(',')
     .map((s) => s.trim())
     .filter((s) => s.length > 0)
+
+  // Collection filter: when present, only show cards from documents in these collections
+  const collectionsParam = url.searchParams.get('collections') ?? ''
+  const collectionIds = collectionsParam
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+
+  // Build a reusable SQL condition that restricts documents to those in the given collections.
+  // Verifies collection ownership to prevent accessing other users' collections.
+  const collectionFilter = collectionIds.length > 0
+    ? sql`${documents.id} IN (
+        SELECT ${collectionDocuments.documentId}
+        FROM ${collectionDocuments}
+        JOIN ${collections} ON ${collections.id} = ${collectionDocuments.collectionId}
+        WHERE ${collectionDocuments.collectionId} IN (${sql.join(collectionIds.map((id) => sql`${id}`), sql`, `)})
+          AND ${collections.userId} = ${user.id}
+      )`
+    : undefined
+
+  const hasCollectionFilter = collectionIds.length > 0
 
   // --- 1. User context ---
 
@@ -118,7 +139,8 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
     (t): t is 'flashcard' | 'quiz' => t === 'flashcard' || t === 'quiz',
   )
 
-  const srDueCards = srEligibleTypes.length === 0 ? [] : await db
+  // When filtering by collection, skip SR-due logic entirely — strict scoping
+  const srDueCards = (srEligibleTypes.length === 0 || hasCollectionFilter) ? [] : await db
     .select({
       card: cards,
       chunk: {
@@ -293,6 +315,7 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
           sql`${documents.readingGoal} IS DISTINCT FROM 'casual' OR ${cards.cardType} NOT IN ('flashcard', 'quiz')`,
           cooldownSubquery,
           prerequisiteGate,
+          collectionFilter,
         ))
         .orderBy(sql`random()`)
         .limit(remainingSlots * 3) // Over-fetch for affinity scoring
@@ -410,6 +433,7 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
             eq(cards.userId, user.id),
             inArray(cards.chunkId, stillNeeding),
             inArray(cards.cardType, [...INTRO_TYPES]),
+            collectionFilter,
           ))
           .orderBy(cards.chunkId, cards.createdAt)
       : []

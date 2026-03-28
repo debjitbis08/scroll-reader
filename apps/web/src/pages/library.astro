@@ -1,9 +1,9 @@
 ---
 import Layout from "../layouts/Layout.astro";
 import { Icon } from "astro-icon/components";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, and, inArray } from "drizzle-orm";
 import { db } from "../lib/db.ts";
-import { documents, cards, chunks } from "@scroll-reader/db";
+import { documents, cards, chunks, collections, collectionDocuments } from "@scroll-reader/db";
 
 const user = Astro.locals.user;
 if (!user) return Astro.redirect("/login");
@@ -26,6 +26,45 @@ const cardCounts = await db
   .groupBy(chunks.documentId);
 
 const cardCountMap = new Map(cardCounts.map((r) => [r.documentId, r.count]));
+
+// Collections
+const userCollections = await db
+  .select({
+    id: collections.id,
+    name: collections.name,
+    documentCount: sql<number>`count(${collectionDocuments.documentId})::int`,
+  })
+  .from(collections)
+  .leftJoin(collectionDocuments, eq(collectionDocuments.collectionId, collections.id))
+  .where(eq(collections.userId, user.id))
+  .groupBy(collections.id)
+  .orderBy(collections.name);
+
+// Document → collection memberships (for badges)
+const allMemberships = await db
+  .select({
+    documentId: collectionDocuments.documentId,
+    collectionId: collectionDocuments.collectionId,
+    collectionName: collections.name,
+  })
+  .from(collectionDocuments)
+  .innerJoin(collections, and(eq(collections.id, collectionDocuments.collectionId), eq(collections.userId, user.id)));
+
+const docCollectionMap = new Map<string, { id: string; name: string }[]>();
+for (const m of allMemberships) {
+  const list = docCollectionMap.get(m.documentId) ?? [];
+  list.push({ id: m.collectionId, name: m.collectionName });
+  docCollectionMap.set(m.documentId, list);
+}
+
+// Collection filter from URL
+const filterCollectionId = Astro.url.searchParams.get('collection') || null;
+const filteredDocs = filterCollectionId
+  ? docs.filter((d) => docCollectionMap.get(d.id)?.some((c) => c.id === filterCollectionId))
+  : docs;
+const activeCollectionName = filterCollectionId
+  ? userCollections.find((c) => c.id === filterCollectionId)?.name ?? null
+  : null;
 
 const STATUS_LABEL: Record<string, string> = {
   pending: "Pending",
@@ -77,8 +116,40 @@ const READING_GOAL_LABEL: Record<string, string> = {
         ) : (
           <div>
             <h1 class="text-2xl mb-4 font-display">My Library</h1>
+
+            {/* Collection filter chips */}
+            {userCollections.length > 0 && (
+              <div class="flex flex-wrap items-center gap-1.5 mb-4">
+                <a
+                  href="/library"
+                  class:list={[
+                    "rounded-full px-3 py-1 font-body text-xs transition-colors",
+                    !filterCollectionId
+                      ? "bg-ed-primary text-ed-on-primary"
+                      : "bg-ed-surface-high text-ed-on-surface-muted hover:bg-ed-surface-highest",
+                  ]}
+                >
+                  All
+                </a>
+                {userCollections.map((col) => (
+                  <a
+                    href={`/library?collection=${col.id}`}
+                    class:list={[
+                      "rounded-full px-3 py-1 font-body text-xs transition-colors",
+                      filterCollectionId === col.id
+                        ? "bg-ed-primary text-ed-on-primary"
+                        : "bg-ed-surface-high text-ed-on-surface-muted hover:bg-ed-surface-highest",
+                    ]}
+                  >
+                    {col.name}
+                    <span class="ml-1 opacity-60">{col.documentCount}</span>
+                  </a>
+                ))}
+              </div>
+            )}
+
             <ul class="space-y-2">
-              {docs.map((doc) => {
+              {filteredDocs.map((doc) => {
                 const cardCount = cardCountMap.get(doc.id) ?? 0;
                 const statusLabel =
                   STATUS_LABEL[doc.processingStatus ?? "pending"];
@@ -126,6 +197,15 @@ const READING_GOAL_LABEL: Record<string, string> = {
                             </span>
                           )}
                         </div>
+                        {(docCollectionMap.get(doc.id) ?? []).length > 0 && (
+                          <div class="mt-1 flex flex-wrap gap-1">
+                            {(docCollectionMap.get(doc.id) ?? []).map((col) => (
+                              <span class="rounded bg-ed-primary-container px-1.5 py-0 font-body text-[0.6rem] text-ed-on-primary-container">
+                                {col.name}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                         {isProcessing && progressPct > 0 && (
                           <div class="mt-2 h-0.5 rounded-sm bg-ed-surface-container overflow-hidden">
                             <div

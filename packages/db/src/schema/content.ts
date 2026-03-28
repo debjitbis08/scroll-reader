@@ -80,6 +80,31 @@ export const documents = pgTable('documents', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 })
 
+export const collections = pgTable('collections', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id')
+    .references(() => profiles.id, { onDelete: 'cascade' })
+    .notNull(),
+  name: text('name').notNull(),
+  description: text('description'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+}, (t) => [
+  unique().on(t.userId, t.name),
+])
+
+export const collectionDocuments = pgTable('collection_documents', {
+  collectionId: uuid('collection_id')
+    .references(() => collections.id, { onDelete: 'cascade' })
+    .notNull(),
+  documentId: uuid('document_id')
+    .references(() => documents.id, { onDelete: 'cascade' })
+    .notNull(),
+  addedAt: timestamp('added_at', { withTimezone: true }).defaultNow(),
+}, (t) => [
+  primaryKey({ columns: [t.collectionId, t.documentId] }),
+])
+
 export const chunks = pgTable('chunks', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id')

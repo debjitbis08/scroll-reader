@@ -3,7 +3,8 @@ import Layout from '../../layouts/Layout.astro'
 import { Icon } from 'astro-icon/components'
 import { eq, and, sql, count, inArray } from 'drizzle-orm'
 import { db } from '../../lib/db.ts'
-import { documents, chunks, cards, jobs, cardScores, feedEvents } from '@scroll-reader/db'
+import { documents, chunks, cards, jobs, cardScores, feedEvents, collectionDocuments } from '@scroll-reader/db'
+import CollectionManager from '../../components/CollectionManager.tsx'
 import type { DocumentType, ReadingGoal } from '@scroll-reader/shared-types'
 import { resolveCardStrategy, describeStrategy } from '@scroll-reader/shared-types'
 import JobPoller from '../../components/JobPoller.tsx'
@@ -29,6 +30,13 @@ const [doc] = await db
   .limit(1)
 
 if (!doc) return Astro.redirect('/library')
+
+// Collection memberships for this document
+const docCollectionRows = await db
+  .select({ collectionId: collectionDocuments.collectionId })
+  .from(collectionDocuments)
+  .where(eq(collectionDocuments.documentId, docId))
+const docCollectionIds = docCollectionRows.map((r) => r.collectionId)
 
 // Load most recent job for this document
 const [job] = await db
@@ -339,9 +347,16 @@ const CARD_TYPE_HUE: Record<string, string> = {
       </span>
     </div>
 
+    <!-- Collections -->
+    <CollectionManager
+      documentId={docId}
+      initialCollectionIds={docCollectionIds}
+      client:load
+    />
+
     <!-- Priority control -->
     {hasChunks && (
-      <div>
+      <div class="mt-2">
         <div class="flex items-center gap-2">
           <span class="font-body text-sm tracking-wide text-ed-on-surface-muted">Priority:</span>
           <div class="border border-ed-outline-dim p-1 rounded">

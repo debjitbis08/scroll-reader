@@ -144,6 +144,12 @@ const CARD_TYPE_LABEL: Record<string, string> = {
   passage: 'Passage',
 }
 
+interface CollectionOption {
+  id: string
+  name: string
+  documentCount: number
+}
+
 const BATCH_SIZE = 10
 
 function ActionButton(props: {
@@ -206,13 +212,29 @@ function ActionButton(props: {
   )
 }
 
-export default function Feed() {
+export default function Feed(props: { initialCollection?: string }) {
   const [cards, setCards] = createSignal<FeedCard[]>([])
   const [loading, setLoading] = createSignal(false)
   const [initialLoaded, setInitialLoaded] = createSignal(false)
   const [hasMore, setHasMore] = createSignal(true)
   const [error, setError] = createSignal<string | null>(null)
+  const [collections, setCollections] = createSignal<CollectionOption[]>([])
+  const [selectedCollection, setSelectedCollection] = createSignal<string | null>(props.initialCollection ?? null)
   let sentinelRef: HTMLDivElement | undefined
+
+  function selectCollection(id: string | null) {
+    setSelectedCollection(id)
+    // Update URL without reload
+    const url = new URL(window.location.href)
+    if (id) url.searchParams.set('collection', id)
+    else url.searchParams.delete('collection')
+    window.history.replaceState({}, '', url.toString())
+    // Reset feed and reload
+    setCards([])
+    setHasMore(true)
+    setInitialLoaded(false)
+    loadMore()
+  }
 
   async function loadMore() {
     if (loading() || !hasMore()) return
@@ -220,7 +242,8 @@ export default function Feed() {
     try {
       const existingIds = cards().map((c) => c.card.id)
       const excludeParam = existingIds.length > 0 ? `&exclude=${existingIds.join(',')}` : ''
-      const res = await fetch(`/api/feed?limit=${BATCH_SIZE}${excludeParam}`)
+      const collParam = selectedCollection() ? `&collections=${selectedCollection()}` : ''
+      const res = await fetch(`/api/feed?limit=${BATCH_SIZE}${excludeParam}${collParam}`)
       if (!res.ok) throw new Error(`Failed to load feed: ${res.status}`)
       const batch: FeedCard[] = await res.json()
       if (batch.length === 0) setHasMore(false)
@@ -273,6 +296,12 @@ export default function Feed() {
   }, 100)
 
   onMount(() => {
+    // Fetch collections for filter selector
+    fetch('/api/collections')
+      .then((r) => r.ok ? r.json() : [])
+      .then((data: CollectionOption[]) => setCollections(data))
+      .catch(() => {})
+
     loadMore()
 
     window.addEventListener('scroll', handleScrollAndSentinel, { passive: true })
@@ -295,6 +324,36 @@ export default function Feed() {
 
   return (
     <div class="flex flex-col gap-10">
+      {/* Collection filter */}
+      <Show when={collections().length > 0}>
+        <div class="flex flex-wrap items-center gap-1.5">
+          <button
+            onClick={() => selectCollection(null)}
+            class={`rounded-full px-3 py-1 font-body text-xs transition-colors ${
+              selectedCollection() === null
+                ? 'bg-ed-primary text-ed-on-primary'
+                : 'bg-ed-surface-high text-ed-on-surface-muted hover:bg-ed-surface-highest'
+            }`}
+          >
+            All
+          </button>
+          <For each={collections()}>
+            {(col) => (
+              <button
+                onClick={() => selectCollection(col.id)}
+                class={`rounded-full px-3 py-1 font-body text-xs transition-colors ${
+                  selectedCollection() === col.id
+                    ? 'bg-ed-primary text-ed-on-primary'
+                    : 'bg-ed-surface-high text-ed-on-surface-muted hover:bg-ed-surface-highest'
+                }`}
+              >
+                {col.name}
+              </button>
+            )}
+          </For>
+        </div>
+      </Show>
+
       <Show when={error()}>
         <div class="rounded bg-ctp-red/10 px-6 py-4 font-body text-sm text-ctp-red">
           {error()}
