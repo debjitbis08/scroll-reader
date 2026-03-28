@@ -191,6 +191,12 @@ Goal: users can register, upload a document, and get reading cards back.
 - [x] Secrets: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `GEMINI_API_KEY`, `DATABASE_URL`, `TRIAL_CHUNK_LIMIT`
 - [x] Verify end-to-end: register → upload EPUB → cards appear
 
+**Deploy command** (reads `CF_TURNSTILE_SITE_KEY` from `.env` since it's inlined at build time):
+
+```fish
+~/.fly/bin/flyctl deploy --config fly.toml --remote-only --build-arg CF_TURNSTILE_SITE_KEY=(grep CF_TURNSTILE_SITE_KEY .env | cut -d= -f2)
+```
+
 ---
 
 ## Phase 3 — Desktop App (Tauri)
