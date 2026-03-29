@@ -68,12 +68,18 @@ function parseAIResponse(
   // form-feed, \n as newline, \r as CR — corrupting LaTeX commands.
   // Strategy: escape all backslashes, then restore the valid JSON escapes
   // that aren't part of LaTeX (e.g. actual newlines between JSON fields).
+  // AI models output LaTeX like \times, \theta, \frac, \beta, \nabla inside
+  // JSON strings. JSON.parse treats \t as tab, \b as backspace, etc.
+  // Strategy: protect known JSON escapes (\\, \", \/, \uXXXX), then escape
+  // all remaining backslashes so LaTeX survives. We intentionally do NOT
+  // protect \n, \r, \t here — they're ambiguous with LaTeX (\nabla, \rho,
+  // \theta). The renderer handles literal \n in the output (see LatexText).
   const escaped = cleaned
     .replace(/\\\\/g, '\x00DOUBLE\x00')       // protect already-escaped \\
     .replace(/\\"/g, '\x00QUOTE\x00')          // protect \"
     .replace(/\\\//g, '\x00SLASH\x00')         // protect \/
     .replace(/\\u([0-9a-fA-F]{4})/g, '\x00U$1\x00') // protect \uXXXX
-    .replace(/\\/g, '\\\\')                    // escape all remaining backslashes
+    .replace(/\\/g, '\\\\')                    // escape all remaining backslashes (LaTeX)
     .replace(/\x00DOUBLE\x00/g, '\\\\')        // restore \\
     .replace(/\x00QUOTE\x00/g, '\\"')          // restore \"
     .replace(/\x00SLASH\x00/g, '\\/')          // restore \/

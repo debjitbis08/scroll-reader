@@ -4,7 +4,7 @@ import { extname } from 'node:path'
 import { eq, sql } from 'drizzle-orm'
 import { db } from '../../lib/db.ts'
 import { documents, profiles, jobs } from '@scroll-reader/db'
-import { getPageCount } from '../../lib/extract.ts'
+import { getPageCount, extractToc } from '../../lib/extract.ts'
 import { uploadDocument } from '../../lib/storage.ts'
 import { TIER_LIMITS } from '@scroll-reader/shared-types'
 import type { Tier } from '@scroll-reader/shared-types'
@@ -65,10 +65,16 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
 
   const title = file.name.replace(/\.[^.]+$/, '')
 
-  // Get page count before inserting — fast Rust extraction
+  // Get page count and TOC before inserting — fast Rust extraction
   let totalPages = 1
+  let toc: { title: string; page: number; level: number }[] = []
   try {
-    totalPages = await getPageCount(tmpPath)
+    const [pageCount, tocEntries] = await Promise.all([
+      getPageCount(tmpPath),
+      extractToc(tmpPath),
+    ])
+    totalPages = pageCount
+    toc = tocEntries
   } catch (err) {
     console.error('[upload] preview extraction failed:', err)
     await unlink(tmpPath).catch(() => {})
@@ -90,6 +96,7 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
       totalPages,
       pageStart: 1,
       pageEnd: totalPages,
+      toc: toc.length > 0 ? toc : null,
     })
     .returning()
 

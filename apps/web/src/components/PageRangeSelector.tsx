@@ -1,12 +1,15 @@
-import { createSignal, createMemo } from 'solid-js'
+import { createSignal, createMemo, createEffect, For, Show } from 'solid-js'
 import type { DocumentType, ReadingGoal } from '@scroll-reader/shared-types'
 import { resolveCardStrategy, describeStrategy } from '@scroll-reader/shared-types'
+
+interface TocEntry { title: string; page: number; level: number }
 
 interface Props {
   docId: string
   totalPages: number
   initialStart: number
   initialEnd: number
+  toc?: TocEntry[]
 }
 
 const CONTENT_OPTIONS: { label: string; value: DocumentType }[] = [
@@ -29,6 +32,57 @@ export default function PageRangeSelector(props: Props) {
   const [readingGoal, setReadingGoal] = createSignal<ReadingGoal>('reflective')
   const [submitting, setSubmitting] = createSignal(false)
   const [error, setError] = createSignal<string | null>(null)
+
+  const hasToc = () => (props.toc?.length ?? 0) > 0
+  const toc = () => props.toc ?? []
+
+  // Track selected chapter indices (1-based into toc array for display, 0-based internally)
+  const [selectedChapters, setSelectedChapters] = createSignal<Set<number>>(
+    new Set(toc().map((_, i) => i)),
+  )
+
+  // When chapter selection changes, update page range
+  createEffect(() => {
+    if (!hasToc()) return
+    const selected = selectedChapters()
+    if (selected.size === 0) return
+
+    const tocEntries = toc()
+    let minPage = Infinity
+    let maxPage = 0
+
+    for (const idx of selected) {
+      const entry = tocEntries[idx]
+      if (!entry) continue
+      if (entry.page < minPage) minPage = entry.page
+      // Find end of this chapter: next entry at same or higher level
+      const nextEntry = tocEntries.find((e, i) => i > idx && e.level <= entry.level)
+      const chapterEnd = nextEntry ? nextEntry.page - 1 : props.totalPages
+      if (chapterEnd > maxPage) maxPage = chapterEnd
+    }
+
+    if (minPage !== Infinity) {
+      setStart(minPage)
+      setEnd(Math.min(maxPage, props.totalPages))
+    }
+  })
+
+  function toggleChapter(idx: number) {
+    setSelectedChapters((prev) => {
+      const next = new Set(prev)
+      if (next.has(idx)) next.delete(idx)
+      else next.add(idx)
+      return next
+    })
+  }
+
+  function selectAll() {
+    setSelectedChapters(new Set(toc().map((_, i) => i)))
+  }
+
+  function deselectAll() {
+    setSelectedChapters(new Set())
+  }
 
   const strategy = createMemo(() => resolveCardStrategy(documentType(), readingGoal()))
   const strategyLabel = createMemo(() => describeStrategy(strategy()))
@@ -77,9 +131,56 @@ export default function PageRangeSelector(props: Props) {
         </p>
       </div>
 
+      {/* Chapter selection (when TOC is available) */}
+      <Show when={hasToc()}>
+        <fieldset class="space-y-2">
+          <legend class="text-sm font-medium text-ctp-text">Select chapters to process</legend>
+          <div class="flex gap-2 mb-2">
+            <button
+              type="button"
+              onClick={selectAll}
+              class="text-xs text-ctp-mauve hover:underline"
+            >
+              Select all
+            </button>
+            <button
+              type="button"
+              onClick={deselectAll}
+              class="text-xs text-ctp-subtext0 hover:underline"
+            >
+              Deselect all
+            </button>
+          </div>
+          <div class="max-h-64 overflow-y-auto space-y-0.5 rounded-lg border border-ctp-surface2 bg-ctp-base p-2">
+            <For each={toc()}>
+              {(entry, idx) => (
+                <label
+                  class={`flex items-start gap-2 rounded px-2 py-1 cursor-pointer transition-colors hover:bg-ctp-surface0 ${
+                    selectedChapters().has(idx()) ? 'text-ctp-text' : 'text-ctp-subtext0'
+                  }`}
+                  style={{ "padding-left": `${entry.level * 16 + 8}px` }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedChapters().has(idx())}
+                    onChange={() => toggleChapter(idx())}
+                    class="mt-0.5 accent-ctp-mauve"
+                  />
+                  <span class="text-sm leading-snug">
+                    {entry.title}
+                  </span>
+                </label>
+              )}
+            </For>
+          </div>
+        </fieldset>
+      </Show>
+
       {/* Page range */}
       <div class="flex items-center gap-3">
-        <label class="text-sm text-ctp-subtext1">Pages</label>
+        <label class="text-sm text-ctp-subtext1">
+          {hasToc() ? 'Page range (from selection)' : 'Pages'}
+        </label>
         <input
           type="number"
           min={1}

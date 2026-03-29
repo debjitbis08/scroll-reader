@@ -25,8 +25,17 @@ pnpm --filter card-tester extract -- --file ~/Downloads/book.pdf
 
 Options:
 - `--file` (required) — path to PDF, EPUB, or TXT file
+- `--toc` — print the table of contents and exit (use to find chapter numbers)
+- `--chapters 7,8,9` — select chapters by TOC index (1-based, from `--toc` output)
 - `--pages 1-10` — restrict to a page range (PDF only)
 - `--out ./test-output` — output directory (default: `./test-output`)
+
+To browse chapters before extracting:
+```bash
+pnpm --filter card-tester extract -- --file ~/book.pdf --toc
+# Then extract specific chapters:
+pnpm --filter card-tester extract -- --file ~/book.pdf --chapters 7,8,9
+```
 
 Outputs:
 - `test-output/chunks.json` — array of chunks with associated images
@@ -47,7 +56,15 @@ Options:
 Outputs:
 - `test-output/cards.json` — array of generated cards with source chunks
 
-### Step 3: View in browser
+### Step 3: Build the frontend (once, or after component changes)
+
+```bash
+pnpm --filter card-tester build:client
+```
+
+The frontend is a SolidJS app that reuses the same card rendering components as the main web app — no duplicate rendering logic.
+
+### Step 4: View in browser
 
 ```bash
 pnpm --filter card-tester serve
@@ -59,9 +76,16 @@ Options:
 
 Open http://localhost:3333 to see the feed.
 
+For development with hot reload, run serve and Vite dev server in parallel:
+```bash
+pnpm --filter card-tester serve &   # API on :3333
+pnpm --filter card-tester dev       # Vite on :5174 (proxies API to :3333)
+```
+
 The feed viewer supports:
 - All card types: discover, flashcard, quiz, glossary, contrast, passage, raw_commentary
 - LaTeX rendering via KaTeX
+- Markdown: fenced code blocks, inline code, bold, italic, headings, lists, blockquotes
 - Interactive quiz (click to answer) and flashcard (click to reveal)
 - Collapsible source chunks with associated images
-- Catppuccin Mocha dark theme
+- Same design system as the main app (editorial tokens + Catppuccin Mocha)

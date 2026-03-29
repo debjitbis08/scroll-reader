@@ -142,19 +142,43 @@ importers:
 
   tools/card-tester:
     dependencies:
+      '@iconify-icon/solid':
+        specifier: ^3.0.3
+        version: 3.0.3(solid-js@1.9.11)
       '@scroll-reader/shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types
       dotenv:
         specifier: ^17.3.1
         version: 17.3.1
+      katex:
+        specifier: ^0.16.38
+        version: 0.16.38
+      solid-js:
+        specifier: ^1.9.0
+        version: 1.9.11
     devDependencies:
+      '@catppuccin/tailwindcss':
+        specifier: ^1.0.0
+        version: 1.0.0
+      '@tailwindcss/vite':
+        specifier: ^4.0.0
+        version: 4.2.0(vite@6.4.1(@types/node@22.19.11)(jiti@2.6.1)(lightningcss@1.31.1)(tsx@4.21.0)(yaml@2.8.2))
+      tailwindcss:
+        specifier: ^4.0.0
+        version: 4.2.0
       tsx:
         specifier: ^4.19.4
         version: 4.21.0
       typescript:
         specifier: ^5.8.3
         version: 5.9.3
+      vite:
+        specifier: ^6.0.0
+        version: 6.4.1(@types/node@22.19.11)(jiti@2.6.1)(lightningcss@1.31.1)(tsx@4.21.0)(yaml@2.8.2)
+      vite-plugin-solid:
+        specifier: ^2.10.0
+        version: 2.11.10(solid-js@1.9.11)(vite@6.4.1(@types/node@22.19.11)(jiti@2.6.1)(lightningcss@1.31.1)(tsx@4.21.0)(yaml@2.8.2))
 
 packages:
 
@@ -6698,6 +6722,19 @@ snapshots:
       solid-refresh: 0.6.3(solid-js@1.9.11)
       vite: 5.4.21(@types/node@22.19.11)(lightningcss@1.31.1)
       vitefu: 1.1.1(vite@5.4.21(@types/node@22.19.11)(lightningcss@1.31.1))
+    transitivePeerDependencies:
+      - supports-color
+
+  vite-plugin-solid@2.11.10(solid-js@1.9.11)(vite@6.4.1(@types/node@22.19.11)(jiti@2.6.1)(lightningcss@1.31.1)(tsx@4.21.0)(yaml@2.8.2)):
+    dependencies:
+      '@babel/core': 7.29.0
+      '@types/babel__core': 7.20.5
+      babel-preset-solid: 1.9.10(@babel/core@7.29.0)(solid-js@1.9.11)
+      merge-anything: 5.1.7
+      solid-js: 1.9.11
+      solid-refresh: 0.6.3(solid-js@1.9.11)
+      vite: 6.4.1(@types/node@22.19.11)(jiti@2.6.1)(lightningcss@1.31.1)(tsx@4.21.0)(yaml@2.8.2)
+      vitefu: 1.1.1(vite@6.4.1(@types/node@22.19.11)(jiti@2.6.1)(lightningcss@1.31.1)(tsx@4.21.0)(yaml@2.8.2))
     transitivePeerDependencies:
       - supports-color
 

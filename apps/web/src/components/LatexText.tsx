@@ -13,28 +13,68 @@ interface Props {
 export default function LatexText(props: Props) {
   const rendered = createMemo(() => renderLatex(props.text))
 
+  const isInline = () => props.class?.includes('inline')
+
   return (
-    <p class={props.class} innerHTML={rendered()} />
+    <div
+      class={`${props.class ?? ''}${isInline() ? '' : ' space-y-2'}`}
+      innerHTML={rendered()}
+    />
   )
 }
 
 function restoreLatexEscapes(text: string): string {
   // When LaTeX like \times, \beta, \frac is stored in JSON, escape sequences
   // (\t → tab, \b → backspace, \f → form-feed, \n → newline, \r → CR)
-  // corrupt the LaTeX. Restore them within math delimiters.
+  // corrupt the LaTeX. Restore them within math delimiters — but ONLY when
+  // followed by letters that form a known LaTeX command, not when the
+  // character is just whitespace before e.g. a variable name like P.
+  const nCmds = 'nabla|nu|neg|neq|newline|nleq|ngeq|nmid|notin|not|ni|nolimits|nonumber|norm'
+  const tCmds = 'times|theta|tau|text|textbf|textit|textrm|to|top|triangle|tan|tanh|tfrac'
+  const bCmds = 'beta|binom|bar|big|Big|bigg|Bigg|bigcap|bigcup|bigvee|bigwedge|bot|boldsymbol|bf'
+  const rCmds = 'rho|right|Rightarrow|rightarrow|rangle|rceil|rfloor|rm|root'
+  const fCmds = 'frac|forall|flat|frown'
+
   return text.replace(/\$\$[\s\S]*?\$\$|\$(?:[^$\\]|\\.)*?\$/g, (match) => {
     return match
-      .replace(/\x08/g, '\\b')  // backspace → \b (e.g. \beta, \binom)
-      .replace(/\t/g, '\\t')    // tab → \t (e.g. \times, \theta)
-      .replace(/\n/g, '\\n')    // newline → \n (e.g. \nabla, \nu)
-      .replace(/\r/g, '\\r')    // CR → \r (e.g. \rho, \right)
-      .replace(/\f/g, '\\f')    // form-feed → \f (e.g. \frac, \forall)
+      .replace(new RegExp(`\\x08(?=${bCmds})`, 'g'), '\\b')
+      .replace(new RegExp(`\\t(?=${tCmds})`, 'g'), '\\t')
+      .replace(new RegExp(`\\n(?=${nCmds})`, 'g'), '\\n')
+      .replace(new RegExp(`\\r(?=${rCmds})`, 'g'), '\\r')
+      .replace(new RegExp(`\\f(?=${fCmds})`, 'g'), '\\f')
   })
 }
 
+function literalEscapesToNewlines(text: string): string {
+  // The JSON parser escapes all backslashes to preserve LaTeX, so \n in the
+  // AI output becomes the literal two-char sequence \n (not a real newline).
+  // Convert literal \n to actual newlines everywhere, but inside math
+  // delimiters protect known LaTeX commands (\nabla, \nu, \theta, etc.)
+  // by using a negative lookahead for their command names.
+  const nProtect = 'nabla|nu|neg|neq|newline|nleq|ngeq|nmid|notin|not(?![a-z])|ni|nolimits|nonumber|norm'
+  const tProtect = 'times|theta|tau|text|textbf|textit|textrm|to(?![a-z])|top|triangle|tan|tanh|tfrac'
+  const mathNlReplace = new RegExp(`\\\\n(?!${nProtect})`, 'g')
+  const mathTabReplace = new RegExp(`\\\\t(?!${tProtect})`, 'g')
+
+  const mathPattern = /\$\$[\s\S]*?\$\$|\$(?:[^$\\]|\\.)*?\$/g
+  let last = 0
+  let out = ''
+  let m: RegExpExecArray | null
+  while ((m = mathPattern.exec(text)) !== null) {
+    // Non-math segment: convert all literal \n and \t
+    out += text.slice(last, m.index).replace(/\\n/g, '\n').replace(/\\t/g, '\t')
+    // Math segment: convert literal \n and \t except before known LaTeX commands
+    out += m[0].replace(mathNlReplace, '\n').replace(mathTabReplace, '\t')
+    last = m.index + m[0].length
+  }
+  out += text.slice(last).replace(/\\n/g, '\n').replace(/\\t/g, '\t')
+  return out
+}
+
 function renderLatex(text: string): string {
-  // Process display math first ($$...$$), then inline math ($...$)
-  let result = restoreLatexEscapes(text)
+  // Convert literal \n to real newlines (outside math), then fix LaTeX escapes inside math
+  let result = literalEscapesToNewlines(text)
+  result = restoreLatexEscapes(result)
 
   // Display math: $$...$$
   result = result.replace(/\$\$([\s\S]*?)\$\$/g, (_match, tex) => {
@@ -62,6 +102,24 @@ function renderLatex(text: string): string {
 }
 
 function renderMarkdown(html: string): string {
+  // Fenced code blocks: ```lang\n...\n``` → <pre><code>
+  // Must run before inline replacements to avoid mangling code content
+  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_match, lang, code) => {
+    const langLabel = lang
+      ? `<span class="absolute right-2 top-1.5 text-[0.65rem] text-ctp-subtext0">${escapeHtml(lang)}</span>`
+      : ''
+    return `<div class="relative my-2 rounded bg-ctp-surface0 text-[0.85em]">${langLabel}<pre class="overflow-x-auto px-3 py-2"><code class="font-mono whitespace-pre">${escapeHtml(code.trim())}</code></pre></div>`
+  })
+
+  // Fallback: unfenced code blocks — a bare language name on its own line followed by code.
+  // AI sometimes forgets triple backticks and writes e.g. "python\nimport foo\n..."
+  // Greedy: captures across blank lines within code, stops at \n\n followed by a prose
+  // line (starts with uppercase letter) or end of string.
+  const codeLangs = '(?:python|javascript|typescript|java|rust|go|c|cpp|bash|sh|r|sql|ruby|swift|kotlin|scala|html|css)'
+  html = html.replace(new RegExp(`(?:^|\\n\\n)${codeLangs}\\n([\\s\\S]+?)(?=\\n\\n[A-Z]|$)`, 'g'), (_match, code) => {
+    return `\n\n<div class="relative my-2 rounded bg-ctp-surface0 text-[0.85em]"><pre class="overflow-x-auto px-3 py-2"><code class="font-mono whitespace-pre">${escapeHtml(code.trim())}</code></pre></div>`
+  })
+
   // Inline code: `code` → <code>
   html = html.replace(/`([^`]+)`/g, '<code class="rounded bg-ctp-surface1 px-1 py-0.5 text-[0.85em] font-mono">$1</code>')
 
@@ -77,9 +135,20 @@ function renderMarkdown(html: string): string {
     const trimmed = block.trim()
     if (!trimmed) return ''
 
+    // Already rendered as HTML block (e.g. fenced code) — pass through
+    if (trimmed.startsWith('<div') || trimmed.startsWith('<pre')) return trimmed
+
+    // Headings: ### h3, ## h2, # h1
+    const headingMatch = trimmed.match(/^(#{1,3})\s+(.+)$/)
+    if (headingMatch) {
+      const level = headingMatch[1].length
+      const cls = level === 1 ? 'text-lg font-semibold' : level === 2 ? 'text-base font-semibold' : 'text-sm font-semibold'
+      return `<h${level} class="${cls}">${headingMatch[2]}</h${level}>`
+    }
+
     // Blockquote: lines starting with >
     if (trimmed.startsWith('&gt; ') || trimmed.startsWith('> ')) {
-      const content = trimmed.replace(/^(&gt;|>) /, '')
+      const content = trimmed.replace(/^(&gt;|>) /gm, '')
       return `<blockquote class="border-l-2 border-ctp-surface2 pl-3 italic text-ctp-subtext0">${content}</blockquote>`
     }
 

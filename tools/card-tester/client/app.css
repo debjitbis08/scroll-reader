@@ -1,0 +1,55 @@
+@import "tailwindcss";
+@import "@catppuccin/tailwindcss/mocha.css";
+@import "katex/dist/katex.min.css";
+
+@source "../../../apps/web/src/components/";
+
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+@utility animate-fade-in {
+  animation: fade-in 0.3s ease-out;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@theme {
+  --font-display: 'Newsreader', Georgia, serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+
+  --color-ed-primary: var(--ed-primary);
+  --color-ed-primary-container: var(--ed-primary-container);
+  --color-ed-on-primary: var(--ed-on-primary);
+  --color-ed-surface: var(--ed-surface);
+  --color-ed-surface-dim: var(--ed-surface-dim);
+  --color-ed-surface-container: var(--ed-surface-container);
+  --color-ed-surface-high: var(--ed-surface-high);
+  --color-ed-surface-highest: var(--ed-surface-highest);
+  --color-ed-on-surface: var(--ed-on-surface);
+  --color-ed-on-surface-dim: var(--ed-on-surface-dim);
+  --color-ed-on-surface-muted: var(--ed-on-surface-muted);
+  --color-ed-outline: var(--ed-outline);
+  --color-ed-outline-dim: var(--ed-outline-dim);
+}
+
+/* Force dark mode for card-tester */
+:root {
+  --ed-primary: #c8c8b0;
+  --ed-primary-container: #474836;
+  --ed-on-primary: #404130;
+  --ed-surface: #0e0e0e;
+  --ed-surface-dim: #141412;
+  --ed-surface-container: #1c1c1a;
+  --ed-surface-high: #252523;
+  --ed-surface-highest: #333330;
+  --ed-on-surface: #e7e5e5;
+  --ed-on-surface-dim: #a8a6a0;
+  --ed-on-surface-muted: #6b6860;
+  --ed-outline: #49473f;
+  --ed-outline-dim: #49473f33;
+}

@@ -231,6 +231,54 @@ function mergeFigures(rustElements: DocElement[], figures: FigureElement[]): Doc
   return result
 }
 
+export interface TocEntry {
+  title: string
+  page: number
+  level: number
+}
+
+/**
+ * Extract the table of contents from a document.
+ * Returns an empty array for TXT files or if TOC is unavailable.
+ */
+export async function extractToc(filePath: string): Promise<TocEntry[]> {
+  const ext = extname(filePath).toLowerCase()
+  if (ext === '.txt') return []
+
+  const binPath = resolveExtractorBin()
+
+  return new Promise((resolve) => {
+    const proc = spawn(binPath, [], { stdio: ['pipe', 'pipe', 'pipe'] })
+    let stdout = ''
+    let stderr = ''
+
+    proc.stdout.on('data', (d: Buffer) => { stdout += d.toString() })
+    proc.stderr.on('data', (d: Buffer) => { stderr += d.toString() })
+
+    proc.on('close', (code) => {
+      if (code !== 0 || !stdout.trim()) {
+        if (stderr) console.warn(`[toc] extractor stderr: ${stderr.trim().slice(0, 200)}`)
+        resolve([])
+        return
+      }
+      try {
+        resolve(JSON.parse(stdout) as TocEntry[])
+      } catch {
+        console.warn(`[toc] invalid JSON output`)
+        resolve([])
+      }
+    })
+
+    proc.on('error', () => {
+      console.warn(`[toc] failed to spawn extractor`)
+      resolve([])
+    })
+
+    proc.stdin.write(JSON.stringify({ file_path: filePath, command: 'toc' }))
+    proc.stdin.end()
+  })
+}
+
 async function callExtractor(filePath: string, outputDir?: string): Promise<DocElement[]> {
   const binPath = resolveExtractorBin()
 

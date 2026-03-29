@@ -17,6 +17,12 @@ pub enum DocElement {
         content: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         chapter: Option<String>,
+        /// 1-based spine index for EPUB elements (matches TocEntry.page).
+        #[serde(skip_serializing_if = "Option::is_none")]
+        spine_index: Option<usize>,
+        /// Last-seen HTML anchor ID (e.g. "toc_1"), for fragment-level filtering.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        anchor_id: Option<String>,
     },
     Image {
         alt: String,
@@ -26,6 +32,10 @@ pub enum DocElement {
         /// MIME type (e.g. "image/png", "image/jpeg").
         #[serde(skip_serializing_if = "Option::is_none")]
         mime: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        spine_index: Option<usize>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        anchor_id: Option<String>,
     },
     Code {
         content: String,
@@ -33,6 +43,10 @@ pub enum DocElement {
         language: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         chapter: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        spine_index: Option<usize>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        anchor_id: Option<String>,
     },
 }
 
@@ -138,8 +152,9 @@ pub fn extract_epub_with_images(
     }
 
     loop {
-        // Capture the current spine item's path before processing
+        // Capture the current spine item's path and 1-based index before processing
         let spine_path = doc.get_current_path();
+        let spine_idx = doc.get_current_chapter() + 1; // 1-based, matches TocEntry.page
 
         if let Some((html_content, mime)) = doc.get_current_str() {
             let is_html = mime.contains("html") || mime.contains("xhtml") || mime.contains("xml");
@@ -148,25 +163,29 @@ pub fn extract_epub_with_images(
                 extractor.process(&html_content);
                 carry_chapter = extractor.last_chapter.or(carry_chapter);
 
-                // Resolve image references from the HTML
+                // Resolve image references and stamp spine_index on every element
                 for el in &mut extractor.elements {
-                    if let DocElement::Image { file, mime: img_mime, .. } = el {
-                        // The HtmlExtractor stores the src in file temporarily
-                        if let Some(src) = file.take() {
-                            if let Some(ref sp) = spine_path {
-                                let resolved = resolve_epub_image_path(sp, &src);
-                                // Try to get the resource by resolved path
-                                if let Some((data, resource_mime)) = get_epub_resource(&mut doc, &resolved) {
-                                    if let Some((fp, m)) = write_image_file(
-                                        output_dir, &data, &resource_mime, &mut seen_images,
-                                    ) {
-                                        *file = Some(fp);
-                                        *img_mime = Some(m);
+                    match el {
+                        DocElement::Image { file, mime: img_mime, spine_index, .. } => {
+                            *spine_index = Some(spine_idx);
+                            // The HtmlExtractor stores the src in file temporarily
+                            if let Some(src) = file.take() {
+                                if let Some(ref sp) = spine_path {
+                                    let resolved = resolve_epub_image_path(sp, &src);
+                                    if let Some((data, resource_mime)) = get_epub_resource(&mut doc, &resolved) {
+                                        if let Some((fp, m)) = write_image_file(
+                                            output_dir, &data, &resource_mime, &mut seen_images,
+                                        ) {
+                                            *file = Some(fp);
+                                            *img_mime = Some(m);
+                                        }
                                     }
                                 }
                             }
                         }
-                        // If file is still None, alt text is preserved as-is
+                        DocElement::Text { spine_index, .. } | DocElement::Code { spine_index, .. } => {
+                            *spine_index = Some(spine_idx);
+                        }
                     }
                 }
 
@@ -353,6 +372,8 @@ fn extract_pdf_via_html(path: &str, output_dir: Option<&Path>) -> Option<Vec<Doc
                         content: code_content,
                         language: None,
                         chapter: Some(chapter.clone()),
+                        spine_index: None,
+                        anchor_id: None,
                     });
                 }
             } else {
@@ -366,6 +387,8 @@ fn extract_pdf_via_html(path: &str, output_dir: Option<&Path>) -> Option<Vec<Doc
                     elements.push(DocElement::Text {
                         content: cleaned,
                         chapter: Some(chapter.clone()),
+                        spine_index: None,
+                        anchor_id: None,
                     });
                 }
             }
@@ -608,6 +631,8 @@ fn extract_pdf_via_text(path: &str, output_dir: Option<&Path>) -> Result<Vec<Doc
                 elements.push(DocElement::Text {
                     content: text,
                     chapter: Some(format!("Page {page_num}")),
+                    spine_index: None,
+                    anchor_id: None,
                 });
             }
         }
@@ -818,7 +843,7 @@ fn extract_page_images(
 
             if let Some(mime) = extractable {
                 if let Some((fp, m)) = write_image_file(output_dir, &stream.content, mime, seen) {
-                    images.push(DocElement::Image { alt, file: Some(fp), mime: Some(m) });
+                    images.push(DocElement::Image { alt, file: Some(fp), mime: Some(m), spine_index: None, anchor_id: None });
                     continue;
                 }
             }
@@ -827,7 +852,7 @@ fn extract_page_images(
             if filter_name == Some(b"FlateDecode") {
                 match decode_flate_image(doc, &stream.dict, &stream.content, output_dir, seen) {
                     Some((fp, m)) => {
-                        images.push(DocElement::Image { alt, file: Some(fp), mime: Some(m) });
+                        images.push(DocElement::Image { alt, file: Some(fp), mime: Some(m), spine_index: None, anchor_id: None });
                         continue;
                     }
                     None => {}
@@ -836,7 +861,7 @@ fn extract_page_images(
         }
 
         // Unsupported filter or extraction failed: emit placeholder
-        images.push(DocElement::Image { alt, file: None, mime: None });
+        images.push(DocElement::Image { alt, file: None, mime: None, spine_index: None, anchor_id: None });
     }
 
     images
@@ -974,6 +999,9 @@ struct HtmlExtractor {
     pub last_chapter: Option<String>,
     text_buf: String,
     current_chapter: Option<String>,
+    /// Anchor ID from the heading that set the current chapter.
+    /// Only updated when a heading with an `id` is encountered.
+    current_anchor: Option<String>,
 }
 
 impl HtmlExtractor {
@@ -983,6 +1011,7 @@ impl HtmlExtractor {
             last_chapter: None,
             text_buf: String::new(),
             current_chapter: initial_chapter,
+            current_anchor: None,
         }
     }
 
@@ -1005,12 +1034,17 @@ impl HtmlExtractor {
             // Skip non-content elements entirely
             "script" | "style" | "head" | "meta" | "link" | "noscript" | "nav" => {}
 
-            // Chapter headings — update current chapter, don't emit text
+            // Chapter headings — update current chapter and anchor ID
             "h1" | "h2" | "h3" | "h4" | "h5" | "h6" => {
                 self.flush();
                 let text = collect_text(el);
                 if !text.is_empty() {
                     self.current_chapter = Some(text);
+                    if let Some(id) = el.value().attr("id") {
+                        if !id.is_empty() {
+                            self.current_anchor = Some(id.to_string());
+                        }
+                    }
                 }
             }
 
@@ -1023,6 +1057,8 @@ impl HtmlExtractor {
                     alt,
                     file: src, // temporarily holds src; resolved by extract_epub_with_images
                     mime: None,
+                    spine_index: None,
+                    anchor_id: self.current_anchor.clone(),
                 });
             }
 
@@ -1037,6 +1073,8 @@ impl HtmlExtractor {
                         content: code_text,
                         language,
                         chapter: self.current_chapter.clone(),
+                        spine_index: None,
+                        anchor_id: self.current_anchor.clone(),
                     });
                 }
             }
@@ -1096,6 +1134,8 @@ impl HtmlExtractor {
                         alt,
                         file: src,
                         mime: None,
+                        spine_index: None,
+                        anchor_id: self.current_anchor.clone(),
                     });
                 }
             }
@@ -1117,6 +1157,8 @@ impl HtmlExtractor {
             self.elements.push(DocElement::Text {
                 content: text,
                 chapter: self.current_chapter.clone(),
+                spine_index: None,
+                anchor_id: self.current_anchor.clone(),
             });
         }
         self.text_buf.clear();
@@ -1240,6 +1282,125 @@ fn lang_from_class(class: Option<&str>) -> Option<String> {
         }
     }
     None
+}
+
+// ── TOC extraction ───────────────────────────────────────────────────────────
+
+#[derive(Debug, Serialize)]
+pub struct TocEntry {
+    pub title: String,
+    pub page: usize,  // 1-based: PDF page number or EPUB spine index + 1
+    pub level: usize,  // nesting depth (0 = top-level)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fragment: Option<String>,  // anchor ID from the navpoint URI (e.g. "toc_1")
+}
+
+pub fn extract_epub_toc(path: &str) -> Result<Vec<TocEntry>, Box<dyn std::error::Error>> {
+    use epub::doc::EpubDoc;
+    let doc = EpubDoc::new(path)?;
+    let mut entries = Vec::new();
+    fn collect(
+        doc: &EpubDoc<std::io::BufReader<std::fs::File>>,
+        navpoints: &[epub::doc::NavPoint],
+        level: usize,
+        entries: &mut Vec<TocEntry>,
+    ) {
+        for np in navpoints {
+            // Strip fragment identifier (#section) — resource_uri_to_chapter
+            // does exact path matching and won't find paths with fragments.
+            let content_str = np.content.to_string_lossy();
+            let (without_fragment, fragment) = match content_str.find('#') {
+                Some(pos) => (
+                    std::path::PathBuf::from(&content_str[..pos]),
+                    Some(content_str[pos + 1..].to_string()),
+                ),
+                None => (np.content.clone(), None),
+            };
+            let page = doc
+                .resource_uri_to_chapter(&without_fragment)
+                .map(|c| c + 1)
+                .unwrap_or(0);
+            if page > 0 {
+                entries.push(TocEntry {
+                    title: np.label.trim().to_string(),
+                    page,
+                    level,
+                    fragment,
+                });
+            }
+            collect(doc, &np.children, level + 1, entries);
+        }
+    }
+    collect(&doc, &doc.toc, 0, &mut entries);
+    Ok(entries)
+}
+
+pub fn extract_pdf_toc(path: &str) -> Result<Vec<TocEntry>, Box<dyn std::error::Error>> {
+    use lopdf::Document;
+    use std::collections::BTreeMap;
+
+    let doc = Document::load(path)?;
+
+    // Build ObjectId → page number map
+    let pages = doc.get_pages();
+    let mut obj_to_page: HashMap<lopdf::ObjectId, u32> = HashMap::new();
+    for (page_num, obj_id) in &pages {
+        obj_to_page.insert(*obj_id, *page_num);
+    }
+
+    let mut named_dests = BTreeMap::new();
+    let outlines = match doc.get_outlines(None, None, &mut named_dests) {
+        Ok(Some(o)) => o,
+        _ => return Ok(Vec::new()),
+    };
+
+    let mut entries = Vec::new();
+    fn collect(
+        outlines: &[lopdf::Outline],
+        level: usize,
+        obj_to_page: &HashMap<lopdf::ObjectId, u32>,
+        entries: &mut Vec<TocEntry>,
+    ) {
+        for outline in outlines {
+            match outline {
+                lopdf::Outline::Destination(dest) => {
+                    let title = dest
+                        .title()
+                        .and_then(|o| match o {
+                            lopdf::Object::String(bytes, _) => {
+                                String::from_utf8(bytes.clone()).ok()
+                            }
+                            _ => None,
+                        })
+                        .unwrap_or_default();
+
+                    let page = dest
+                        .page()
+                        .and_then(|o| match o {
+                            lopdf::Object::Reference(obj_id) => {
+                                obj_to_page.get(obj_id).copied()
+                            }
+                            _ => None,
+                        })
+                        .unwrap_or(0);
+
+                    if !title.is_empty() && page > 0 {
+                        entries.push(TocEntry {
+                            title: title.trim().to_string(),
+                            page: page as usize,
+                            level,
+                            fragment: None,
+                        });
+                    }
+                }
+                lopdf::Outline::SubOutlines(children) => {
+                    collect(children, level + 1, obj_to_page, entries);
+                }
+            }
+        }
+    }
+    collect(&outlines, 0, &obj_to_page, &mut entries);
+    Ok(entries)
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -1701,6 +1862,8 @@ mod tests {
                         content: code_lines.join("\n"),
                         language: None,
                         chapter: Some("Page 1".to_string()),
+                        spine_index: None,
+                        anchor_id: None,
                     });
                 } else {
                     let mut text_lines = Vec::new();
@@ -1714,6 +1877,8 @@ mod tests {
                         elements.push(DocElement::Text {
                             content: cleaned,
                             chapter: Some("Page 1".to_string()),
+                            spine_index: None,
+                            anchor_id: None,
                         });
                     }
                 }

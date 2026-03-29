@@ -396,6 +396,7 @@ const CARD_TYPE_HUE: Record<string, string> = {
         totalPages={doc.totalPages}
         initialStart={doc.pageStart ?? 1}
         initialEnd={doc.pageEnd ?? doc.totalPages}
+        toc={doc.toc ?? undefined}
         client:load
       />
     )}

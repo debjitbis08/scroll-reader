@@ -1,6 +1,12 @@
 @import "tailwindcss";
 @import "@catppuccin/tailwindcss/mocha.css";
 
+/* Allow long equations to scroll horizontally instead of overflowing */
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
 @utility animate-fade-in {
   animation: fade-in 0.3s ease-out;
 }

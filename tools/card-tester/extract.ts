@@ -24,12 +24,14 @@ const { values } = parseArgs({
   options: {
     file: { type: 'string' },
     pages: { type: 'string' },
+    chapters: { type: 'string' },
+    toc: { type: 'boolean', default: false },
     out: { type: 'string', default: join(HERE, 'test-output') },
   },
 })
 
 if (!values.file) {
-  console.error('Usage: pnpm --filter card-tester extract -- --file path/to/book.pdf [--pages 1-10] [--out dir]')
+  console.error('Usage: pnpm --filter card-tester extract -- --file path/to/book.pdf [--pages 1-10] [--chapters 1,3,5] [--toc] [--out dir]')
   process.exit(1)
 }
 
@@ -104,6 +106,69 @@ async function callPython(scriptPath: string, input: Record<string, string>): Pr
   })
 }
 
+// ── TOC command ──
+
+interface TocEntry { title: string; page: number; level: number; fragment?: string }
+
+const extractorBinForToc = resolveBin('extractor', 'packages/extractor/target/release/extractor')
+
+if (values.toc) {
+  const tocOut = await callBin(extractorBinForToc, { file_path: filePath, command: 'toc' })
+  const toc: TocEntry[] = JSON.parse(tocOut)
+  if (toc.length === 0) {
+    console.log('No table of contents found in this file.')
+  } else {
+    console.log(`Table of Contents (${toc.length} entries):\n`)
+    for (let i = 0; i < toc.length; i++) {
+      const e = toc[i]
+      const indent = '  '.repeat(e.level)
+      console.log(`  ${String(i + 1).padStart(3)}. ${indent}${e.title}`)
+    }
+  }
+  process.exit(0)
+}
+
+// ── Resolve --chapters to page/fragment range ──
+
+// For EPUB fragment-level filtering: list of { startFragment, endFragment, spinePage } ranges
+let fragmentRanges: { startFragment: string; endFragment: string | null; spinePage: number }[] = []
+
+if (values.chapters) {
+  const tocOut = await callBin(extractorBinForToc, { file_path: filePath, command: 'toc' })
+  const toc: TocEntry[] = JSON.parse(tocOut)
+  if (toc.length === 0) {
+    console.error('No TOC found — cannot use --chapters. Use --pages instead.')
+    process.exit(1)
+  }
+  const selected = values.chapters.split(',').map((s) => parseInt(s.trim(), 10))
+  const selectedPages: number[] = []
+  for (const idx of selected) {
+    const entry = toc[idx - 1] // 1-based index from user
+    if (!entry) {
+      console.error(`Chapter index ${idx} is out of range (1-${toc.length}). Run --toc to see the list.`)
+      process.exit(1)
+    }
+    const nextEntry = toc.find((e, i) => i > idx - 1 && e.level <= entry.level)
+    const endPage = nextEntry ? Math.max(nextEntry.page - 1, entry.page) : Infinity
+    for (let p = entry.page; p <= endPage; p++) selectedPages.push(p)
+
+    // Collect fragment range for EPUB sub-spine filtering
+    if (entry.fragment) {
+      fragmentRanges.push({
+        startFragment: entry.fragment,
+        endFragment: nextEntry?.fragment ?? null,
+        spinePage: entry.page,
+      })
+    }
+  }
+  if (selectedPages.length > 0) {
+    pageStart = Math.min(...selectedPages)
+    pageEnd = Math.max(...selectedPages.filter((p) => p !== Infinity))
+    if (pageEnd === -Infinity) pageEnd = Infinity
+    console.log(`Chapters resolved to pages ${pageStart}-${pageEnd === Infinity ? 'end' : pageEnd}`)
+  }
+}
+
 // ── Types ──
 
 interface DocElement {
@@ -114,6 +179,8 @@ interface DocElement {
   mime?: string
   chapter?: string
   language?: string
+  spine_index?: number
+  anchor_id?: string
 }
 
 interface TestChunk {
@@ -202,8 +269,9 @@ if (figures.length > 0) {
   elements = merged
 }
 
-// Filter by page range — track current page so images inherit context
+// Filter by page range
 if (pageStart > 0 && ext === '.pdf') {
+  // PDF: track current page from chapter field ("Page N")
   let currentPage = 1
   elements = elements.filter((el) => {
     if (el.type === 'text' || el.type === 'code') {
@@ -211,9 +279,44 @@ if (pageStart > 0 && ext === '.pdf') {
       if (m) currentPage = parseInt(m[1], 10)
       return currentPage >= pageStart && currentPage <= pageEnd
     }
-    // Images inherit the page of the preceding text element
     return currentPage >= pageStart && currentPage <= pageEnd
   })
+} else if (pageStart > 0 && (ext === '.epub' || ext === '.kepub')) {
+  if (fragmentRanges.length > 0) {
+    // EPUB with fragments: filter by anchor_id ranges within spine pages
+    // Build a set of "end" fragments so we know when to stop
+    const endFragments = new Set(fragmentRanges.map((r) => r.endFragment).filter(Boolean) as string[])
+    const startFragments = new Set(fragmentRanges.map((r) => r.startFragment))
+    const spinePages = new Set(fragmentRanges.map((r) => r.spinePage))
+
+    let inside = false
+    elements = elements.filter((el) => {
+      const si = el.spine_index ?? 0
+      const anchor = el.anchor_id
+
+      // Outside the relevant spine pages entirely — exclude
+      if (!spinePages.has(si)) return false
+
+      // Check if this element starts a selected range
+      if (anchor && startFragments.has(anchor)) {
+        inside = true
+      }
+
+      // Check if this element starts the next (unselected) section
+      if (anchor && endFragments.has(anchor) && !startFragments.has(anchor)) {
+        inside = false
+        return false
+      }
+
+      return inside
+    })
+  } else {
+    // No fragments — fall back to spine_index filtering
+    elements = elements.filter((el) => {
+      const si = el.spine_index ?? 0
+      return si >= pageStart && si <= pageEnd
+    })
+  }
 }
 
 console.log(`  After filtering: ${elements.length} elements`)
