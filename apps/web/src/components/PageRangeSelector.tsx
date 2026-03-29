@@ -1,141 +1,160 @@
-import { createSignal, createMemo, createEffect, For, Show } from 'solid-js'
-import type { DocumentType, ReadingGoal } from '@scroll-reader/shared-types'
-import { resolveCardStrategy, describeStrategy } from '@scroll-reader/shared-types'
+import { createSignal, createMemo, createEffect, For, Show } from "solid-js";
+import type { DocumentType, ReadingGoal } from "@scroll-reader/shared-types";
+import {
+  resolveCardStrategy,
+  describeStrategy,
+} from "@scroll-reader/shared-types";
 
-interface TocEntry { title: string; page: number; level: number; fragment?: string }
+interface TocEntry {
+  title: string;
+  page: number;
+  level: number;
+  fragment?: string;
+}
 
 interface Props {
-  docId: string
-  totalPages: number
-  initialStart: number
-  initialEnd: number
-  toc?: TocEntry[]
+  docId: string;
+  totalPages: number;
+  initialStart: number;
+  initialEnd: number;
+  toc?: TocEntry[];
 }
 
 const CONTENT_OPTIONS: { label: string; value: DocumentType }[] = [
-  { label: 'Fiction / novel', value: 'fiction' },
-  { label: 'Spiritual / philosophical', value: 'scripture' },
-  { label: 'Non-fiction', value: 'book' },
-  { label: 'Textbook / technical', value: 'manual' },
-]
+  { label: "Fiction / novel", value: "fiction" },
+  { label: "Spiritual / philosophical", value: "scripture" },
+  { label: "Non-fiction", value: "book" },
+  { label: "Textbook / technical", value: "manual" },
+];
 
 const GOAL_OPTIONS: { label: string; value: ReadingGoal }[] = [
-  { label: 'Just reading', value: 'casual' },
-  { label: 'Reading to reflect', value: 'reflective' },
-  { label: 'Studying to retain', value: 'study' },
-]
+  { label: "Just reading", value: "casual" },
+  { label: "Reading to reflect", value: "reflective" },
+  { label: "Studying to retain", value: "study" },
+];
 
 export default function PageRangeSelector(props: Props) {
-  const [start, setStart] = createSignal(props.initialStart)
-  const [end, setEnd] = createSignal(props.initialEnd)
-  const [documentType, setDocumentType] = createSignal<DocumentType>('book')
-  const [readingGoal, setReadingGoal] = createSignal<ReadingGoal>('reflective')
-  const [submitting, setSubmitting] = createSignal(false)
-  const [error, setError] = createSignal<string | null>(null)
+  const [start, setStart] = createSignal(props.initialStart);
+  const [end, setEnd] = createSignal(props.initialEnd);
+  const [documentType, setDocumentType] = createSignal<DocumentType>("book");
+  const [readingGoal, setReadingGoal] = createSignal<ReadingGoal>("reflective");
+  const [submitting, setSubmitting] = createSignal(false);
+  const [error, setError] = createSignal<string | null>(null);
 
-  const hasToc = () => (props.toc?.length ?? 0) > 0
-  const toc = () => props.toc ?? []
+  const hasToc = () => (props.toc?.length ?? 0) > 0;
+  const toc = () => props.toc ?? [];
 
   // Track selected chapter indices (1-based into toc array for display, 0-based internally)
   const [selectedChapters, setSelectedChapters] = createSignal<Set<number>>(
     new Set(toc().map((_, i) => i)),
-  )
+  );
 
   // When chapter selection changes, update page range
   createEffect(() => {
-    if (!hasToc()) return
-    const selected = selectedChapters()
-    if (selected.size === 0) return
+    if (!hasToc()) return;
+    const selected = selectedChapters();
+    if (selected.size === 0) return;
 
-    const tocEntries = toc()
-    let minPage = Infinity
-    let maxPage = 0
+    const tocEntries = toc();
+    let minPage = Infinity;
+    let maxPage = 0;
 
     for (const idx of selected) {
-      const entry = tocEntries[idx]
-      if (!entry) continue
-      if (entry.page < minPage) minPage = entry.page
+      const entry = tocEntries[idx];
+      if (!entry) continue;
+      if (entry.page < minPage) minPage = entry.page;
       // Find end of this chapter: next entry at same or higher level
-      const nextEntry = tocEntries.find((e, i) => i > idx && e.level <= entry.level)
-      const chapterEnd = nextEntry ? nextEntry.page - 1 : props.totalPages
-      if (chapterEnd > maxPage) maxPage = chapterEnd
+      const nextEntry = tocEntries.find(
+        (e, i) => i > idx && e.level <= entry.level,
+      );
+      const chapterEnd = nextEntry ? nextEntry.page - 1 : props.totalPages;
+      if (chapterEnd > maxPage) maxPage = chapterEnd;
     }
 
     if (minPage !== Infinity) {
-      setStart(minPage)
-      setEnd(Math.min(maxPage, props.totalPages))
+      setStart(minPage);
+      setEnd(Math.min(maxPage, props.totalPages));
     }
-  })
+  });
 
   function toggleChapter(idx: number) {
     setSelectedChapters((prev) => {
-      const next = new Set(prev)
-      if (next.has(idx)) next.delete(idx)
-      else next.add(idx)
-      return next
-    })
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx);
+      else next.add(idx);
+      return next;
+    });
   }
 
   function selectAll() {
-    setSelectedChapters(new Set(toc().map((_, i) => i)))
+    setSelectedChapters(new Set(toc().map((_, i) => i)));
   }
 
   function deselectAll() {
-    setSelectedChapters(new Set())
+    setSelectedChapters(new Set() as Set<number>);
   }
 
-  const strategy = createMemo(() => resolveCardStrategy(documentType(), readingGoal()))
-  const strategyLabel = createMemo(() => describeStrategy(strategy()))
+  const strategy = createMemo(() =>
+    resolveCardStrategy(documentType(), readingGoal()),
+  );
+  const strategyLabel = createMemo(() => describeStrategy(strategy()));
 
   const handleSubmit = async () => {
     if (start() < 1 || end() > props.totalPages || start() > end()) {
-      setError('Invalid page range.')
-      return
+      setError("Invalid page range.");
+      return;
     }
 
-    setSubmitting(true)
-    setError(null)
+    setSubmitting(true);
+    setError(null);
 
     try {
       const res = await fetch(`/api/documents/${props.docId}/configure`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           pageStart: start(),
           pageEnd: end(),
           documentType: documentType(),
           readingGoal: readingGoal(),
-          ...(hasToc() ? { selectedTocIndices: Array.from(selectedChapters()) } : {}),
+          ...(hasToc()
+            ? { selectedTocIndices: Array.from(selectedChapters()) }
+            : {}),
         }),
-      })
+      });
 
       if (!res.ok) {
-        const msg = await res.text()
-        setError(msg || 'Failed to start processing.')
-        setSubmitting(false)
-        return
+        const msg = await res.text();
+        setError(msg || "Failed to start processing.");
+        setSubmitting(false);
+        return;
       }
 
-      window.location.reload()
+      window.location.reload();
     } catch {
-      setError('Network error. Please try again.')
-      setSubmitting(false)
+      setError("Network error. Please try again.");
+      setSubmitting(false);
     }
-  }
+  };
 
   return (
     <div class="rounded-xl border border-ctp-surface1 bg-ctp-surface0 p-6 space-y-6">
       <div class="space-y-2">
-        <h2 class="text-lg font-semibold text-ctp-text">Configure processing</h2>
+        <h2 class="text-lg font-semibold text-ctp-text">
+          Configure processing
+        </h2>
         <p class="text-sm text-ctp-subtext0">
-          This document has {props.totalPages} page{props.totalPages !== 1 ? 's' : ''}.
+          This document has {props.totalPages} page
+          {props.totalPages !== 1 ? "s" : ""}.
         </p>
       </div>
 
       {/* Chapter selection (when TOC is available) */}
       <Show when={hasToc()}>
         <fieldset class="space-y-2">
-          <legend class="text-sm font-medium text-ctp-text">Select chapters to process</legend>
+          <legend class="text-sm font-medium text-ctp-text">
+            Select chapters to process
+          </legend>
           <div class="flex gap-2 mb-2">
             <button
               type="button"
@@ -157,7 +176,9 @@ export default function PageRangeSelector(props: Props) {
               {(entry, idx) => (
                 <label
                   class={`flex items-start gap-2 rounded px-2 py-1 cursor-pointer transition-colors hover:bg-ctp-surface0 ${
-                    selectedChapters().has(idx()) ? 'text-ctp-text' : 'text-ctp-subtext0'
+                    selectedChapters().has(idx())
+                      ? "text-ctp-text"
+                      : "text-ctp-subtext0"
                   }`}
                   style={{ "padding-left": `${entry.level * 16 + 8}px` }}
                 >
@@ -167,9 +188,7 @@ export default function PageRangeSelector(props: Props) {
                     onChange={() => toggleChapter(idx())}
                     class="mt-0.5 accent-ctp-mauve"
                   />
-                  <span class="text-sm leading-snug">
-                    {entry.title}
-                  </span>
+                  <span class="text-sm leading-snug">{entry.title}</span>
                 </label>
               )}
             </For>
@@ -195,7 +214,9 @@ export default function PageRangeSelector(props: Props) {
             min={1}
             max={props.totalPages}
             value={end()}
-            onInput={(e) => setEnd(parseInt(e.currentTarget.value, 10) || props.totalPages)}
+            onInput={(e) =>
+              setEnd(parseInt(e.currentTarget.value, 10) || props.totalPages)
+            }
             class="w-20 rounded-lg border border-ctp-surface2 bg-ctp-base px-3 py-2 text-sm text-ctp-text focus:border-ctp-mauve focus:outline-none"
           />
           <span class="text-sm text-ctp-subtext0">of {props.totalPages}</span>
@@ -204,14 +225,16 @@ export default function PageRangeSelector(props: Props) {
 
       {/* Content type */}
       <fieldset class="space-y-2">
-        <legend class="text-sm font-medium text-ctp-text">What kind of content is this?</legend>
+        <legend class="text-sm font-medium text-ctp-text">
+          What kind of content is this?
+        </legend>
         <div class="flex flex-wrap gap-2">
           {CONTENT_OPTIONS.map((opt) => (
             <label
               class={`cursor-pointer rounded-lg border px-3 py-1.5 text-sm transition-colors ${
                 documentType() === opt.value
-                  ? 'border-ctp-mauve bg-ctp-mauve/10 text-ctp-mauve'
-                  : 'border-ctp-surface2 text-ctp-subtext1 hover:border-ctp-surface2 hover:bg-ctp-surface1'
+                  ? "border-ctp-mauve bg-ctp-mauve/10 text-ctp-mauve"
+                  : "border-ctp-surface2 text-ctp-subtext1 hover:border-ctp-surface2 hover:bg-ctp-surface1"
               }`}
             >
               <input
@@ -230,14 +253,16 @@ export default function PageRangeSelector(props: Props) {
 
       {/* Reading goal */}
       <fieldset class="space-y-2">
-        <legend class="text-sm font-medium text-ctp-text">What's your goal?</legend>
+        <legend class="text-sm font-medium text-ctp-text">
+          What's your goal?
+        </legend>
         <div class="flex flex-wrap gap-2">
           {GOAL_OPTIONS.map((opt) => (
             <label
               class={`cursor-pointer rounded-lg border px-3 py-1.5 text-sm transition-colors ${
                 readingGoal() === opt.value
-                  ? 'border-ctp-mauve bg-ctp-mauve/10 text-ctp-mauve'
-                  : 'border-ctp-surface2 text-ctp-subtext1 hover:border-ctp-surface2 hover:bg-ctp-surface1'
+                  ? "border-ctp-mauve bg-ctp-mauve/10 text-ctp-mauve"
+                  : "border-ctp-surface2 text-ctp-subtext1 hover:border-ctp-surface2 hover:bg-ctp-surface1"
               }`}
             >
               <input
@@ -255,21 +280,17 @@ export default function PageRangeSelector(props: Props) {
       </fieldset>
 
       {/* Strategy preview */}
-      <p class="text-sm text-ctp-subtext0 italic">
-        {strategyLabel()}
-      </p>
+      <p class="text-sm text-ctp-subtext0 italic">{strategyLabel()}</p>
 
-      {error() && (
-        <p class="text-sm text-ctp-red">{error()}</p>
-      )}
+      {error() && <p class="text-sm text-ctp-red">{error()}</p>}
 
       <button
         onClick={handleSubmit}
         disabled={submitting()}
         class="rounded-lg bg-ctp-mauve px-6 py-2.5 text-sm font-medium text-ctp-base transition-colors hover:bg-ctp-mauve/90 disabled:opacity-50"
       >
-        {submitting() ? 'Starting…' : 'Start processing'}
+        {submitting() ? "Starting…" : "Start processing"}
       </button>
     </div>
-  )
+  );
 }
