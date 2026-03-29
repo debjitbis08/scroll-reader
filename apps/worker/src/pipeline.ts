@@ -1,13 +1,52 @@
 import { eq } from 'drizzle-orm'
 import { db } from './db.ts'
-import { documents, chunks, cards } from '@scroll-reader/db'
+import { documents, chunks, cards, aiUsageLogs } from '@scroll-reader/db'
 import type { Document, Chunk } from '@scroll-reader/db'
-import type { AIProvider } from './ai/index.ts'
+import type { AIProvider, AIUsage } from './ai/index.ts'
 import { extractDocument } from './extract.ts'
 import { callSegmenter, callChunker } from './chunker.ts'
 import { aiChunk } from './ai/chunk.ts'
 import { generateCardsForChunk } from './cards/generate.ts'
 import { basename } from 'node:path'
+
+const COST_PER_MILLION: Record<string, { input: number; output: number }> = {
+  'gemini-2.0-flash': { input: 0.10, output: 0.40 },
+  'gemini-2.0-flash-lite': { input: 0.02, output: 0.10 },
+  'gemini-2.5-flash': { input: 0.15, output: 0.60 },
+  'gemini-2.5-pro': { input: 1.25, output: 10.00 },
+}
+
+function estimateCost(model: string, promptTokens: number | null, completionTokens: number | null): number | null {
+  const pricing = COST_PER_MILLION[model]
+  if (!pricing || promptTokens == null || completionTokens == null) return null
+  return (promptTokens * pricing.input + completionTokens * pricing.output) / 1_000_000
+}
+
+function logUsage(
+  userId: string,
+  documentId: string,
+  operation: 'chunking' | 'card_generation',
+  providerName: 'gemini' | 'ollama',
+  model: string,
+  usage: AIUsage,
+  chunkId?: string,
+): void {
+  const cost = estimateCost(model, usage.promptTokens, usage.completionTokens)
+  db.insert(aiUsageLogs).values({
+    userId,
+    documentId,
+    chunkId: chunkId ?? null,
+    operation,
+    provider: providerName,
+    model,
+    promptTokens: usage.promptTokens,
+    completionTokens: usage.completionTokens,
+    totalTokens: usage.totalTokens,
+    durationMs: usage.durationMs,
+    estimatedCostUsd: cost,
+    metadata: usage.raw ?? null,
+  }).catch((err) => console.warn('[usage-log] failed to log AI usage:', err))
+}
 
 /**
  * Processes a single document file through the full pipeline:
@@ -86,7 +125,11 @@ export async function processDocument(filePath: string, userId: string): Promise
       let textChunks
       try {
         const segments = await callSegmenter(el.content)
-        textChunks = await aiChunk(segments, provider)
+        const chunkResult = await aiChunk(segments, provider)
+        textChunks = chunkResult.chunks
+        for (const u of chunkResult.usages) {
+          logUsage(userId, doc.id, 'chunking', provider.name, provider.model, u)
+        }
       } catch (err) {
         console.warn(`[pipeline] AI chunking failed, falling back to mechanical:`, err)
         textChunks = await callChunker(el.content)
@@ -141,7 +184,10 @@ export async function processDocument(filePath: string, userId: string): Promise
       // Fetch chunk N-1 regardless of type — image chunks provide alt text context
       const prevChunk: Chunk | null = insertedChunks[insertedChunks.indexOf(chunk) - 1] ?? null
 
-      const newCards = await generateCardsForChunk(chunk, prevChunk, doc as Document, provider)
+      const { cards: newCards, usage: cardUsage } = await generateCardsForChunk(chunk, prevChunk, doc as Document, provider)
+      if (cardUsage) {
+        logUsage(userId, doc.id, 'card_generation', provider.name, provider.model, cardUsage, chunk.id)
+      }
       await db.insert(cards).values(newCards)
       totalCards += newCards.length
     }

@@ -7,12 +7,25 @@ export interface ImagePart {
   base64: string
 }
 
+export interface AIUsage {
+  promptTokens: number | null
+  completionTokens: number | null
+  totalTokens: number | null
+  durationMs: number | null
+  raw?: Record<string, unknown>
+}
+
+export interface AIResponse {
+  text: string
+  usage: AIUsage | null
+}
+
 // Single interface for all AI providers.
 // No provider-specific logic may appear outside this module.
 export interface AIProvider {
   readonly name: 'gemini' | 'ollama'
   readonly model: string
-  generate(prompt: string, images?: ImagePart[]): Promise<string>
+  generate(prompt: string, images?: ImagePart[]): Promise<AIResponse>
 }
 
 export function createProvider(): AIProvider {

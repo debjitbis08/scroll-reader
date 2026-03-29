@@ -1,4 +1,4 @@
-import type { AIProvider } from './index.ts'
+import type { AIProvider, AIResponse } from './index.ts'
 
 interface GeminiResponse {
   candidates: Array<{
@@ -6,6 +6,11 @@ interface GeminiResponse {
       parts: Array<{ text: string }>
     }
   }>
+  usageMetadata?: {
+    promptTokenCount?: number
+    candidatesTokenCount?: number
+    totalTokenCount?: number
+  }
 }
 
 export class GeminiProvider implements AIProvider {
@@ -16,11 +21,12 @@ export class GeminiProvider implements AIProvider {
     this.model = process.env.GEMINI_MODEL ?? 'gemini-2.0-flash'
   }
 
-  async generate(prompt: string): Promise<string> {
+  async generate(prompt: string): Promise<AIResponse> {
     const apiKey = process.env.GEMINI_API_KEY
     if (!apiKey) throw new Error('GEMINI_API_KEY is not set')
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${apiKey}`
+    const start = performance.now()
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -28,12 +34,24 @@ export class GeminiProvider implements AIProvider {
         contents: [{ parts: [{ text: prompt }] }],
       }),
     })
+    const durationMs = Math.round(performance.now() - start)
 
     if (!res.ok) {
       throw new Error(`Gemini API error ${res.status}: ${await res.text()}`)
     }
 
     const data = (await res.json()) as GeminiResponse
-    return data.candidates[0].content.parts[0].text
+    const text = data.candidates[0].content.parts[0].text
+    const um = data.usageMetadata
+
+    return {
+      text,
+      usage: um ? {
+        promptTokens: um.promptTokenCount ?? null,
+        completionTokens: um.candidatesTokenCount ?? null,
+        totalTokens: um.totalTokenCount ?? null,
+        durationMs,
+      } : null,
+    }
   }
 }

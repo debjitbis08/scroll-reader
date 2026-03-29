@@ -1,8 +1,14 @@
-import type { AIProvider, ImagePart } from './index.ts'
+import type { AIProvider, AIResponse, ImagePart } from './index.ts'
 import { OLLAMA_MODEL, OLLAMA_BASE_URL } from 'astro:env/server'
 
 interface OllamaResponse {
   response: string
+  total_duration?: number
+  load_duration?: number
+  prompt_eval_count?: number
+  prompt_eval_duration?: number
+  eval_count?: number
+  eval_duration?: number
 }
 
 export class OllamaProvider implements AIProvider {
@@ -15,7 +21,7 @@ export class OllamaProvider implements AIProvider {
     this.baseUrl = OLLAMA_BASE_URL
   }
 
-  async generate(prompt: string, images?: ImagePart[]): Promise<string> {
+  async generate(prompt: string, images?: ImagePart[]): Promise<AIResponse> {
     const body: Record<string, unknown> = { model: this.model, prompt, stream: false }
     if (images && images.length > 0) {
       body.images = images.map((img) => img.base64)
@@ -31,6 +37,26 @@ export class OllamaProvider implements AIProvider {
     }
 
     const data = (await res.json()) as OllamaResponse
-    return data.response
+    const promptTokens = data.prompt_eval_count ?? null
+    const completionTokens = data.eval_count ?? null
+
+    return {
+      text: data.response,
+      usage: {
+        promptTokens,
+        completionTokens,
+        totalTokens: promptTokens != null && completionTokens != null
+          ? promptTokens + completionTokens
+          : null,
+        durationMs: data.total_duration != null
+          ? Math.round(data.total_duration / 1e6)
+          : null,
+        raw: {
+          load_duration: data.load_duration,
+          prompt_eval_duration: data.prompt_eval_duration,
+          eval_duration: data.eval_duration,
+        },
+      },
+    }
   }
 }

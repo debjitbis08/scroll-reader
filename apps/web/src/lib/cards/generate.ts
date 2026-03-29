@@ -1,4 +1,4 @@
-import type { AIProvider, ImagePart } from '../ai/index.ts'
+import type { AIProvider, AIUsage, ImagePart } from '../ai/index.ts'
 import type { Document, Chunk, InsertCard } from '@scroll-reader/db'
 import type { CardType, CardStrategy, CardContent, DocumentType, ReadingGoal } from '@scroll-reader/shared-types'
 import { resolveCardStrategy } from '@scroll-reader/shared-types'
@@ -7,6 +7,11 @@ import { buildSmartPrompt } from './prompts.ts'
 interface AICard {
   type: CardType
   content: CardContent
+}
+
+export interface CardGenResult {
+  cards: InsertCard[]
+  usage: AIUsage | null
 }
 
 /**
@@ -24,7 +29,7 @@ export async function generateCardsForChunk(
   provider: AIProvider,
   cardTypes?: CardType[],
   images?: { base64: string; mimeType: string; alt: string }[],
-): Promise<InsertCard[]> {
+): Promise<CardGenResult> {
   const strategy: CardStrategy = cardTypes
     ? { cardTypes, chunkInterval: 1 }
     : resolveCardStrategy(
@@ -40,17 +45,20 @@ export async function generateCardsForChunk(
 
   const prompt = buildSmartPrompt(chunk, prevChunk, doc, strategy, imageAlts)
   const response = await provider.generate(prompt, imageParts)
-  const aiCards = parseAIResponse(response, strategy)
+  const aiCards = parseAIResponse(response.text, strategy)
 
-  return aiCards.map((card) => ({
-    userId: chunk.userId,
-    chunkId: chunk.id,
-    cardType: card.type,
-    content: card.content,
-    encrypted: false,
-    aiProvider: provider.name,
-    aiModel: provider.model,
-  }))
+  return {
+    cards: aiCards.map((card) => ({
+      userId: chunk.userId,
+      chunkId: chunk.id,
+      cardType: card.type,
+      content: card.content,
+      encrypted: false,
+      aiProvider: provider.name,
+      aiModel: provider.model,
+    })),
+    usage: response.usage,
+  }
 }
 
 function parseAIResponse(

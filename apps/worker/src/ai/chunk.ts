@@ -1,6 +1,11 @@
-import type { AIProvider } from './index.ts'
+import type { AIProvider, AIUsage } from './index.ts'
 import type { ChunkerSegment } from '../chunker.ts'
 import type { ChunkerChunk } from '../types.ts'
+
+export interface AIChunkResult {
+  chunks: ChunkerChunk[]
+  usages: AIUsage[]
+}
 
 /** How many segments to send in one AI call. */
 const WINDOW_SIZE = 15
@@ -18,13 +23,16 @@ const OVERLAP = 3
 export async function aiChunk(
   segments: ChunkerSegment[],
   provider: AIProvider,
-): Promise<ChunkerChunk[]> {
-  if (segments.length === 0) return []
+): Promise<AIChunkResult> {
+  if (segments.length === 0) return { chunks: [], usages: [] }
+
+  const usages: AIUsage[] = []
 
   // For small documents, process in a single call
   if (segments.length <= WINDOW_SIZE) {
-    const groups = await callAIForGroups(segments, 0, provider)
-    return groupsToChunks(segments, groups)
+    const { groups, usage } = await callAIForGroups(segments, 0, provider)
+    if (usage) usages.push(usage)
+    return { chunks: groupsToChunks(segments, groups), usages }
   }
 
   // Sliding window for larger documents
@@ -34,7 +42,8 @@ export async function aiChunk(
   while (cursor < segments.length) {
     const windowEnd = Math.min(cursor + WINDOW_SIZE, segments.length)
     const window = segments.slice(cursor, windowEnd)
-    const groups = await callAIForGroups(window, cursor, provider)
+    const { groups, usage } = await callAIForGroups(window, cursor, provider)
+    if (usage) usages.push(usage)
 
     if (cursor === 0) {
       // First window: take all groups
@@ -55,22 +64,25 @@ export async function aiChunk(
     cursor += WINDOW_SIZE - OVERLAP
   }
 
-  return groupsToChunks(segments, allGroups)
+  return { chunks: groupsToChunks(segments, allGroups), usages }
 }
 
 async function callAIForGroups(
   window: ChunkerSegment[],
   offset: number,
   provider: AIProvider,
-): Promise<number[][]> {
+): Promise<{ groups: number[][]; usage: AIUsage | null }> {
   const prompt = buildChunkingPrompt(window, offset)
 
   try {
     const response = await provider.generate(prompt)
-    return parseGroupingResponse(response, offset, offset + window.length - 1)
+    return {
+      groups: parseGroupingResponse(response.text, offset, offset + window.length - 1),
+      usage: response.usage,
+    }
   } catch (err) {
     console.warn(`[ai-chunk] AI call failed, falling back to one-segment-per-chunk:`, err)
-    return window.map((_, i) => [offset + i])
+    return { groups: window.map((_, i) => [offset + i]), usage: null }
   }
 }
 

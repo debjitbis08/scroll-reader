@@ -2,12 +2,13 @@ import { eq, and, or, sql, gte, lt, isNull, inArray, asc } from 'drizzle-orm'
 import { readFile, writeFile, unlink, rm, mkdir } from 'node:fs/promises'
 import { extname, basename } from 'node:path'
 import { db } from './db.ts'
-import { documents, chunks, chunkImages, cards, jobs, profiles } from '@scroll-reader/db'
-import type { Document, Chunk } from '@scroll-reader/db'
+import { documents, chunks, chunkImages, cards, jobs, profiles, aiUsageLogs } from '@scroll-reader/db'
+import type { Document, Chunk, InsertAiUsageLog } from '@scroll-reader/db'
 import { extractDocument, filterByPageRange, filterByToc } from './extract.ts'
 import type { ImageElement, TocEntry } from './extract.ts'
 import { callSegmenter, callChunker } from './chunker.ts'
 import { createProvider } from './ai/index.ts'
+import type { AIUsage } from './ai/index.ts'
 import { aiChunk } from './ai/chunk.ts'
 import { generateCardsForChunk } from './cards/generate.ts'
 import type { CardType, DocumentType, ReadingGoal, Tier } from '@scroll-reader/shared-types'
@@ -15,6 +16,46 @@ import { TIER_LIMITS, resolveCardStrategy } from '@scroll-reader/shared-types'
 import { BATCH_SIZE } from 'astro:env/server'
 import { downloadDocument, deleteDocument, uploadImage } from './storage.ts'
 import { MACHINE_ID, addAffinity, hasAffinity, cleanAffinity } from './machine.ts'
+
+// Per-million-token pricing for cost estimation
+const COST_PER_MILLION: Record<string, { input: number; output: number }> = {
+  'gemini-2.0-flash': { input: 0.10, output: 0.40 },
+  'gemini-2.0-flash-lite': { input: 0.02, output: 0.10 },
+  'gemini-2.5-flash': { input: 0.15, output: 0.60 },
+  'gemini-2.5-pro': { input: 1.25, output: 10.00 },
+}
+
+function estimateCost(model: string, promptTokens: number | null, completionTokens: number | null): number | null {
+  const pricing = COST_PER_MILLION[model]
+  if (!pricing || promptTokens == null || completionTokens == null) return null
+  return (promptTokens * pricing.input + completionTokens * pricing.output) / 1_000_000
+}
+
+function logUsage(
+  userId: string,
+  documentId: string,
+  operation: 'chunking' | 'card_generation',
+  providerName: 'gemini' | 'ollama',
+  model: string,
+  usage: AIUsage,
+  chunkId?: string,
+): void {
+  const cost = estimateCost(model, usage.promptTokens, usage.completionTokens)
+  db.insert(aiUsageLogs).values({
+    userId,
+    documentId,
+    chunkId: chunkId ?? null,
+    operation,
+    provider: providerName,
+    model,
+    promptTokens: usage.promptTokens,
+    completionTokens: usage.completionTokens,
+    totalTokens: usage.totalTokens,
+    durationMs: usage.durationMs,
+    estimatedCostUsd: cost,
+    metadata: usage.raw ?? null,
+  }).catch((err) => console.warn('[usage-log] failed to log AI usage:', err))
+}
 
 type PendingImage = {
   file: string    // path on disk
@@ -232,7 +273,11 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
           let textChunks
           try {
             const segments = await callSegmenter(el.content)
-            textChunks = await aiChunk(segments, provider)
+            const chunkResult = await aiChunk(segments, provider)
+            textChunks = chunkResult.chunks
+            for (const u of chunkResult.usages) {
+              logUsage(doc.userId, doc.id, 'chunking', provider.name, provider.model, u)
+            }
           } catch (err) {
             console.warn(`[pipeline] AI chunking failed, falling back to mechanical:`, err)
             textChunks = await callChunker(el.content)
@@ -417,8 +462,12 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
           if (images.length === 0) images = undefined
         }
 
-        const newCards = await generateCardsForChunk(chunk, prevChunk, doc as Document, provider, cardTypes, images)
+        const { cards: newCards, usage: cardUsage } = await generateCardsForChunk(chunk, prevChunk, doc as Document, provider, cardTypes, images)
         attempted.add(chunk.id)
+
+        if (cardUsage) {
+          logUsage(doc.userId, doc.id, 'card_generation', provider.name, provider.model, cardUsage, chunk.id)
+        }
 
         if (newCards.length > 0) {
           await db.insert(cards).values(newCards)

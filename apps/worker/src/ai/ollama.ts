@@ -1,7 +1,13 @@
-import type { AIProvider } from './index.ts'
+import type { AIProvider, AIResponse } from './index.ts'
 
 interface OllamaResponse {
   response: string
+  total_duration?: number
+  load_duration?: number
+  prompt_eval_count?: number
+  prompt_eval_duration?: number
+  eval_count?: number
+  eval_duration?: number
 }
 
 export class OllamaProvider implements AIProvider {
@@ -14,7 +20,7 @@ export class OllamaProvider implements AIProvider {
     this.baseUrl = process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434'
   }
 
-  async generate(prompt: string): Promise<string> {
+  async generate(prompt: string): Promise<AIResponse> {
     const res = await fetch(`${this.baseUrl}/api/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -26,6 +32,26 @@ export class OllamaProvider implements AIProvider {
     }
 
     const data = (await res.json()) as OllamaResponse
-    return data.response
+    const promptTokens = data.prompt_eval_count ?? null
+    const completionTokens = data.eval_count ?? null
+
+    return {
+      text: data.response,
+      usage: {
+        promptTokens,
+        completionTokens,
+        totalTokens: promptTokens != null && completionTokens != null
+          ? promptTokens + completionTokens
+          : null,
+        durationMs: data.total_duration != null
+          ? Math.round(data.total_duration / 1e6)
+          : null,
+        raw: {
+          load_duration: data.load_duration,
+          prompt_eval_duration: data.prompt_eval_duration,
+          eval_duration: data.eval_duration,
+        },
+      },
+    }
   }
 }
