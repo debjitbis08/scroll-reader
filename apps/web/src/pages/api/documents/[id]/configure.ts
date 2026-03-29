@@ -27,11 +27,12 @@ export const POST: APIRoute = async ({ request, locals, params }) => {
   }
 
   const body = await request.json()
-  const { pageStart, pageEnd, documentType, readingGoal } = body as {
+  const { pageStart, pageEnd, documentType, readingGoal, selectedTocIndices } = body as {
     pageStart: number
     pageEnd: number
     documentType?: string
     readingGoal?: string
+    selectedTocIndices?: number[]
   }
 
   if (
@@ -42,6 +43,16 @@ export const POST: APIRoute = async ({ request, locals, params }) => {
     return new Response('Invalid page range', { status: 400 })
   }
 
+  // Validate selectedTocIndices if provided
+  const tocLength = Array.isArray(doc.toc) ? doc.toc.length : 0
+  if (selectedTocIndices !== undefined) {
+    if (!Array.isArray(selectedTocIndices) || selectedTocIndices.some(
+      (i) => typeof i !== 'number' || i < 0 || i >= tocLength,
+    )) {
+      return new Response('Invalid TOC indices', { status: 400 })
+    }
+  }
+
   // Validate and resolve card strategy
   const docType: DocumentType = (documentType && VALID_DOC_TYPES.includes(documentType as DocumentType))
     ? documentType as DocumentType
@@ -50,12 +61,13 @@ export const POST: APIRoute = async ({ request, locals, params }) => {
     ? readingGoal as ReadingGoal
     : 'reflective'
 
-  // Save page range, doc type, goal, and transition to chunking
+  // Save page range, TOC selection, doc type, goal, and transition to chunking
   await db
     .update(documents)
     .set({
       pageStart,
       pageEnd,
+      selectedTocIndices: selectedTocIndices ?? null,
       documentType: docType,
       readingGoal: goal,
       processingStatus: 'chunking',

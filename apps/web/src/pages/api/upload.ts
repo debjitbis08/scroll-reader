@@ -67,7 +67,7 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
 
   // Get page count and TOC before inserting — fast Rust extraction
   let totalPages = 1
-  let toc: { title: string; page: number; level: number }[] = []
+  let toc: { title: string; page: number; level: number; fragment?: string }[] = []
   try {
     const [pageCount, tocEntries] = await Promise.all([
       getPageCount(tmpPath),

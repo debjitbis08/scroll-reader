@@ -4,8 +4,8 @@ import { extname, basename } from 'node:path'
 import { db } from './db.ts'
 import { documents, chunks, chunkImages, cards, jobs, profiles } from '@scroll-reader/db'
 import type { Document, Chunk } from '@scroll-reader/db'
-import { extractDocument, filterByPageRange } from './extract.ts'
-import type { ImageElement } from './extract.ts'
+import { extractDocument, filterByPageRange, filterByToc } from './extract.ts'
+import type { ImageElement, TocEntry } from './extract.ts'
 import { callSegmenter, callChunker } from './chunker.ts'
 import { createProvider } from './ai/index.ts'
 import { aiChunk } from './ai/chunk.ts'
@@ -159,7 +159,11 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
       await writeFile(tmpPath, fileBuffer)
 
       let elements = await extractDocument(tmpPath, imageDir)
-      if (doc.pageStart && doc.pageEnd) {
+      const selectedIndices = doc.selectedTocIndices as number[] | null
+      const toc = doc.toc as TocEntry[] | null
+      if (selectedIndices && toc && toc.length > 0) {
+        elements = filterByToc(elements, ext, toc, selectedIndices, doc.totalPages ?? 1)
+      } else if (doc.pageStart && doc.pageEnd) {
         elements = filterByPageRange(elements, ext, doc.pageStart, doc.pageEnd)
       }
 

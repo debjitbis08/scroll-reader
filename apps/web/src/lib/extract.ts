@@ -4,15 +4,19 @@ import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
 import { EXTRACTOR_BIN, FIGURE_EXTRACT_BIN } from 'astro:env/server'
 
-export interface TextElement { type: 'text'; content: string; chapter?: string }
+export interface TextElement { type: 'text'; content: string; chapter?: string; spine_index?: number; anchor_id?: string }
 export interface ImageElement {
   type: 'image'
   alt: string
   file?: string  // path to extracted image on disk (temp dir)
   mime?: string  // e.g. "image/png", "image/jpeg"
+  spine_index?: number
+  anchor_id?: string
 }
-export interface CodeElement { type: 'code'; content: string; language?: string; chapter?: string }
+export interface CodeElement { type: 'code'; content: string; language?: string; chapter?: string; spine_index?: number; anchor_id?: string }
 export type DocElement = TextElement | ImageElement | CodeElement
+
+export interface TocEntry { title: string; page: number; level: number; fragment?: string }
 
 function resolveExtractorBin(): string {
   if (EXTRACTOR_BIN) return EXTRACTOR_BIN
@@ -99,6 +103,91 @@ function tagWithPages(
       lastChapter = chapter
     }
     return { element: el, page: currentPage }
+  })
+}
+
+/**
+ * Filters elements using TOC entries and selected indices.
+ * For EPUBs: uses spine_index + anchor_id for fragment-level precision.
+ * For PDFs: uses page number ranges derived from TOC entries.
+ * Supports non-contiguous chapter selections.
+ */
+export function filterByToc(
+  elements: DocElement[],
+  ext: string,
+  toc: TocEntry[],
+  selectedIndices: number[],
+  totalPages: number,
+): DocElement[] {
+  if (selectedIndices.length === 0) return []
+
+  // Resolve each selected index into a range
+  type FragmentRange = { startFragment: string; endFragment: string | null; spinePage: number }
+  const fragmentRanges: FragmentRange[] = []
+  const selectedPageSet = new Set<number>()
+
+  for (const idx of selectedIndices) {
+    const entry = toc[idx]
+    if (!entry) continue
+    const nextEntry = toc.find((e, i) => i > idx && e.level <= entry.level)
+    const endPage = nextEntry ? Math.max(nextEntry.page - 1, entry.page) : totalPages
+
+    for (let p = entry.page; p <= endPage; p++) selectedPageSet.add(p)
+
+    if (entry.fragment) {
+      fragmentRanges.push({
+        startFragment: entry.fragment,
+        endFragment: nextEntry?.fragment ?? null,
+        spinePage: entry.page,
+      })
+    }
+  }
+
+  const isEpub = ext === '.epub' || ext === '.kepub'
+
+  if (isEpub && fragmentRanges.length > 0) {
+    // Fragment-level EPUB filtering
+    const endFragments = new Set(
+      fragmentRanges.map((r) => r.endFragment).filter(Boolean) as string[],
+    )
+    const startFragments = new Set(fragmentRanges.map((r) => r.startFragment))
+    const spinePages = new Set(fragmentRanges.map((r) => r.spinePage))
+
+    let inside = false
+    return elements.filter((el) => {
+      const si = el.spine_index ?? 0
+      const anchor = el.anchor_id
+
+      if (!spinePages.has(si)) return false
+
+      if (anchor && startFragments.has(anchor)) {
+        inside = true
+      }
+      if (anchor && endFragments.has(anchor) && !startFragments.has(anchor)) {
+        inside = false
+        return false
+      }
+
+      return inside
+    })
+  }
+
+  if (isEpub) {
+    // EPUB without fragments — fall back to spine_index filtering
+    return elements.filter((el) => {
+      const si = el.spine_index ?? 0
+      return selectedPageSet.has(si)
+    })
+  }
+
+  // PDF: filter by page number from "Page N" chapter labels
+  let currentPage = 1
+  return elements.filter((el) => {
+    if (el.type === 'text' || el.type === 'code') {
+      const m = el.chapter?.match(/^Page\s+(\d+)$/i)
+      if (m) currentPage = parseInt(m[1], 10)
+    }
+    return selectedPageSet.has(currentPage)
   })
 }
 

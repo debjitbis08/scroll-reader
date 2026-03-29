@@ -2,7 +2,7 @@ import { createSignal, createMemo, createEffect, For, Show } from 'solid-js'
 import type { DocumentType, ReadingGoal } from '@scroll-reader/shared-types'
 import { resolveCardStrategy, describeStrategy } from '@scroll-reader/shared-types'
 
-interface TocEntry { title: string; page: number; level: number }
+interface TocEntry { title: string; page: number; level: number; fragment?: string }
 
 interface Props {
   docId: string
@@ -105,6 +105,7 @@ export default function PageRangeSelector(props: Props) {
           pageEnd: end(),
           documentType: documentType(),
           readingGoal: readingGoal(),
+          ...(hasToc() ? { selectedTocIndices: Array.from(selectedChapters()) } : {}),
         }),
       })
 
@@ -176,30 +177,30 @@ export default function PageRangeSelector(props: Props) {
         </fieldset>
       </Show>
 
-      {/* Page range */}
-      <div class="flex items-center gap-3">
-        <label class="text-sm text-ctp-subtext1">
-          {hasToc() ? 'Page range (from selection)' : 'Pages'}
-        </label>
-        <input
-          type="number"
-          min={1}
-          max={props.totalPages}
-          value={start()}
-          onInput={(e) => setStart(parseInt(e.currentTarget.value, 10) || 1)}
-          class="w-20 rounded-lg border border-ctp-surface2 bg-ctp-base px-3 py-2 text-sm text-ctp-text focus:border-ctp-mauve focus:outline-none"
-        />
-        <span class="text-sm text-ctp-subtext0">to</span>
-        <input
-          type="number"
-          min={1}
-          max={props.totalPages}
-          value={end()}
-          onInput={(e) => setEnd(parseInt(e.currentTarget.value, 10) || props.totalPages)}
-          class="w-20 rounded-lg border border-ctp-surface2 bg-ctp-base px-3 py-2 text-sm text-ctp-text focus:border-ctp-mauve focus:outline-none"
-        />
-        <span class="text-sm text-ctp-subtext0">of {props.totalPages}</span>
-      </div>
+      {/* Page range — fallback when no TOC */}
+      <Show when={!hasToc()}>
+        <div class="flex items-center gap-3">
+          <label class="text-sm text-ctp-subtext1">Pages</label>
+          <input
+            type="number"
+            min={1}
+            max={props.totalPages}
+            value={start()}
+            onInput={(e) => setStart(parseInt(e.currentTarget.value, 10) || 1)}
+            class="w-20 rounded-lg border border-ctp-surface2 bg-ctp-base px-3 py-2 text-sm text-ctp-text focus:border-ctp-mauve focus:outline-none"
+          />
+          <span class="text-sm text-ctp-subtext0">to</span>
+          <input
+            type="number"
+            min={1}
+            max={props.totalPages}
+            value={end()}
+            onInput={(e) => setEnd(parseInt(e.currentTarget.value, 10) || props.totalPages)}
+            class="w-20 rounded-lg border border-ctp-surface2 bg-ctp-base px-3 py-2 text-sm text-ctp-text focus:border-ctp-mauve focus:outline-none"
+          />
+          <span class="text-sm text-ctp-subtext0">of {props.totalPages}</span>
+        </div>
+      </Show>
 
       {/* Content type */}
       <fieldset class="space-y-2">

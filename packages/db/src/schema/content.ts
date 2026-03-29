@@ -67,7 +67,8 @@ export const documents = pgTable('documents', {
   totalPages: integer('total_pages'),
   pageStart: integer('page_start'),
   pageEnd: integer('page_end'),
-  toc: jsonb('toc').$type<{ title: string; page: number; level: number }[] | null>(),
+  toc: jsonb('toc').$type<{ title: string; page: number; level: number; fragment?: string }[] | null>(),
+  selectedTocIndices: jsonb('selected_toc_indices').$type<number[] | null>(),
   totalElements: integer('total_elements'), // total extracted elements (set after first extraction)
   elementsProcessed: integer('elements_processed').default(0), // how many elements have been chunked so far
   chunkCount: integer('chunk_count').default(0),
