@@ -1,4 +1,6 @@
-import { pgTable, pgEnum, text, integer, real, timestamp, uuid, jsonb, index } from 'drizzle-orm/pg-core'
+import { pgTable, pgEnum, pgPolicy, text, integer, real, timestamp, uuid, jsonb, index } from 'drizzle-orm/pg-core'
+import { sql } from 'drizzle-orm'
+import { authUid, authenticatedRole } from 'drizzle-orm/supabase'
 import { profiles } from './content.ts'
 import { documents } from './content.ts'
 import { chunks } from './content.ts'
@@ -28,4 +30,19 @@ export const aiUsageLogs = pgTable('ai_usage_logs', {
 }, (t) => [
   index('idx_ai_usage_user_created').on(t.userId, t.createdAt),
   index('idx_ai_usage_document').on(t.documentId),
-])
+  pgPolicy('ai_usage_logs_select_own', {
+    for: 'select',
+    to: authenticatedRole,
+    using: sql`${t.userId} = ${authUid}`,
+  }),
+  pgPolicy('ai_usage_logs_insert_own', {
+    for: 'insert',
+    to: authenticatedRole,
+    withCheck: sql`${t.userId} = ${authUid}`,
+  }),
+  pgPolicy('ai_usage_logs_delete_own', {
+    for: 'delete',
+    to: authenticatedRole,
+    using: sql`${t.userId} = ${authUid}`,
+  }),
+]).enableRLS()

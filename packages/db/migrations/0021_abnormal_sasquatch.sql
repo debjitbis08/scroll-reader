@@ -1,0 +1,4 @@
+ALTER TABLE "ai_usage_logs" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+CREATE POLICY "ai_usage_logs_select_own" ON "ai_usage_logs" AS PERMISSIVE FOR SELECT TO "authenticated" USING ("ai_usage_logs"."user_id" = (select auth.uid()));--> statement-breakpoint
+CREATE POLICY "ai_usage_logs_insert_own" ON "ai_usage_logs" AS PERMISSIVE FOR INSERT TO "authenticated" WITH CHECK ("ai_usage_logs"."user_id" = (select auth.uid()));--> statement-breakpoint
+CREATE POLICY "ai_usage_logs_delete_own" ON "ai_usage_logs" AS PERMISSIVE FOR DELETE TO "authenticated" USING ("ai_usage_logs"."user_id" = (select auth.uid()));
