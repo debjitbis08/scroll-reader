@@ -2,7 +2,6 @@ import { pgTable, pgEnum, pgPolicy, text, integer, real, timestamp, uuid, jsonb,
 import { sql } from 'drizzle-orm'
 import { authUid, authenticatedRole } from 'drizzle-orm/supabase'
 import { profiles } from './content.ts'
-import { documents } from './content.ts'
 import { chunks } from './content.ts'
 import { aiProviderEnum } from './content.ts'
 
@@ -13,8 +12,7 @@ export const aiUsageLogs = pgTable('ai_usage_logs', {
   userId: uuid('user_id')
     .references(() => profiles.id, { onDelete: 'cascade' })
     .notNull(),
-  documentId: uuid('document_id')
-    .references(() => documents.id, { onDelete: 'set null' }),
+  documentId: uuid('document_id'), // intentionally no FK — cost history survives doc deletion
   chunkId: uuid('chunk_id')
     .references(() => chunks.id, { onDelete: 'set null' }),
   operation: aiOperationEnum('operation').notNull(),

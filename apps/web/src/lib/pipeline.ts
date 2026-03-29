@@ -2,7 +2,7 @@ import { eq, and, or, sql, gte, lt, isNull, inArray, asc } from 'drizzle-orm'
 import { readFile, writeFile, unlink, rm, mkdir } from 'node:fs/promises'
 import { extname, basename } from 'node:path'
 import { db } from './db.ts'
-import { documents, chunks, chunkImages, cards, jobs, profiles, aiUsageLogs } from '@scroll-reader/db'
+import { documents, chunks, chunkImages, cards, jobs, profiles, aiUsageLogs, usageEvents } from '@scroll-reader/db'
 import type { Document, Chunk, InsertAiUsageLog } from '@scroll-reader/db'
 import { extractDocument, filterByPageRange, filterByToc } from './extract.ts'
 import type { ImageElement, TocEntry } from './extract.ts'
@@ -84,17 +84,22 @@ const TIER_WEIGHTS: Record<string, number> = { plus: 2, free: 1 }
 
 /**
  * Count how many cards a user has generated today (UTC).
+ * Uses usage_events instead of cards table so the count survives document deletion.
  */
 async function cardsGeneratedToday(userId: string): Promise<number> {
   const todayStart = new Date()
   todayStart.setUTCHours(0, 0, 0, 0)
 
   const [row] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(cards)
-    .where(and(eq(cards.userId, userId), gte(cards.createdAt, todayStart)))
+    .select({ total: sql<number>`coalesce(sum(${usageEvents.quantity}), 0)::int` })
+    .from(usageEvents)
+    .where(and(
+      eq(usageEvents.userId, userId),
+      eq(usageEvents.eventType, 'cards_generated'),
+      gte(usageEvents.occurredAt, todayStart),
+    ))
 
-  return row?.count ?? 0
+  return row?.total ?? 0
 }
 
 // ── Document Locking ────────────────────────────────────────
@@ -618,6 +623,14 @@ export async function processUser(userId: string, tier: Tier): Promise<number> {
       if (generated === 0) {
         exhausted.add(doc.id)
       } else {
+        // Log usage event — survives document deletion, used for daily limit enforcement
+        db.insert(usageEvents).values({
+          userId,
+          eventType: 'cards_generated',
+          quantity: generated,
+          documentId: doc.id,
+        }).catch((err) => console.warn('[usage-event] failed to log cards_generated:', err))
+
         const weight = getDocWeight(doc.id, priorityDocId)
         const newVt = (doc.docVirtualTime ?? 0) + generated / weight
         doc.docVirtualTime = newVt
