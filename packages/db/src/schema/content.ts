@@ -93,7 +93,27 @@ export const collections = pgTable('collections', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 }, (t) => [
   unique().on(t.userId, t.name),
-])
+  pgPolicy('collections_select_own', {
+    for: 'select',
+    to: authenticatedRole,
+    using: sql`${t.userId} = ${authUid}`,
+  }),
+  pgPolicy('collections_insert_own', {
+    for: 'insert',
+    to: authenticatedRole,
+    withCheck: sql`${t.userId} = ${authUid}`,
+  }),
+  pgPolicy('collections_update_own', {
+    for: 'update',
+    to: authenticatedRole,
+    using: sql`${t.userId} = ${authUid}`,
+  }),
+  pgPolicy('collections_delete_own', {
+    for: 'delete',
+    to: authenticatedRole,
+    using: sql`${t.userId} = ${authUid}`,
+  }),
+]).enableRLS()
 
 export const collectionDocuments = pgTable('collection_documents', {
   collectionId: uuid('collection_id')
@@ -105,7 +125,27 @@ export const collectionDocuments = pgTable('collection_documents', {
   addedAt: timestamp('added_at', { withTimezone: true }).defaultNow(),
 }, (t) => [
   primaryKey({ columns: [t.collectionId, t.documentId] }),
-])
+  pgPolicy('collection_documents_select_own', {
+    for: 'select',
+    to: authenticatedRole,
+    using: sql`EXISTS (SELECT 1 FROM ${collections} WHERE ${collections.id} = ${t.collectionId} AND ${collections.userId} = ${authUid})`,
+  }),
+  pgPolicy('collection_documents_insert_own', {
+    for: 'insert',
+    to: authenticatedRole,
+    withCheck: sql`EXISTS (SELECT 1 FROM ${collections} WHERE ${collections.id} = ${t.collectionId} AND ${collections.userId} = ${authUid})`,
+  }),
+  pgPolicy('collection_documents_update_own', {
+    for: 'update',
+    to: authenticatedRole,
+    using: sql`EXISTS (SELECT 1 FROM ${collections} WHERE ${collections.id} = ${t.collectionId} AND ${collections.userId} = ${authUid})`,
+  }),
+  pgPolicy('collection_documents_delete_own', {
+    for: 'delete',
+    to: authenticatedRole,
+    using: sql`EXISTS (SELECT 1 FROM ${collections} WHERE ${collections.id} = ${t.collectionId} AND ${collections.userId} = ${authUid})`,
+  }),
+]).enableRLS()
 
 export const chunks = pgTable('chunks', {
   id: uuid('id').primaryKey().defaultRandom(),

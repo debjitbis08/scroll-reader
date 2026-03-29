@@ -1,0 +1,10 @@
+ALTER TABLE "collection_documents" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "collections" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+CREATE POLICY "collection_documents_select_own" ON "collection_documents" AS PERMISSIVE FOR SELECT TO "authenticated" USING (EXISTS (SELECT 1 FROM "collections" WHERE "collections"."id" = "collection_documents"."collection_id" AND "collections"."user_id" = (select auth.uid())));--> statement-breakpoint
+CREATE POLICY "collection_documents_insert_own" ON "collection_documents" AS PERMISSIVE FOR INSERT TO "authenticated" WITH CHECK (EXISTS (SELECT 1 FROM "collections" WHERE "collections"."id" = "collection_documents"."collection_id" AND "collections"."user_id" = (select auth.uid())));--> statement-breakpoint
+CREATE POLICY "collection_documents_update_own" ON "collection_documents" AS PERMISSIVE FOR UPDATE TO "authenticated" USING (EXISTS (SELECT 1 FROM "collections" WHERE "collections"."id" = "collection_documents"."collection_id" AND "collections"."user_id" = (select auth.uid())));--> statement-breakpoint
+CREATE POLICY "collection_documents_delete_own" ON "collection_documents" AS PERMISSIVE FOR DELETE TO "authenticated" USING (EXISTS (SELECT 1 FROM "collections" WHERE "collections"."id" = "collection_documents"."collection_id" AND "collections"."user_id" = (select auth.uid())));--> statement-breakpoint
+CREATE POLICY "collections_select_own" ON "collections" AS PERMISSIVE FOR SELECT TO "authenticated" USING ("collections"."user_id" = (select auth.uid()));--> statement-breakpoint
+CREATE POLICY "collections_insert_own" ON "collections" AS PERMISSIVE FOR INSERT TO "authenticated" WITH CHECK ("collections"."user_id" = (select auth.uid()));--> statement-breakpoint
+CREATE POLICY "collections_update_own" ON "collections" AS PERMISSIVE FOR UPDATE TO "authenticated" USING ("collections"."user_id" = (select auth.uid()));--> statement-breakpoint
+CREATE POLICY "collections_delete_own" ON "collections" AS PERMISSIVE FOR DELETE TO "authenticated" USING ("collections"."user_id" = (select auth.uid()));
