@@ -62,23 +62,31 @@ export function filterByToc(
     const startFragments = new Set(fragmentRanges.map((r) => r.startFragment))
     const spinePages = new Set(fragmentRanges.map((r) => r.spinePage))
 
-    let inside = false
-    return elements.filter((el) => {
-      const si = el.spine_index ?? 0
-      const anchor = el.anchor_id
+    // If no elements on target spine pages have anchor_ids, the extractor
+    // doesn't support fragments for this EPUB — fall through to spine_index filtering.
+    const hasAnchors = elements.some(
+      (el) => spinePages.has(el.spine_index ?? 0) && el.anchor_id,
+    )
 
-      if (!spinePages.has(si)) return false
+    if (hasAnchors) {
+      let inside = false
+      return elements.filter((el) => {
+        const si = el.spine_index ?? 0
+        const anchor = el.anchor_id
 
-      if (anchor && startFragments.has(anchor)) {
-        inside = true
-      }
-      if (anchor && endFragments.has(anchor) && !startFragments.has(anchor)) {
-        inside = false
-        return false
-      }
+        if (!spinePages.has(si)) return false
 
-      return inside
-    })
+        if (anchor && startFragments.has(anchor)) {
+          inside = true
+        }
+        if (anchor && endFragments.has(anchor) && !startFragments.has(anchor)) {
+          inside = false
+          return false
+        }
+
+        return inside
+      })
+    }
   }
 
   if (isEpub) {
@@ -114,14 +122,9 @@ function tagWithPages(
     })
   }
 
-  let currentPage = 1
-  let lastChapter: string | undefined
-  return elements.map((el) => {
-    const chapter = el.type === 'text' || el.type === 'code' ? el.chapter : undefined
-    if (chapter && chapter !== lastChapter) {
-      if (lastChapter !== undefined) currentPage++
-      lastChapter = chapter
-    }
-    return { element: el, page: currentPage }
-  })
+  // EPUB: use spine_index directly (consistent with TOC page references)
+  return elements.map((el) => ({
+    element: el,
+    page: el.spine_index ?? 1,
+  }))
 }

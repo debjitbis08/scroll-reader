@@ -582,15 +582,17 @@ const CARD_TYPE_HUE: Record<string, string> = {
           Each cell is one section of the book. Your cards are drawn only from the highlighted sections. Each may generate multiple cards.
         </p>
 
-        {(isChunking || isGenerating || chunksWithCards === 0) && !doc.paused && (
+        {totalCards === 0 && (
           <div class="flex items-center justify-between gap-2 rounded bg-ed-surface-container px-3 py-2">
             <div class="space-y-0.5">
               <p class="font-body text-[0.7rem] text-ed-on-surface">
                 {quotaExhausted
-                  ? <>Daily card limit reached — new cards eligible <time id="doc-quota-reset" datetime={resetAt.toISOString()} class="font-medium">{resetAt.toUTCString()}</time>.</>
-                  : <>{cardsToday} of {dailyLimit} cards generated today across all your documents.</>}
+                  ? <>Daily card limit reached — no cards have been generated for this book yet. Next generation eligible <time id="doc-quota-reset" datetime={resetAt.toISOString()} class="font-medium">{resetAt.toUTCString()}</time>.</>
+                  : doc.paused
+                  ? 'This document is paused — unpause it to start generating cards.'
+                  : <>{cardsToday} of {dailyLimit} cards generated today across all your documents. Cards for this book are queued.</>}
               </p>
-              {!quotaExhausted && (
+              {!quotaExhausted && !doc.paused && (
                 <p class="font-body text-[0.65rem] text-ed-on-surface-muted">Quota resets <time id="doc-quota-reset" datetime={resetAt.toISOString()}>{resetAt.toUTCString()}</time>.</p>
               )}
             </div>

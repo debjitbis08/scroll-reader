@@ -165,6 +165,12 @@ function mergeFigures(rustElements: DocElement[], figures: FigureElement[]): Doc
 // ── Page counting (for getPageCount) ──
 
 function countPages(elements: DocElement[], ext: string): number {
+  // EPUB: use max spine_index (consistent with TOC page references)
+  if (ext === '.epub' || ext === '.kepub') {
+    const maxSpine = Math.max(...elements.map((el) => el.spine_index ?? 0), 0)
+    return maxSpine || 1
+  }
+
   const tagged = tagWithPages(elements, ext)
   const pages = new Set(tagged.map(({ page }) => page))
   return pages.size || 1
@@ -183,15 +189,9 @@ function tagWithPages(
     })
   }
 
-  // EPUB: sequential section numbers based on chapter changes
-  let currentPage = 1
-  let lastChapter: string | undefined
-  return elements.map((el) => {
-    const chapter = el.type === 'text' || el.type === 'code' ? el.chapter : undefined
-    if (chapter && chapter !== lastChapter) {
-      if (lastChapter !== undefined) currentPage++
-      lastChapter = chapter
-    }
-    return { element: el, page: currentPage }
-  })
+  // EPUB: use spine_index directly (consistent with TOC page references)
+  return elements.map((el) => ({
+    element: el,
+    page: el.spine_index ?? 1,
+  }))
 }
