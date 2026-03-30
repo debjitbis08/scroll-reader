@@ -1,16 +1,23 @@
-import type { Document, Chunk } from '@scroll-reader/db'
-import type { CardType, CardStrategy } from '@scroll-reader/shared-types'
+import type { Document, Chunk } from "@scroll-reader/db";
+import type { CardType, CardStrategy } from "@scroll-reader/shared-types";
 
 const CARD_TYPE_DESCRIPTIONS: Record<CardType, string> = {
-  discover: 'Discover — distill the core idea or argument of the passage into a vivid, self-contained summary. The reader should come away understanding what the passage says and why it matters. Use multiple paragraphs separated by \\n\\n when the idea has distinct parts. Optionally include a short, evocative title (3-6 words).',
-  raw_commentary: 'Notes — a sharp marginal note: question an assumption, surface a tension, connect to a broader idea, or reframe what the passage takes for granted. Opinionated and specific, not a summary. Use multiple paragraphs if needed.',
-  connect: 'Connect — links this passage to ideas from elsewhere in the book or other works.',
-  flashcard: 'Flashcard — a question about the transferable concept or principle illustrated in the passage, NOT about specific datasets, examples, or named entities used to explain it. Ask about the underlying idea ("What is the purpose of principal components?") not the example ("What did they do with the NCI60 dataset?"). Answer should be 1-3 sentences.',
-  quiz: 'Quiz — a multiple choice question about a transferable concept or principle, with exactly 4 options (A-D), one correct answer (0-indexed), and a brief explanation for each option. Frame questions around the general idea, not specific examples or datasets from the text.',
-  glossary: 'Glossary — a key term from the passage with its definition as used in this text, optional etymology or origin, and optionally related terms. If the term appears in a non-Latin script (e.g. Devanagari, Greek, Arabic) in the source, the term field MUST include the original script followed by the transliteration, e.g. "राजा (rājā)".',
-  contrast: 'Contrast — an "X vs Y" comparison of two concepts, methods, or ideas mentioned or implied in the passage. Present 2-4 key dimensions of difference.',
-  passage: 'Passage — select the most beautiful, significant, or thought-provoking excerpt from the passage. Reproduce it verbatim. Add only a brief (1 sentence) note on why it matters.',
-}
+  discover:
+    "Discover — distill the core idea or argument of the passage into a vivid, self-contained summary. The reader should come away understanding what the passage says and why it matters. Use multiple paragraphs separated by \\n\\n when the idea has distinct parts. Optionally include a short, evocative title (3-6 words).",
+  raw_commentary:
+    "Notes — a sharp marginal note: question an assumption, surface a tension, connect to a broader idea, or reframe what the passage takes for granted. Opinionated and specific, not a summary. Use multiple paragraphs if needed.",
+  connect:
+    "Connect — links this passage to ideas from elsewhere in the book or other works.",
+  flashcard:
+    'Flashcard — a question about the transferable concept or principle illustrated in the passage, NOT about specific datasets, examples, or named entities used to explain it. Ask about the underlying idea ("What is the purpose of principal components?") not the example ("What did they do with the NCI60 dataset?"). Answer should be 1-3 sentences.',
+  quiz: "Quiz — a multiple choice question about a transferable concept or principle, with exactly 4 options (A-D), one correct answer (0-indexed), and a brief explanation for each option. Frame questions around the general idea, not specific examples or datasets from the text.",
+  glossary:
+    'Glossary — a key term from the passage with its definition as used in this text, optional etymology or origin, and optionally related terms. If the term appears in a non-Latin script (e.g. Devanagari, Greek, Arabic) in the source, the term field MUST include the original script followed by the transliteration, e.g. "राजा (rājā)".',
+  contrast:
+    'Contrast — an "X vs Y" comparison of two concepts, methods, or ideas mentioned or implied in the passage. Present 2-4 key dimensions of difference.',
+  passage:
+    "Passage — select the most beautiful, significant, or thought-provoking excerpt from the passage. Reproduce it verbatim. Add only a brief (1 sentence) note on why it matters.",
+};
 
 /**
  * Builds a single intelligent prompt that asks the AI to analyze the passage
@@ -24,26 +31,26 @@ export function buildSmartPrompt(
   strategy?: CardStrategy | null,
   imageAlts?: string[],
 ): string {
-  const docLabel = doc.title ?? 'Untitled'
+  const docLabel = doc.title ?? "Untitled";
 
   const contextBlock = prevChunk
-    ? prevChunk.chunkType === 'image'
-      ? `[Prior content was an image: ${prevChunk.content || 'no alt text'}]\n\n`
-      : prevChunk.chunkType === 'code'
+    ? prevChunk.chunkType === "image"
+      ? `[Prior content was an image: ${prevChunk.content || "no alt text"}]\n\n`
+      : prevChunk.chunkType === "code"
         ? `[Prior content was a code block]\n\`\`\`\n${prevChunk.content}\n\`\`\`\n\n`
         : `[Prior passage — for context only]\n${prevChunk.content}\n\n`
-    : ''
+    : "";
 
-  const isCodeChunk = chunk.chunkType === 'code'
+  const isCodeChunk = chunk.chunkType === "code";
   const passageBlock = isCodeChunk
-    ? `[Code sample from "${docLabel}"]\n\`\`\`${chunk.language !== 'en' ? chunk.language : ''}\n${chunk.content}\n\`\`\``
-    : `[Passage from "${docLabel}"]\n${chunk.content}`
+    ? `[Code sample from "${docLabel}"]\n\`\`\`${chunk.language !== "en" ? chunk.language : ""}\n${chunk.content}\n\`\`\``
+    : `[Passage from "${docLabel}"]\n${chunk.content}`;
 
   // Build suggested card types description
-  const suggestedTypes = strategy?.cardTypes ?? ['discover', 'raw_commentary']
+  const suggestedTypes = strategy?.cardTypes ?? ["discover", "raw_commentary"];
   const typeDescriptions = suggestedTypes
     .map((t) => `  - ${CARD_TYPE_DESCRIPTIONS[t] ?? t}`)
-    .join('\n')
+    .join("\n");
 
   const codeInstructions = isCodeChunk
     ? `
@@ -54,18 +61,18 @@ CODE-SPECIFIC INSTRUCTIONS:
 - Include a SHORT, simplified code example (a few lines) using fenced code blocks (\`\`\`lang) that demonstrates the core idea — do not reproduce the original verbatim, create a minimal example inspired by it.
 - Use backtick code spans for inline references to functions, variables, or keywords.
 `
-    : ''
+    : "";
 
-  const hasImages = imageAlts && imageAlts.length > 0
+  const hasImages = imageAlts && imageAlts.length > 0;
   const imageBlock = hasImages
     ? `\nThis passage has ${imageAlts.length} associated figure(s) attached as images below. You can see them. The figures are indexed as:
-${imageAlts.map((alt, i) => `  [${i}] ${alt}`).join('\n')}
+${imageAlts.map((alt, i) => `  [${i}] ${alt}`).join("\n")}
 `
-    : ''
+    : "";
 
   return `${contextBlock}${passageBlock}
 
-You are a reading companion AI. Analyze the ${isCodeChunk ? 'code sample' : 'passage'} above and generate reading cards.
+You are a reading companion AI. Analyze the ${isCodeChunk ? "code sample" : "passage"} above and generate reading cards.
 
 SUGGESTED CARD TYPES (you may adjust based on the content):
 ${typeDescriptions}
@@ -109,5 +116,5 @@ The "images" array is OPTIONAL on all types — only include it when figures are
 Allowed types: ${JSON.stringify(suggestedTypes)}
 If no cards are appropriate, return: []
 
-JSON:`
+JSON:`;
 }

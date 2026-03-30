@@ -175,7 +175,7 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
           LIMIT 1
         )`,
         // Study/reflective only — never serve SR cards for casual docs
-        sql`${documents.readingGoal} IS NULL OR ${documents.readingGoal} != 'casual'`,
+        sql`(${documents.readingGoal} IS NULL OR ${documents.readingGoal} != 'casual')`,
         // Exclude dismissed
         excludeIds.length > 0
           ? notInArray(cards.id, excludeIds)
@@ -312,7 +312,7 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
           inArray(cards.cardType, [...eligibleTypes]),
           allExcludeIds.length > 0 ? notInArray(cards.id, allExcludeIds) : undefined,
           // Casual docs: exclude study-only types (flashcard/quiz); all other docs: allow all
-          sql`${documents.readingGoal} IS DISTINCT FROM 'casual' OR ${cards.cardType} NOT IN ('flashcard', 'quiz')`,
+          sql`(${documents.readingGoal} IS DISTINCT FROM 'casual' OR ${cards.cardType} NOT IN ('flashcard', 'quiz'))`,
           cooldownSubquery,
           prerequisiteGate,
           collectionFilter,

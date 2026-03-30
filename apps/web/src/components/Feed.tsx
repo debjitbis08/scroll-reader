@@ -221,6 +221,8 @@ export default function Feed(props: { initialCollection?: string }) {
   const [collections, setCollections] = createSignal<CollectionOption[]>([])
   const [selectedCollection, setSelectedCollection] = createSignal<string | null>(props.initialCollection ?? null)
   let sentinelRef: HTMLDivElement | undefined
+  let abortController: AbortController | null = null
+  let loadGeneration = 0
 
   function selectCollection(id: string | null) {
     setSelectedCollection(id)
@@ -229,8 +231,10 @@ export default function Feed(props: { initialCollection?: string }) {
     if (id) url.searchParams.set('collection', id)
     else url.searchParams.delete('collection')
     window.history.replaceState({}, '', url.toString())
-    // Reset feed and reload
+    // Abort any in-flight request and reset feed
+    if (abortController) abortController.abort()
     setCards([])
+    setLoading(false)
     setHasMore(true)
     setInitialLoaded(false)
     loadMore()
@@ -239,13 +243,20 @@ export default function Feed(props: { initialCollection?: string }) {
   async function loadMore() {
     if (loading() || !hasMore()) return
     setLoading(true)
+    // Track generation so stale responses are discarded
+    const gen = ++loadGeneration
+    abortController = new AbortController()
     try {
       const existingIds = cards().map((c) => c.card.id)
       const excludeParam = existingIds.length > 0 ? `&exclude=${existingIds.join(',')}` : ''
       const collParam = selectedCollection() ? `&collections=${selectedCollection()}` : ''
-      const res = await fetch(`/api/feed?limit=${BATCH_SIZE}${excludeParam}${collParam}`)
+      const res = await fetch(`/api/feed?limit=${BATCH_SIZE}${excludeParam}${collParam}`, {
+        signal: abortController.signal,
+      })
+      if (gen !== loadGeneration) return // stale response
       if (!res.ok) throw new Error(`Failed to load feed: ${res.status}`)
       const batch: FeedCard[] = await res.json()
+      if (gen !== loadGeneration) return // stale response
       if (batch.length === 0) setHasMore(false)
       // Deduplicate in case of any overlap
       const existingSet = new Set(existingIds)
@@ -253,13 +264,17 @@ export default function Feed(props: { initialCollection?: string }) {
       setCards((prev) => [...prev, ...newCards])
       setError(null)
     } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') return
+      if (gen !== loadGeneration) return
       setError(e instanceof Error ? e.message : 'Failed to load feed')
     } finally {
-      setLoading(false)
-      setInitialLoaded(true)
-      // If sentinel is still visible after loading (content didn't fill viewport),
-      // schedule another check since no scroll event will fire.
-      requestAnimationFrame(checkSentinel)
+      if (gen === loadGeneration) {
+        setLoading(false)
+        setInitialLoaded(true)
+        // If sentinel is still visible after loading (content didn't fill viewport),
+        // schedule another check since no scroll event will fire.
+        requestAnimationFrame(checkSentinel)
+      }
     }
   }
 
@@ -629,15 +644,32 @@ export default function Feed(props: { initialCollection?: string }) {
       </For>
 
       <Show when={cards().length === 0 && initialLoaded() && !error()}>
-        <div class="flex flex-col items-center gap-4 py-20 text-center">
-          <p class="font-display text-lg text-ed-on-surface-dim">No cards in your feed yet.</p>
-          <a
-            href="/upload"
-            class="rounded bg-ed-primary px-5 py-2.5 font-body text-sm font-medium text-ed-on-primary transition-colors hover:bg-ed-primary/80"
-          >
-            Upload a document
-          </a>
-        </div>
+        {(() => {
+          const selCol = selectedCollection()
+          const col = selCol ? collections().find((c) => c.id === selCol) : undefined
+          const hasDocsButNoCards = col && col.documentCount > 0
+
+          return (
+            <div class="flex flex-col items-center gap-4 py-20 text-center">
+              <Show when={hasDocsButNoCards} fallback={
+                <>
+                  <p class="font-display text-lg text-ed-on-surface-dim">
+                    {selCol ? 'No documents in this collection.' : 'No cards in your feed yet.'}
+                  </p>
+                  <a
+                    href={selCol ? '/library' : '/upload'}
+                    class="rounded bg-ed-primary px-5 py-2.5 font-body text-sm font-medium text-ed-on-primary transition-colors hover:bg-ed-primary/80"
+                  >
+                    {selCol ? 'Go to library' : 'Upload a document'}
+                  </a>
+                </>
+              }>
+                <p class="font-display text-lg text-ed-on-surface-dim">Cards are still being generated for this collection.</p>
+                <p class="font-body text-sm text-ed-on-surface-muted">Check back shortly — processing may take a few minutes.</p>
+              </Show>
+            </div>
+          )
+        })()}
       </Show>
 
       <div ref={sentinelRef} class="h-1" />
