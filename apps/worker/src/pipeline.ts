@@ -1,13 +1,24 @@
 import { eq } from 'drizzle-orm'
+import { dirname, join, basename } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { db } from './db.ts'
 import { documents, chunks, cards, aiUsageLogs } from '@scroll-reader/db'
 import type { Document, Chunk } from '@scroll-reader/db'
 import type { AIProvider, AIUsage } from './ai/index.ts'
-import { extractDocument } from './extract.ts'
-import { callSegmenter, callChunker } from './chunker.ts'
-import { aiChunk } from './ai/chunk.ts'
+import {
+  extractDocument, callSegmenter, callChunker, aiChunk,
+  mergeConsecutiveCode, foldSmallCodeIntoText,
+} from '@scroll-reader/pipeline'
+import type { ExtractConfig, ChunkerConfig, PipelineChunk } from '@scroll-reader/pipeline'
 import { generateCardsForChunk } from './cards/generate.ts'
-import { basename } from 'node:path'
+
+const HERE = dirname(fileURLToPath(import.meta.url))
+const extractConfig: ExtractConfig = {
+  extractorBin: process.env.EXTRACTOR_BIN || join(HERE, '../../../packages/extractor/target/debug/extractor'),
+}
+const chunkerConfig: ChunkerConfig = {
+  chunkerBin: process.env.CHUNKER_BIN || join(HERE, '../../../packages/chunker/target/debug/chunker'),
+}
 
 const COST_PER_MILLION: Record<string, { input: number; output: number }> = {
   'gemini-2.0-flash': { input: 0.10, output: 0.40 },
@@ -75,7 +86,10 @@ export async function processDocument(filePath: string, userId: string): Promise
     // --- Stage 1: Extract ---
     await setStatus(doc.id, 'chunking')
     console.log(`[pipeline] Extracting: ${fileName}`)
-    const elements = await extractDocument(filePath)
+    let elements = await extractDocument(filePath, extractConfig)
+
+    // Merge consecutive code elements (PDF extractor fragmentation fix)
+    elements = mergeConsecutiveCode(elements)
 
     // --- Stage 2: Chunk text elements and build the merged chunk list ---
     // Text elements → chunker binary → ChunkerChunks
@@ -124,7 +138,7 @@ export async function processDocument(filePath: string, userId: string): Promise
       // Pass 1 (Rust segments) → Pass 2 (AI boundary refinement)
       let textChunks
       try {
-        const segments = await callSegmenter(el.content)
+        const segments = await callSegmenter(el.content, chunkerConfig)
         const chunkResult = await aiChunk(segments, provider)
         textChunks = chunkResult.chunks
         for (const u of chunkResult.usages) {
@@ -132,7 +146,7 @@ export async function processDocument(filePath: string, userId: string): Promise
         }
       } catch (err) {
         console.warn(`[pipeline] AI chunking failed, falling back to mechanical:`, err)
-        textChunks = await callChunker(el.content)
+        textChunks = await callChunker(el.content, chunkerConfig)
       }
 
       for (const c of textChunks) {
@@ -143,6 +157,32 @@ export async function processDocument(filePath: string, userId: string): Promise
           wordCount: c.word_count,
           language: c.language,
           chunkIndex: pendingChunks.length,
+        })
+      }
+    }
+
+    // Fold small code chunks into adjacent text
+    {
+      const asPipeline: PipelineChunk[] = pendingChunks
+        .filter((c) => c.chunkType === 'text' || c.chunkType === 'code')
+        .map((c) => ({
+          content: c.content,
+          chapter: c.chapter,
+          chunkType: c.chunkType as 'text' | 'code',
+          wordCount: c.wordCount,
+          language: c.language,
+          images: [],
+        }))
+      const folded = foldSmallCodeIntoText(asPipeline)
+      pendingChunks.length = 0
+      for (let i = 0; i < folded.length; i++) {
+        pendingChunks.push({
+          chunkType: folded[i].chunkType,
+          content: folded[i].content,
+          chapter: folded[i].chapter,
+          wordCount: folded[i].wordCount,
+          language: folded[i].language,
+          chunkIndex: i,
         })
       }
     }

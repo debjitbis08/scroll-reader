@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@scroll-reader/db": "workspace:*",
+    "@scroll-reader/pipeline": "workspace:*",
     "@scroll-reader/shared-types": "workspace:*",
     "chokidar": "^3.6.0",
     "drizzle-orm": "^0.40.0",

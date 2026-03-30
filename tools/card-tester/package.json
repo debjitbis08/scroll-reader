@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@iconify-icon/solid": "^3.0.3",
+    "@scroll-reader/pipeline": "workspace:*",
     "@scroll-reader/shared-types": "workspace:*",
     "dotenv": "^17.3.1",
     "katex": "^0.16.38",

@@ -1,26 +1,9 @@
 import { GeminiProvider } from './gemini.ts'
 import { OllamaProvider } from './ollama.ts'
 
-export interface AIUsage {
-  promptTokens: number | null
-  completionTokens: number | null
-  totalTokens: number | null
-  durationMs: number | null
-  raw?: Record<string, unknown>
-}
-
-export interface AIResponse {
-  text: string
-  usage: AIUsage | null
-}
-
-// Single interface for all AI providers.
-// No provider-specific logic may appear outside this module.
-export interface AIProvider {
-  readonly name: 'gemini' | 'ollama'
-  readonly model: string
-  generate(prompt: string): Promise<AIResponse>
-}
+// Re-export AI types from the shared pipeline package
+export type { AIUsage, AIResponse, AIProvider } from '@scroll-reader/pipeline'
+import type { AIProvider } from '@scroll-reader/pipeline'
 
 export function createProvider(): AIProvider {
   const name = process.env.AI_PROVIDER ?? 'gemini'

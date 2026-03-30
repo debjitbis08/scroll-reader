@@ -4,7 +4,15 @@ import { extname } from 'node:path'
 import { eq, sql } from 'drizzle-orm'
 import { db } from '../../lib/db.ts'
 import { documents, profiles, jobs } from '@scroll-reader/db'
-import { getPageCount, extractToc } from '../../lib/extract.ts'
+import { getPageCount, extractToc } from '@scroll-reader/pipeline'
+import { EXTRACTOR_BIN } from 'astro:env/server'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const HERE = dirname(fileURLToPath(import.meta.url))
+const extractConfig = {
+  extractorBin: EXTRACTOR_BIN || join(HERE, '../../../../../packages/extractor/target/debug/extractor'),
+}
 import { uploadDocument } from '../../lib/storage.ts'
 import { TIER_LIMITS } from '@scroll-reader/shared-types'
 import type { Tier } from '@scroll-reader/shared-types'
@@ -70,8 +78,8 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
   let toc: { title: string; page: number; level: number; fragment?: string }[] = []
   try {
     const [pageCount, tocEntries] = await Promise.all([
-      getPageCount(tmpPath),
-      extractToc(tmpPath),
+      getPageCount(tmpPath, extractConfig),
+      extractToc(tmpPath, extractConfig),
     ])
     totalPages = pageCount
     toc = tocEntries

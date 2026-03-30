@@ -35,6 +35,9 @@ importers:
       '@scroll-reader/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@scroll-reader/pipeline':
+        specifier: workspace:*
+        version: link:../../packages/pipeline
       '@scroll-reader/shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types
@@ -93,6 +96,9 @@ importers:
       '@scroll-reader/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@scroll-reader/pipeline':
+        specifier: workspace:*
+        version: link:../../packages/pipeline
       '@scroll-reader/shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types
@@ -138,6 +144,12 @@ importers:
         specifier: ^2.84.0
         version: 2.84.0
 
+  packages/pipeline:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.11
+
   packages/shared-types: {}
 
   tools/card-tester:
@@ -145,6 +157,9 @@ importers:
       '@iconify-icon/solid':
         specifier: ^3.0.3
         version: 3.0.3(solid-js@1.9.11)
+      '@scroll-reader/pipeline':
+        specifier: workspace:*
+        version: link:../../packages/pipeline
       '@scroll-reader/shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types

@@ -16,6 +16,7 @@
     "@iconify-json/fa6-solid": "^1.2.4",
     "@iconify-json/mdi": "^1.2.0",
     "@scroll-reader/db": "workspace:*",
+    "@scroll-reader/pipeline": "workspace:*",
     "@scroll-reader/shared-types": "workspace:*",
     "@supabase/ssr": "^0.6.0",
     "@supabase/supabase-js": "^2.47.0",

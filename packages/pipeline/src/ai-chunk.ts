@@ -1,5 +1,4 @@
-import type { AIProvider, AIUsage } from './index.ts'
-import type { ChunkerSegment, ChunkerChunk } from '../chunker.ts'
+import type { AIProvider, AIUsage, ChunkerChunk, ChunkerSegment } from './types.ts'
 
 export interface AIChunkResult {
   chunks: ChunkerChunk[]
@@ -27,7 +26,6 @@ export async function aiChunk(
 
   const usages: AIUsage[] = []
 
-  // For small documents, process in a single call
   if (segments.length <= WINDOW_SIZE) {
     const { groups, usage } = await callAIForGroups(segments, 0, provider)
     if (usage) usages.push(usage)
@@ -45,15 +43,11 @@ export async function aiChunk(
     if (usage) usages.push(usage)
 
     if (cursor === 0) {
-      // First window: take all groups
       allGroups.push(...groups)
     } else {
-      // Subsequent windows: skip groups that overlap with previous window
-      // (they were already decided by the prior call)
       const firstNewIndex = cursor + OVERLAP
       for (const group of groups) {
         if (group[group.length - 1] >= firstNewIndex) {
-          // Filter out any indices that belong to the overlap zone
           const filtered = group.filter((i) => i >= firstNewIndex)
           if (filtered.length > 0) allGroups.push(filtered)
         }
@@ -123,7 +117,6 @@ function parseGroupingResponse(
   minIndex: number,
   maxIndex: number,
 ): number[][] {
-  // Extract JSON array from the response — handle markdown code fences
   const cleaned = response
     .replace(/```json\s*/g, '')
     .replace(/```\s*/g, '')
@@ -135,7 +128,6 @@ function parseGroupingResponse(
     groups = JSON.parse(cleaned)
   } catch {
     console.warn(`[ai-chunk] Could not parse AI response as JSON, falling back`)
-    // Fallback: each segment is its own chunk
     const fallback: number[][] = []
     for (let i = minIndex; i <= maxIndex; i++) {
       fallback.push([i])
@@ -143,7 +135,6 @@ function parseGroupingResponse(
     return fallback
   }
 
-  // Validate: must be array of arrays of numbers
   if (!Array.isArray(groups) || !groups.every((g) => Array.isArray(g) && g.every((n) => typeof n === 'number'))) {
     console.warn(`[ai-chunk] AI response is not array of arrays, falling back`)
     const fallback: number[][] = []
@@ -153,7 +144,6 @@ function parseGroupingResponse(
     return fallback
   }
 
-  // Validate: all indices in range and each appears exactly once
   const seen = new Set<number>()
   for (const group of groups) {
     for (const idx of group) {
@@ -169,16 +159,13 @@ function parseGroupingResponse(
     }
   }
 
-  // Fill in any missing indices as solo chunks
   for (let i = minIndex; i <= maxIndex; i++) {
     if (!seen.has(i)) {
       groups.push([i])
     }
   }
 
-  // Sort groups by their first index
   groups.sort((a, b) => a[0] - b[0])
-
   return groups
 }
 
@@ -191,7 +178,6 @@ function groupsToChunks(
     const content = segs.map((s) => s.content).join('\n\n')
     const wordCount = segs.reduce((sum, s) => sum + s.word_count, 0)
     const chapter = segs[0].chapter
-    // Use the most common language in the group
     const lang = segs[0].language
 
     return {

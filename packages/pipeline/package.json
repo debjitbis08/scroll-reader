@@ -1,0 +1,12 @@
+{
+  "name": "@scroll-reader/pipeline",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0"
+  }
+}

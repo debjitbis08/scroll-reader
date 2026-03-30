@@ -1,21 +1,34 @@
 import { eq, and, or, sql, gte, lt, isNull, inArray, asc } from 'drizzle-orm'
-import { readFile, writeFile, unlink, rm, mkdir } from 'node:fs/promises'
-import { extname, basename } from 'node:path'
+import { readFile, writeFile, unlink, rm } from 'node:fs/promises'
+import { extname, basename, dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { db } from './db.ts'
 import { documents, chunks, chunkImages, cards, jobs, profiles, aiUsageLogs, usageEvents } from '@scroll-reader/db'
-import type { Document, Chunk, InsertAiUsageLog } from '@scroll-reader/db'
-import { extractDocument, filterByPageRange, filterByToc } from './extract.ts'
-import type { ImageElement, TocEntry } from './extract.ts'
-import { callSegmenter, callChunker } from './chunker.ts'
+import type { Document, Chunk } from '@scroll-reader/db'
+import {
+  extractDocument, filterByPageRange, filterByToc,
+  callSegmenter, callChunker, aiChunk,
+  mergeConsecutiveCode, foldSmallCodeIntoText,
+} from '@scroll-reader/pipeline'
+import type { ImageElement, TocEntry, ExtractConfig, ChunkerConfig, AIUsage, PipelineChunk } from '@scroll-reader/pipeline'
 import { createProvider } from './ai/index.ts'
-import type { AIUsage } from './ai/index.ts'
-import { aiChunk } from './ai/chunk.ts'
 import { generateCardsForChunk } from './cards/generate.ts'
 import type { CardType, DocumentType, ReadingGoal, Tier } from '@scroll-reader/shared-types'
 import { TIER_LIMITS, resolveCardStrategy } from '@scroll-reader/shared-types'
-import { BATCH_SIZE } from 'astro:env/server'
+import { BATCH_SIZE, EXTRACTOR_BIN, CHUNKER_BIN, FIGURE_EXTRACT_BIN } from 'astro:env/server'
 import { downloadDocument, deleteDocument, uploadImage } from './storage.ts'
 import { MACHINE_ID, addAffinity, hasAffinity, cleanAffinity } from './machine.ts'
+
+// ── Resolve binary paths ──
+
+const HERE = dirname(fileURLToPath(import.meta.url))
+const extractConfig: ExtractConfig = {
+  extractorBin: EXTRACTOR_BIN || join(HERE, '../../../../packages/extractor/target/debug/extractor'),
+  figureExtractBin: FIGURE_EXTRACT_BIN || join(HERE, '../../../../packages/extractor/figure_extract.py'),
+}
+const chunkerConfig: ChunkerConfig = {
+  chunkerBin: CHUNKER_BIN || join(HERE, '../../../../packages/chunker/target/debug/chunker'),
+}
 
 // Per-million-token pricing for cost estimation
 const COST_PER_MILLION: Record<string, { input: number; output: number }> = {
@@ -204,7 +217,7 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
       const fileBuffer = await downloadDocument(filePath)
       await writeFile(tmpPath, fileBuffer)
 
-      let elements = await extractDocument(tmpPath, imageDir)
+      let elements = await extractDocument(tmpPath, extractConfig, imageDir)
       const selectedIndices = doc.selectedTocIndices as number[] | null
       const toc = doc.toc as TocEntry[] | null
       if (selectedIndices && toc && toc.length > 0) {
@@ -214,6 +227,9 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
       }
 
       await unlink(tmpPath).catch(() => {})
+
+      // Merge consecutive code elements (PDF extractor fragmentation fix)
+      elements = mergeConsecutiveCode(elements)
 
       const totalElements = elements.length
 
@@ -277,7 +293,7 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
 
           let textChunks
           try {
-            const segments = await callSegmenter(el.content)
+            const segments = await callSegmenter(el.content, chunkerConfig)
             const chunkResult = await aiChunk(segments, provider)
             textChunks = chunkResult.chunks
             for (const u of chunkResult.usages) {
@@ -285,7 +301,7 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
             }
           } catch (err) {
             console.warn(`[pipeline] AI chunking failed, falling back to mechanical:`, err)
-            textChunks = await callChunker(el.content)
+            textChunks = await callChunker(el.content, chunkerConfig)
           }
 
           // Attach buffered images to the first text chunk from this element
@@ -313,6 +329,34 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
           const last = pendingChunks[pendingChunks.length - 1]
           last.images = [...(last.images ?? []), ...pendingImages]
           pendingImages = []
+        }
+
+        // Fold small code chunks into adjacent text (same transform as card-tester)
+        {
+          const asPipeline: PipelineChunk[] = pendingChunks
+            .filter((c): c is PendingChunk & { chunkType: 'text' | 'code' } =>
+              c.chunkType === 'text' || c.chunkType === 'code')
+            .map((c) => ({
+              content: c.content,
+              chapter: c.chapter,
+              chunkType: c.chunkType,
+              wordCount: c.wordCount,
+              language: c.language,
+              images: c.images ?? [],
+            }))
+          const folded = foldSmallCodeIntoText(asPipeline)
+          // Replace pendingChunks with folded result
+          pendingChunks.length = 0
+          for (const f of folded) {
+            pendingChunks.push({
+              chunkType: f.chunkType,
+              content: f.content,
+              chapter: f.chapter,
+              wordCount: f.wordCount,
+              language: f.language,
+              images: f.images.length > 0 ? f.images : undefined,
+            })
+          }
         }
 
         if (pendingChunks.length > 0) {
