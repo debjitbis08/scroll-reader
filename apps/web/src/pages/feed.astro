@@ -2,9 +2,39 @@
 import Layout from '../layouts/Layout.astro'
 import AppNav from '../components/AppNav.astro'
 import FeedComp from '../components/Feed.tsx'
+import { eq, and, sql, gte } from 'drizzle-orm'
+import { db } from '../lib/db.ts'
+import { profiles, usageEvents } from '@scroll-reader/db'
+import type { Tier } from '@scroll-reader/shared-types'
+import { TIER_LIMITS } from '@scroll-reader/shared-types'
 
 const user = Astro.locals.user
 if (!user) return Astro.redirect('/login')
+
+const [profileRow] = await db
+  .select({ tier: profiles.tier })
+  .from(profiles)
+  .where(eq(profiles.id, user.id))
+  .limit(1)
+
+const userTier = (profileRow?.tier ?? 'free') as Tier
+const dailyLimit = TIER_LIMITS[userTier].cardsPerDay
+
+const todayStart = new Date()
+todayStart.setUTCHours(0, 0, 0, 0)
+const [quotaRow] = await db
+  .select({ total: sql<number>`coalesce(sum(${usageEvents.quantity}), 0)::int` })
+  .from(usageEvents)
+  .where(and(
+    eq(usageEvents.userId, user.id),
+    eq(usageEvents.eventType, 'cards_generated'),
+    gte(usageEvents.occurredAt, todayStart),
+  ))
+const cardsToday = quotaRow?.total ?? 0
+const quotaExhausted = cardsToday >= dailyLimit
+
+const resetAt = new Date()
+resetAt.setUTCHours(24, 0, 0, 0)
 
 const initialCollection = Astro.url.searchParams.get('collection') || undefined
 ---
@@ -13,9 +43,36 @@ const initialCollection = Astro.url.searchParams.get('collection') || undefined
   <main class="min-h-screen bg-ed-surface">
     <div class="flex">
       <AppNav active="feed" />
-      <section class="mx-auto w-full max-w-2xl px-4 py-8">
+      <section class="mx-auto w-full max-w-2xl px-4 py-8 space-y-4">
+        <div class="flex items-center justify-between gap-3 rounded bg-ed-surface-high px-4 py-2.5">
+          <p class="font-body text-[0.7rem] text-ed-on-surface-muted">
+            {quotaExhausted
+              ? <>Daily card limit reached. New cards eligible <time id="feed-quota-reset" datetime={resetAt.toISOString()} class="text-ed-on-surface">{resetAt.toUTCString()}</time>.</>
+              : <>{cardsToday} of {dailyLimit} cards generated today · resets <time id="feed-quota-reset" datetime={resetAt.toISOString()} class="text-ed-on-surface">{resetAt.toUTCString()}</time></>}
+          </p>
+          <div class="flex items-center gap-2 shrink-0">
+            <span class="font-display text-xs tabular-nums text-ed-on-surface">{cardsToday}<span class="text-ed-on-surface-muted">/{dailyLimit}</span></span>
+            <div class="w-16 h-1 rounded-full bg-ed-outline-dim overflow-hidden">
+              <div
+                class:list={['h-full rounded-full', quotaExhausted ? 'bg-ed-error' : 'bg-ed-primary']}
+                style={`width: ${Math.min(100, Math.round((cardsToday / dailyLimit) * 100))}%`}
+              />
+            </div>
+          </div>
+        </div>
         <FeedComp initialCollection={initialCollection} client:load />
       </section>
     </div>
   </main>
 </Layout>
+
+<script>
+  const el = document.getElementById('feed-quota-reset')
+  if (el) {
+    const dt = new Date(el.getAttribute('datetime')!)
+    const now = new Date()
+    const isToday = dt.toDateString() === now.toDateString()
+    const time = dt.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+    el.textContent = isToday ? `today at ${time}` : `tomorrow at ${time}`
+  }
+</script>

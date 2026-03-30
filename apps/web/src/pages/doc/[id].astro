@@ -1,12 +1,12 @@
 ---
 import Layout from '../../layouts/Layout.astro'
 import { Icon } from 'astro-icon/components'
-import { eq, and, sql, count, inArray } from 'drizzle-orm'
+import { eq, and, sql, count, inArray, gte } from 'drizzle-orm'
 import { db } from '../../lib/db.ts'
-import { documents, chunks, cards, jobs, cardScores, feedEvents, collectionDocuments } from '@scroll-reader/db'
+import { documents, chunks, cards, jobs, cardScores, feedEvents, collectionDocuments, usageEvents, profiles } from '@scroll-reader/db'
 import CollectionManager from '../../components/CollectionManager.tsx'
-import type { DocumentType, ReadingGoal } from '@scroll-reader/shared-types'
-import { resolveCardStrategy, describeStrategy } from '@scroll-reader/shared-types'
+import type { DocumentType, ReadingGoal, Tier } from '@scroll-reader/shared-types'
+import { resolveCardStrategy, describeStrategy, TIER_LIMITS } from '@scroll-reader/shared-types'
 import JobPoller from '../../components/JobPoller.tsx'
 import PageRangeSelector from '../../components/PageRangeSelector.tsx'
 import LatexText from '../../components/LatexText.tsx'
@@ -59,6 +59,32 @@ const strategy = resolveCardStrategy(
   (doc.readingGoal ?? 'reflective') as ReadingGoal,
 )
 
+// --- Daily quota ---
+const [profileRow] = await db
+  .select({ tier: profiles.tier })
+  .from(profiles)
+  .where(eq(profiles.id, userId))
+  .limit(1)
+
+const userTier = (profileRow?.tier ?? 'free') as Tier
+const dailyLimit = TIER_LIMITS[userTier].cardsPerDay
+
+const todayStart = new Date()
+todayStart.setUTCHours(0, 0, 0, 0)
+const [quotaRow] = await db
+  .select({ total: sql<number>`coalesce(sum(${usageEvents.quantity}), 0)::int` })
+  .from(usageEvents)
+  .where(and(
+    eq(usageEvents.userId, userId),
+    eq(usageEvents.eventType, 'cards_generated'),
+    gte(usageEvents.occurredAt, todayStart),
+  ))
+const cardsToday = quotaRow?.total ?? 0
+const quotaExhausted = cardsToday >= dailyLimit
+
+const resetAt = new Date()
+resetAt.setUTCHours(24, 0, 0, 0)
+
 // --- Data queries (only when we have chunks/cards) ---
 
 type CardRow = typeof cards.$inferSelect
@@ -74,6 +100,11 @@ let estimatedTotalChunks: number | null = null
 type SampleCard = { card: CardRow; chunk: ChunkRow }
 let sampleCards: SampleCard[] = []
 let chunkIndicesWithCards = new Set<number>()
+// Processing map: cap real dots at 500 to avoid perf issues on huge books
+const MAP_MAX_DOTS = 500
+let mapTextChunks: ChunkRow[] = []
+let mapSampledChunks: ChunkRow[] = []
+let mapEstimatedRemaining = 0
 
 if (hasChunks) {
   // Load all chunks (needed for processing map + chunk estimation)
@@ -200,6 +231,18 @@ if (hasChunks) {
     if (processedPages > 0) {
       estimatedTotalChunks = Math.round(totalTextChunks * (selectedPages / processedPages))
     }
+  }
+
+  // Processing map computation (kept in frontmatter to avoid JSX parser issues with < operator)
+  mapTextChunks = allChunks.filter((c) => c.chunkType === 'text' || c.chunkType === 'code')
+  const mapTotal = estimatedTotalChunks ?? mapTextChunks.length
+  mapEstimatedRemaining = Math.max(0, mapTotal - mapTextChunks.length)
+  if (mapTextChunks.length <= MAP_MAX_DOTS) {
+    mapSampledChunks = mapTextChunks
+  } else {
+    mapSampledChunks = mapTextChunks.filter((_, i) =>
+      Math.floor((i * MAP_MAX_DOTS) / mapTextChunks.length) !== Math.floor(((i - 1) * MAP_MAX_DOTS) / mapTextChunks.length)
+    )
   }
 }
 
@@ -425,124 +468,145 @@ const CARD_TYPE_HUE: Record<string, string> = {
     )}
 
     <!-- Hero: Processing map with funnel -->
-    {hasChunks && (estimatedTotalChunks ?? totalTextChunks) > 0 && (() => {
-      const mapTotal = estimatedTotalChunks ?? totalTextChunks
-      const textChunks = allChunks.filter((c) => c.chunkType === 'text' || c.chunkType === 'code')
-      const estimatedRemaining = Math.max(0, mapTotal - textChunks.length)
-      return (
-        <div class="rounded bg-ed-surface-high p-6 space-y-6">
+    {hasChunks && (estimatedTotalChunks ?? totalTextChunks) > 0 && (
+      <div class="rounded bg-ed-surface-high p-6 space-y-6">
 
-          <!-- Funnel numbers -->
-          <div class="flex items-end justify-between gap-2">
-            <div class="flex items-baseline gap-1">
-              {(isChunking || isGenerating) && (
-                <span class="flex items-center gap-1.5 font-body text-[0.7rem] text-ed-on-surface-muted">
-                  <span class="size-1.5 rounded-full bg-ed-primary animate-pulse" />
-                  {doc.paused ? 'Paused' : 'Processing'}
-                </span>
-              )}
-            </div>
-            {totalCards > 0 && (
-              <span class="font-body text-[0.75rem] text-ed-on-surface-muted">
-                {totalCards} card{totalCards !== 1 ? 's' : ''} generated
+        <!-- Funnel numbers -->
+        <div class="flex items-end justify-between gap-2">
+          <div class="flex items-baseline gap-1">
+            {(isChunking || isGenerating) && (
+              <span class="flex items-center gap-1.5 font-body text-[0.7rem] text-ed-on-surface-muted">
+                <span class="size-1.5 rounded-full bg-ed-primary animate-pulse" />
+                {doc.paused ? 'Paused' : 'Processing'}
               </span>
             )}
           </div>
-
-          <div class="grid grid-cols-4 gap-px text-center">
-            <div class="space-y-1">
-              <p class="font-display text-2xl text-ed-on-surface tabular-nums">{masteredChunkIndices.size}</p>
-              <p class="font-body text-[0.65rem] uppercase tracking-[0.15em] text-ed-on-surface-muted">Sections mastered</p>
-            </div>
-            <div class="space-y-1">
-              <p class="font-display text-2xl text-ed-on-surface tabular-nums">{seenChunkIndices.size}</p>
-              <p class="font-body text-[0.65rem] uppercase tracking-[0.15em] text-ed-on-surface-muted">Seen in your feed</p>
-            </div>
-            <div class="space-y-1">
-              <p class="font-display text-2xl text-ed-on-surface tabular-nums">{chunksWithCards}</p>
-              <p class="font-body text-[0.65rem] uppercase tracking-[0.15em] text-ed-on-surface-muted">Sections processed</p>
-            </div>
-            <div class="space-y-1">
-              <div class="flex items-center justify-center gap-1">
-                <p class="font-display text-2xl text-ed-on-surface-dim tabular-nums">
-                  {isReady ? mapTotal : `~${mapTotal}`}
-                </p>
-                {!isReady && (
-                  <span
-                    class="text-ed-on-surface-muted cursor-help"
-                    title="Estimated based on sections extracted so far and total page count"
-                  >
-                    <Icon name="mdi:information-outline" class="size-3.5" />
-                  </span>
-                )}
-              </div>
-              <p class="font-body text-[0.65rem] uppercase tracking-[0.15em] text-ed-on-surface-muted">
-                Sections in book
-              </p>
-            </div>
-          </div>
-
-          <!-- The map -->
-          <div class="flex flex-wrap gap-px">
-            {/* Real chunks — colored by state */}
-            {textChunks.map((chunk) => {
-              const isMastered = masteredChunkIndices.has(chunk.chunkIndex)
-              const isSeen = seenChunkIndices.has(chunk.chunkIndex)
-              const hasCards = chunkIndicesWithCards.has(chunk.chunkIndex)
-              return (
-                <div
-                  class:list={[
-                    'size-2 rounded-sm',
-                    isMastered ? 'bg-ed-primary' :
-                    isSeen ? 'bg-ed-primary/60' :
-                    hasCards ? 'bg-ed-primary-container' :
-                    'bg-ed-outline-dim',
-                  ]}
-                  title={`Section ${chunk.chunkIndex + 1}${chunk.chapter ? ` · ${chunk.chapter}` : ''}${isMastered ? ' · mastered' : isSeen ? ' · seen' : hasCards ? ' · processed' : ' · not processed'}`}
-                />
-              )
-            })}
-            {/* Estimated remaining — placeholder dots */}
-            {Array.from({ length: estimatedRemaining }).map((_, i) => (
-              <div
-                class="size-2 rounded-sm bg-ed-surface-container"
-                title={`Section ~${textChunks.length + i + 1} · not yet extracted`}
-              />
-            ))}
-          </div>
-
-          <!-- Legend -->
-          <div class="flex flex-wrap gap-x-4 gap-y-1 font-body text-[0.65rem] text-ed-on-surface-muted">
-            <span class="flex items-center gap-1.5">
-              <span class="size-2 rounded-sm bg-ed-primary" />
-              Mastered
+          {totalCards > 0 && (
+            <span class="font-body text-[0.75rem] text-ed-on-surface-muted">
+              {totalCards} card{totalCards !== 1 ? 's' : ''} generated
             </span>
-            <span class="flex items-center gap-1.5">
-              <span class="size-2 rounded-sm bg-ed-primary/60" />
-              Seen in feed
-            </span>
-            <span class="flex items-center gap-1.5">
-              <span class="size-2 rounded-sm bg-ed-primary-container" />
-              Processed
-            </span>
-            <span class="flex items-center gap-1.5">
-              <span class="size-2 rounded-sm bg-ed-surface-container" />
-              Not yet processed
-            </span>
-          </div>
-
-          <p class="font-body text-[0.7rem] text-ed-on-surface-muted italic">
-            Each cell is one section of the book. Your cards are drawn only from the highlighted sections. Each may generate multiple cards.
-          </p>
-
-          {(isChunking || isGenerating) && !doc.paused && (
-            <p class="font-body text-[0.7rem] text-ed-on-surface-muted">
-              New cards are generated daily. Check back for more.
-            </p>
           )}
         </div>
-      )
-    })()}
+
+        <div class="grid grid-cols-4 gap-px text-center">
+          <div class="space-y-1">
+            <p class="font-display text-2xl text-ed-on-surface tabular-nums">{masteredChunkIndices.size}</p>
+            <p class="font-body text-[0.65rem] uppercase tracking-[0.15em] text-ed-on-surface-muted">Sections mastered</p>
+          </div>
+          <div class="space-y-1">
+            <p class="font-display text-2xl text-ed-on-surface tabular-nums">{seenChunkIndices.size}</p>
+            <p class="font-body text-[0.65rem] uppercase tracking-[0.15em] text-ed-on-surface-muted">Seen in your feed</p>
+          </div>
+          <div class="space-y-1">
+            <p class="font-display text-2xl text-ed-on-surface tabular-nums">{chunksWithCards}</p>
+            <p class="font-body text-[0.65rem] uppercase tracking-[0.15em] text-ed-on-surface-muted">Sections processed</p>
+          </div>
+          <div class="space-y-1">
+            <div class="flex items-center justify-center gap-1">
+              <p class="font-display text-2xl text-ed-on-surface-dim tabular-nums">
+                {isReady ? (estimatedTotalChunks ?? totalTextChunks) : `~${estimatedTotalChunks ?? totalTextChunks}`}
+              </p>
+              {!isReady && (
+                <span
+                  class="text-ed-on-surface-muted cursor-help"
+                  title="Estimated based on sections extracted so far and total page count"
+                >
+                  <Icon name="mdi:information-outline" class="size-3.5" />
+                </span>
+              )}
+            </div>
+            <p class="font-body text-[0.65rem] uppercase tracking-[0.15em] text-ed-on-surface-muted">
+              Sections in book
+            </p>
+          </div>
+        </div>
+
+        <!-- The map -->
+        <div class="space-y-1">
+          {/* Real chunks as dots — sampled to max 500 */}
+          {mapSampledChunks.length > 0 && (
+            <div class="flex flex-wrap gap-px">
+              {mapSampledChunks.map((chunk) => {
+                const isMastered = masteredChunkIndices.has(chunk.chunkIndex)
+                const isSeen = seenChunkIndices.has(chunk.chunkIndex)
+                const hasCards = chunkIndicesWithCards.has(chunk.chunkIndex)
+                return (
+                  <div
+                    class:list={[
+                      'size-2 rounded-sm',
+                      isMastered ? 'bg-ed-primary' :
+                      isSeen ? 'bg-ed-primary/60' :
+                      hasCards ? 'bg-ed-primary-container' :
+                      'bg-ed-outline-dim',
+                    ]}
+                    title={`§${chunk.chunkIndex + 1}${chunk.chapter ? ` — ${chunk.chapter}` : ''}`}
+                  />
+                )
+              })}
+            </div>
+          )}
+          {/* Estimated remaining — single bar with inline label */}
+          {mapEstimatedRemaining > 0 && (
+            <div
+              class="flex items-center px-2 h-4 rounded-sm bg-ed-surface-container"
+              style={`width: ${Math.max(8, Math.round((mapEstimatedRemaining / (estimatedTotalChunks ?? totalTextChunks)) * 100))}%`}
+            >
+              <span class="font-body text-[0.6rem] text-ed-on-surface-muted truncate">
+                ~{mapEstimatedRemaining} estimated remaining
+              </span>
+            </div>
+          )}
+        </div>
+
+        <!-- Legend -->
+        <div class="flex flex-wrap gap-x-4 gap-y-1 font-body text-[0.65rem] text-ed-on-surface-muted">
+          <span class="flex items-center gap-1.5">
+            <span class="size-2 rounded-sm bg-ed-primary" />
+            Mastered
+          </span>
+          <span class="flex items-center gap-1.5">
+            <span class="size-2 rounded-sm bg-ed-primary/60" />
+            Seen in feed
+          </span>
+          <span class="flex items-center gap-1.5">
+            <span class="size-2 rounded-sm bg-ed-primary-container" />
+            Processed
+          </span>
+          <span class="flex items-center gap-1.5">
+            <span class="size-2 rounded-sm bg-ed-surface-container" />
+            Not yet processed
+          </span>
+        </div>
+
+        <p class="font-body text-[0.7rem] text-ed-on-surface-muted italic">
+          Each cell is one section of the book. Your cards are drawn only from the highlighted sections. Each may generate multiple cards.
+        </p>
+
+        {(isChunking || isGenerating || chunksWithCards === 0) && !doc.paused && (
+          <div class="flex items-center justify-between gap-2 rounded bg-ed-surface-container px-3 py-2">
+            <div class="space-y-0.5">
+              <p class="font-body text-[0.7rem] text-ed-on-surface">
+                {quotaExhausted
+                  ? <>Daily card limit reached — new cards eligible <time id="doc-quota-reset" datetime={resetAt.toISOString()} class="font-medium">{resetAt.toUTCString()}</time>.</>
+                  : <>{cardsToday} of {dailyLimit} cards generated today across all your documents.</>}
+              </p>
+              {!quotaExhausted && (
+                <p class="font-body text-[0.65rem] text-ed-on-surface-muted">Quota resets <time id="doc-quota-reset" datetime={resetAt.toISOString()}>{resetAt.toUTCString()}</time>.</p>
+              )}
+            </div>
+            <div class="flex flex-col items-end gap-0.5 shrink-0">
+              <span class="font-display text-sm tabular-nums text-ed-on-surface">{cardsToday}<span class="text-ed-on-surface-muted">/{dailyLimit}</span></span>
+              <div class="w-16 h-1 rounded-full bg-ed-outline-dim overflow-hidden">
+                <div
+                  class:list={['h-full rounded-full', quotaExhausted ? 'bg-ed-error' : 'bg-ed-primary']}
+                  style={`width: ${Math.min(100, Math.round((cardsToday / dailyLimit) * 100))}%`}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    )}
 
     <!-- Card type distribution -->
     {hasChunks && totalCards > 0 && (
@@ -643,6 +707,16 @@ const CARD_TYPE_HUE: Record<string, string> = {
 </Layout>
 
 <script>
+  // Localize quota reset time to user's timezone
+  const resetEl = document.getElementById('doc-quota-reset')
+  if (resetEl) {
+    const dt = new Date(resetEl.getAttribute('datetime')!)
+    const now = new Date()
+    const isToday = dt.toDateString() === now.toDateString()
+    const time = dt.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+    resetEl.textContent = isToday ? `today at ${time}` : `tomorrow at ${time}`
+  }
+
   // Edit title
   const titleDisplay = document.getElementById('title-display')!
   const titleEdit = document.getElementById('title-edit')!
