@@ -24,6 +24,7 @@ WORKDIR /app
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.json ./
 COPY packages/db/package.json packages/db/
 COPY packages/shared-types/package.json packages/shared-types/
+COPY packages/pipeline/package.json packages/pipeline/
 COPY apps/web/package.json apps/web/
 COPY apps/worker/package.json apps/worker/
 
@@ -32,6 +33,7 @@ RUN pnpm install --frozen-lockfile
 # Copy source
 COPY packages/db/ packages/db/
 COPY packages/shared-types/ packages/shared-types/
+COPY packages/pipeline/ packages/pipeline/
 COPY apps/web/ apps/web/
 
 # Astro needs env vars at build time for validation — provide dummy values
@@ -61,6 +63,7 @@ WORKDIR /app
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY packages/db/package.json packages/db/
 COPY packages/shared-types/package.json packages/shared-types/
+COPY packages/pipeline/package.json packages/pipeline/
 COPY apps/web/package.json apps/web/
 COPY apps/worker/package.json apps/worker/
 
@@ -72,6 +75,7 @@ COPY --from=node-builder /app/apps/web/dist apps/web/dist
 # Copy shared packages (needed at runtime for imports)
 COPY --from=node-builder /app/packages/db packages/db
 COPY --from=node-builder /app/packages/shared-types packages/shared-types
+COPY --from=node-builder /app/packages/pipeline packages/pipeline
 
 # Copy Rust binaries
 COPY --from=rust-builder /build/packages/chunker/target/release/chunker /usr/local/bin/chunker
