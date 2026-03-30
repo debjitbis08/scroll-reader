@@ -11,7 +11,7 @@ import { extname, dirname, join, basename, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
 import {
-  extractDocument, extractToc, filterByPageRange,
+  extractDocument, extractToc, filterByPageRange, filterByToc,
   callChunker, mergeConsecutiveCode, foldSmallCodeIntoText,
 } from '@scroll-reader/pipeline'
 import type { DocElement, TocEntry, PipelineChunk, ExtractConfig, ChunkerConfig } from '@scroll-reader/pipeline'
@@ -84,7 +84,10 @@ if (values.toc) {
   process.exit(0)
 }
 
-// ── Resolve --chapters to page range ──
+// ── Resolve --chapters to TOC-based filter ──
+
+let chapterToc: TocEntry[] | null = null
+let chapterSelectedIndices: number[] = []
 
 if (values.chapters) {
   const toc = await extractToc(filePath, extractConfig)
@@ -93,23 +96,16 @@ if (values.chapters) {
     process.exit(1)
   }
   const selected = values.chapters.split(',').map((s) => parseInt(s.trim(), 10))
-  const selectedPages: number[] = []
   for (const idx of selected) {
-    const entry = toc[idx - 1] // 1-based index from user
-    if (!entry) {
+    if (idx < 1 || idx > toc.length) {
       console.error(`Chapter index ${idx} is out of range (1-${toc.length}). Run --toc to see the list.`)
       process.exit(1)
     }
-    const nextEntry = toc.find((e, i) => i > idx - 1 && e.level <= entry.level)
-    const endPage = nextEntry ? Math.max(nextEntry.page - 1, entry.page) : Infinity
-    for (let p = entry.page; p <= endPage; p++) selectedPages.push(p)
   }
-  if (selectedPages.length > 0) {
-    pageStart = Math.min(...selectedPages)
-    pageEnd = Math.max(...selectedPages.filter((p) => p !== Infinity))
-    if (pageEnd === -Infinity) pageEnd = Infinity
-    console.log(`Chapters resolved to pages ${pageStart}-${pageEnd === Infinity ? 'end' : pageEnd}`)
-  }
+  chapterToc = toc
+  chapterSelectedIndices = selected.map((idx) => idx - 1) // convert to 0-based
+  const names = chapterSelectedIndices.map((i) => toc[i].title).join(', ')
+  console.log(`Chapters selected: ${names}`)
 }
 
 // ── Extract ──
@@ -119,8 +115,11 @@ console.log(`Extracting: ${filePath}`)
 let elements = await extractDocument(filePath, extractConfig, imageDir)
 console.log(`  Extracted: ${elements.length} elements`)
 
-// Filter by page range
-if (pageStart > 0) {
+// Filter by chapter (TOC-based) or page range
+if (chapterToc) {
+  const totalPages = Math.max(...elements.map((el) => el.spine_index ?? 0), 1)
+  elements = filterByToc(elements, ext, chapterToc, chapterSelectedIndices, totalPages)
+} else if (pageStart > 0) {
   elements = filterByPageRange(elements, ext, pageStart, pageEnd)
 }
 
