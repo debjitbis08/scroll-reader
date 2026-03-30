@@ -63,17 +63,18 @@ SUGGESTED CARD TYPES (you may adjust based on the content):
 ${typeDescriptions}
 ${codeInstructions}
 INSTRUCTIONS:
-1. First, understand what kind of content this is (prose, reference table, notation, formula, code sample, etc.).
-2. ALWAYS generate a "discover" card first if it is in the suggested types — it is the primary card type. Then add other types only if the content warrants them.
-3. You may skip non-discover card types that don't fit, generate fewer cards, or return an empty array if the content is not meaningful enough.
-4. Format card text appropriately:
+1. First, understand what kind of content this is (prose, reference table, notation, formula, code sample, exercises/questions, table of contents, etc.).
+2. If the content TEACHES something (explains a concept, presents an argument, demonstrates a technique), generate a "discover" card first when it is in the suggested types — it is the primary card type. Then add other types only if the content warrants them.
+3. If the content is primarily exercises, homework questions, discussion prompts, review questions, or a table of contents/index — do NOT generate a "discover" card. These are questions, not teachings. Instead, generate flashcard or quiz cards that ANSWER the most important questions if possible, or return an empty array if the questions are too open-ended or require external work.
+4. You may skip any card type that doesn't fit, generate fewer cards, or return an empty array if the content is not meaningful enough.
+5. Format card text appropriately:
    - Use LaTeX notation (e.g., $x^2$, $\\sum_{i=1}^{n}$) for mathematical content. Put significant equations on their own line using $$...$$ display math. For long equations that won't fit on one line, use \\begin{aligned}...\\end{aligned} inside $$...$$ with \\\\ line breaks and & alignment points.
    - Use clean formatting for reference material (structured lists, tables)
    - IMPORTANT: If the source contains non-Latin scripts (Devanagari, Greek, Arabic, Chinese, etc.), you MUST include the original script in the card, not just transliterations. Write terms as "राजा (rājā)" not just "rājā". This applies to all card types — discover body, glossary terms, flashcard answers, etc.
    - Use natural prose for narrative content. Separate distinct ideas into multiple paragraphs using \\n\\n.
    - Use backtick code spans for inline code references. For multi-line code, you MUST use fenced code blocks with triple backticks and a language tag — write them as \`\`\`python\\n...code...\\n\`\`\` inside the JSON string. Never write a bare language name on its own line without the triple backticks.
-5. SHOW, DON'T TELL: If the passage teaches through examples (code snippets, calculations, derivations, worked problems, formulas in action), the card MUST also teach through examples. Do NOT replace concrete examples with prose descriptions of what the examples do. Instead, create a SHORT, SIMPLIFIED example inspired by the original (a few lines of code, 2-3 steps of a calculation, a compact derivation). A brief sentence of context is fine, but the example is the core of the card. Prose-heavy summaries of example-driven content are a failure mode — avoid them.
-6. CRITICAL — every card MUST be completely self-contained. The reader will see the card WITHOUT the source passage. Never write "the passage", "the text", "the author", "according to the passage", or "this section". Instead, name the specific concept, book, author, or idea directly. Include enough context that the card makes sense on its own.
+6. SHOW, DON'T TELL: If the passage teaches through examples (code snippets, calculations, derivations, worked problems, formulas in action), the card MUST also teach through examples. Do NOT replace concrete examples with prose descriptions of what the examples do. Instead, create a SHORT, SIMPLIFIED example inspired by the original (a few lines of code, 2-3 steps of a calculation, a compact derivation). A brief sentence of context is fine, but the example is the core of the card. Prose-heavy summaries of example-driven content are a failure mode — avoid them.
+7. CRITICAL — every card MUST be completely self-contained. The reader will see the card WITHOUT the source passage. Never write "the passage", "the text", "the author", "according to the passage", or "this section". Instead, name the specific concept, book, author, or idea directly. Include enough context that the card makes sense on its own.
 
 Respond with ONLY a JSON array. Each element has "type" and "content" (an object whose shape depends on the type):
 

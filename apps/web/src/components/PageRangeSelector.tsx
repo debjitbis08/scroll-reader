@@ -41,8 +41,33 @@ export default function PageRangeSelector(props: Props) {
   const [submitting, setSubmitting] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
 
-  const hasToc = () => (props.toc?.length ?? 0) > 0;
-  const toc = () => props.toc ?? [];
+  const [tocData, setTocData] = createSignal<TocEntry[]>(props.toc ?? []);
+  const [refreshing, setRefreshing] = createSignal(false);
+  const hasToc = () => tocData().length > 0;
+  const toc = tocData;
+
+  // Detect if TOC has entries with missing titles (stale data from old extractor)
+  const hasMissingTitles = () =>
+    tocData().length > 0 && tocData().some((e) => !e.title);
+
+  async function refreshToc() {
+    setRefreshing(true);
+    try {
+      const res = await fetch(`/api/documents/${props.docId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refreshToc: true }),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.toc) {
+        setTocData(data.toc);
+        setSelectedChapters(new Set(data.toc.map((_: TocEntry, i: number) => i)));
+      }
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   // Track selected chapter indices (1-based into toc array for display, 0-based internally)
   const [selectedChapters, setSelectedChapters] = createSignal<Set<number>>(
@@ -171,6 +196,16 @@ export default function PageRangeSelector(props: Props) {
               Deselect all
             </button>
           </div>
+          <Show when={hasMissingTitles()}>
+            <button
+              type="button"
+              onClick={refreshToc}
+              disabled={refreshing()}
+              class="text-xs text-ctp-peach hover:underline disabled:opacity-50"
+            >
+              {refreshing() ? "Refreshing..." : "Chapter names missing — click to refresh"}
+            </button>
+          </Show>
           <div class="max-h-64 overflow-y-auto space-y-0.5 rounded-lg border border-ctp-surface2 bg-ctp-base p-2">
             <For each={toc()}>
               {(entry, idx) => (
@@ -188,7 +223,7 @@ export default function PageRangeSelector(props: Props) {
                     onChange={() => toggleChapter(idx())}
                     class="mt-0.5 accent-ctp-mauve"
                   />
-                  <span class="text-sm leading-snug">{entry.title}</span>
+                  <span class="text-sm leading-snug">{entry.title || `Page ${entry.page}`}</span>
                 </label>
               )}
             </For>

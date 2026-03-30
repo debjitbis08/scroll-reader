@@ -647,7 +647,9 @@ export default function Feed(props: { initialCollection?: string }) {
         {(() => {
           const selCol = selectedCollection()
           const col = selCol ? collections().find((c) => c.id === selCol) : undefined
-          const hasDocsButNoCards = col && col.documentCount > 0
+          const hasDocsButNoCards = selCol
+            ? col && col.documentCount > 0
+            : collections().some((c) => c.documentCount > 0)
 
           return (
             <div class="flex flex-col items-center gap-4 py-20 text-center">
@@ -664,7 +666,9 @@ export default function Feed(props: { initialCollection?: string }) {
                   </a>
                 </>
               }>
-                <p class="font-display text-lg text-ed-on-surface-dim">Cards are still being generated for this collection.</p>
+                <p class="font-display text-lg text-ed-on-surface-dim">
+                  {selCol ? 'Cards are still being generated for this collection.' : 'Cards are being generated for your documents.'}
+                </p>
                 <p class="font-body text-sm text-ed-on-surface-muted">Check back shortly — processing may take a few minutes.</p>
               </Show>
             </div>
