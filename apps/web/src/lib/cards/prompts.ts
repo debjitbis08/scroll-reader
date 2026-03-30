@@ -81,7 +81,8 @@ INSTRUCTIONS:
 1. First, understand what kind of content this is (prose, reference table, notation, formula, code sample, exercises/questions, table of contents, etc.).
 2. If the content TEACHES something (explains a concept, presents an argument, demonstrates a technique), generate a "discover" card first when it is in the suggested types — it is the primary card type. Then add other types only if the content warrants them.
 3. If the content is primarily exercises, homework questions, discussion prompts, review questions, or a table of contents/index — do NOT generate a "discover" card. These are questions, not teachings. Instead, generate flashcard or quiz cards that ANSWER the most important questions if possible, or return an empty array if the questions are too open-ended or require external work.
-4. You may skip any card type that doesn't fit, generate fewer cards, or return an empty array if the content is not meaningful enough.
+4. If the content is meta-content about the document itself — a preface, foreword, introduction explaining the book's purpose/audience/structure, or an author's note — restrict to "discover" and "passage". Do NOT generate flashcard, quiz, or glossary cards for this content, as the subject matter is the book, not the field it covers.
+5. You may skip any card type that doesn't fit, generate fewer cards, or return an empty array if the content is not meaningful enough.
 5. Format card text appropriately:
    - Use LaTeX notation (e.g., $x^2$, $\\sum_{i=1}^{n}$) for mathematical content. Put significant equations on their own line using $$...$$ display math. For long equations that won't fit on one line, use \\begin{aligned}...\\end{aligned} inside $$...$$ with \\\\ line breaks and & alignment points.
    - Use clean formatting for reference material (structured lists, tables)
