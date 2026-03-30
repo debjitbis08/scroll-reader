@@ -223,6 +223,9 @@ export default function Feed(props: { initialCollection?: string }) {
   let sentinelRef: HTMLDivElement | undefined
   let abortController: AbortController | null = null
   let loadGeneration = 0
+  let sentinelObserver: IntersectionObserver | null = null
+  // Tracks IDs sent to the server as excludes — reset on rotation, independent of displayed cards
+  let excludedCardIds: string[] = []
 
   function selectCollection(id: string | null) {
     setSelectedCollection(id)
@@ -233,6 +236,7 @@ export default function Feed(props: { initialCollection?: string }) {
     window.history.replaceState({}, '', url.toString())
     // Abort any in-flight request and reset feed
     if (abortController) abortController.abort()
+    excludedCardIds = []
     setCards([])
     setLoading(false)
     setHasMore(true)
@@ -247,8 +251,7 @@ export default function Feed(props: { initialCollection?: string }) {
     const gen = ++loadGeneration
     abortController = new AbortController()
     try {
-      const existingIds = cards().map((c) => c.card.id)
-      const excludeParam = existingIds.length > 0 ? `&exclude=${existingIds.join(',')}` : ''
+      const excludeParam = excludedCardIds.length > 0 ? `&exclude=${excludedCardIds.join(',')}` : ''
       const collParam = selectedCollection() ? `&collections=${selectedCollection()}` : ''
       const res = await fetch(`/api/feed?limit=${BATCH_SIZE}${excludeParam}${collParam}`, {
         signal: abortController.signal,
@@ -257,12 +260,22 @@ export default function Feed(props: { initialCollection?: string }) {
       if (!res.ok) throw new Error(`Failed to load feed: ${res.status}`)
       const batch: FeedCard[] = await res.json()
       if (gen !== loadGeneration) return // stale response
-      if (batch.length === 0) setHasMore(false)
-      // Deduplicate in case of any overlap
-      const existingSet = new Set(existingIds)
-      const newCards = batch.filter((c) => !existingSet.has(c.card.id))
-      setCards((prev) => [...prev, ...newCards])
-      setError(null)
+      if (batch.length === 0) {
+        if (excludedCardIds.length === 0) {
+          // Reset already happened and server still returned nothing — truly no cards
+          setHasMore(false)
+        } else {
+          // End of one full rotation cycle — clear exclusions and loop
+          excludedCardIds = []
+          // IntersectionObserver won't re-fire since sentinel didn't move; kick off next load
+          // after finally resets loading state
+          setTimeout(() => { if (gen === loadGeneration) loadMore() }, 0)
+        }
+      } else {
+        excludedCardIds = [...new Set([...excludedCardIds, ...batch.map((c) => c.card.id)])]
+        setCards((prev) => [...prev, ...batch])
+        setError(null)
+      }
     } catch (e) {
       if (e instanceof DOMException && e.name === 'AbortError') return
       if (gen !== loadGeneration) return
@@ -271,22 +284,11 @@ export default function Feed(props: { initialCollection?: string }) {
       if (gen === loadGeneration) {
         setLoading(false)
         setInitialLoaded(true)
-        // If sentinel is still visible after loading (content didn't fill viewport),
-        // schedule another check since no scroll event will fire.
-        requestAnimationFrame(checkSentinel)
       }
     }
   }
 
-  function checkSentinel() {
-    if (!sentinelRef || loading() || !hasMore()) return
-    const rect = sentinelRef.getBoundingClientRect()
-    if (rect.top < window.innerHeight + 600) {
-      loadMore()
-    }
-  }
-
-  // Combined scroll handler: impression tracking + infinite scroll sentinel check
+  // Scroll handler: impression tracking only
   const handleScrollAndSentinel = throttle(() => {
     // Impression tracking
     const owner = getOwnerCard(
@@ -305,9 +307,6 @@ export default function Feed(props: { initialCollection?: string }) {
         impressionState.startTime = Date.now()
       }
     }
-
-    // Infinite scroll
-    checkSentinel()
   }, 100)
 
   onMount(() => {
@@ -317,6 +316,13 @@ export default function Feed(props: { initialCollection?: string }) {
       .then((data: CollectionOption[]) => setCollections(data))
       .catch(() => {})
 
+    // IntersectionObserver for infinite scroll sentinel
+    sentinelObserver = new IntersectionObserver(
+      (entries) => { if (entries[0].isIntersecting) loadMore() },
+      { rootMargin: '0px 0px 600px 0px' },
+    )
+    if (sentinelRef) sentinelObserver.observe(sentinelRef)
+
     loadMore()
 
     window.addEventListener('scroll', handleScrollAndSentinel, { passive: true })
@@ -325,6 +331,7 @@ export default function Feed(props: { initialCollection?: string }) {
     window.addEventListener('pagehide', flushCurrentAndBuffer)
 
     onCleanup(() => {
+      sentinelObserver?.disconnect()
       window.removeEventListener('scroll', handleScrollAndSentinel)
       clearInterval(flushInterval)
       document.removeEventListener('visibilitychange', onVisibilityChange)
