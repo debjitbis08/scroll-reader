@@ -311,8 +311,8 @@ const CARD_TYPE_HUE: Record<string, string> = {
       </div>
     </div>
 
-    <!-- Document metadata -->
-    <div class="flex flex-wrap gap-x-4 gap-y-1 font-body text-[0.75rem] tracking-wide text-ed-on-surface-muted">
+    <!-- Document metadata (hidden during preview — configure section shows these) -->
+    {!isPreview && <div class="flex flex-wrap gap-x-4 gap-y-1 font-body text-[0.75rem] tracking-wide text-ed-on-surface-muted">
       <span>{DOC_TYPE_LABEL[doc.documentType] ?? doc.documentType}</span>
       {doc.readingGoal && (
         <span class="flex items-center gap-1">
@@ -357,7 +357,7 @@ const CARD_TYPE_HUE: Record<string, string> = {
         <Icon name="mdi:cards-outline" class="size-3.5" />
         {describeStrategy(strategy)}
       </span>
-    </div>
+    </div>}
 
     <!-- Collections -->
     <CollectionManager

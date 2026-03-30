@@ -69,7 +69,7 @@ export default function PageRangeSelector(props: Props) {
     }
   }
 
-  // Track selected chapter indices (1-based into toc array for display, 0-based internally)
+  // Track selected chapter indices (0-based into toc array)
   const [selectedChapters, setSelectedChapters] = createSignal<Set<number>>(
     new Set(toc().map((_, i) => i)),
   );
@@ -163,12 +163,12 @@ export default function PageRangeSelector(props: Props) {
   };
 
   return (
-    <div class="rounded-xl border border-ctp-surface1 bg-ctp-surface0 p-6 space-y-6">
-      <div class="space-y-2">
-        <h2 class="text-lg font-semibold text-ctp-text">
+    <div class="rounded bg-ed-surface-high p-6 space-y-6">
+      <div class="space-y-1">
+        <h2 class="font-display text-xl text-ed-on-surface">
           Configure processing
         </h2>
-        <p class="text-sm text-ctp-subtext0">
+        <p class="font-body text-sm text-ed-on-surface-muted">
           This document has {props.totalPages} page
           {props.totalPages !== 1 ? "s" : ""}.
         </p>
@@ -177,21 +177,21 @@ export default function PageRangeSelector(props: Props) {
       {/* Chapter selection (when TOC is available) */}
       <Show when={hasToc()}>
         <fieldset class="space-y-2">
-          <legend class="text-sm font-medium text-ctp-text">
-            Select chapters to process
+          <legend class="font-body text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-ed-primary">
+            Chapters to process
           </legend>
-          <div class="flex gap-2 mb-2">
+          <div class="flex gap-3 mb-2">
             <button
               type="button"
               onClick={selectAll}
-              class="text-xs text-ctp-mauve hover:underline"
+              class="font-body text-xs text-ed-primary hover:underline"
             >
               Select all
             </button>
             <button
               type="button"
               onClick={deselectAll}
-              class="text-xs text-ctp-subtext0 hover:underline"
+              class="font-body text-xs text-ed-on-surface-muted hover:underline"
             >
               Deselect all
             </button>
@@ -201,19 +201,19 @@ export default function PageRangeSelector(props: Props) {
               type="button"
               onClick={refreshToc}
               disabled={refreshing()}
-              class="text-xs text-ctp-peach hover:underline disabled:opacity-50"
+              class="font-body text-xs text-ed-on-surface-muted hover:text-ed-primary transition-colors disabled:opacity-50"
             >
               {refreshing() ? "Refreshing..." : "Chapter names missing — click to refresh"}
             </button>
           </Show>
-          <div class="max-h-64 overflow-y-auto space-y-0.5 rounded-lg border border-ctp-surface2 bg-ctp-base p-2">
+          <div class="max-h-64 overflow-y-auto space-y-0.5 rounded bg-ed-surface p-2">
             <For each={toc()}>
               {(entry, idx) => (
                 <label
-                  class={`flex items-start gap-2 rounded px-2 py-1 cursor-pointer transition-colors hover:bg-ctp-surface0 ${
+                  class={`flex items-start gap-2 rounded px-2 py-1 cursor-pointer transition-colors ${
                     selectedChapters().has(idx())
-                      ? "text-ctp-text"
-                      : "text-ctp-subtext0"
+                      ? "bg-ed-primary-container text-ed-on-surface"
+                      : "text-ed-on-surface-muted hover:bg-ed-surface-high"
                   }`}
                   style={{ "padding-left": `${entry.level * 16 + 8}px` }}
                 >
@@ -221,9 +221,11 @@ export default function PageRangeSelector(props: Props) {
                     type="checkbox"
                     checked={selectedChapters().has(idx())}
                     onChange={() => toggleChapter(idx())}
-                    class="mt-0.5 accent-ctp-mauve"
+                    class="mt-0.5 accent-ed-primary"
                   />
-                  <span class="text-sm leading-snug">{entry.title || `Page ${entry.page}`}</span>
+                  <span class="font-body text-sm leading-snug">
+                    {entry.title || `Page ${entry.page}`}
+                  </span>
                 </label>
               )}
             </For>
@@ -234,16 +236,16 @@ export default function PageRangeSelector(props: Props) {
       {/* Page range — fallback when no TOC */}
       <Show when={!hasToc()}>
         <div class="flex items-center gap-3">
-          <label class="text-sm text-ctp-subtext1">Pages</label>
+          <label class="font-body text-sm text-ed-on-surface-muted">Pages</label>
           <input
             type="number"
             min={1}
             max={props.totalPages}
             value={start()}
             onInput={(e) => setStart(parseInt(e.currentTarget.value, 10) || 1)}
-            class="w-20 rounded-lg border border-ctp-surface2 bg-ctp-base px-3 py-2 text-sm text-ctp-text focus:border-ctp-mauve focus:outline-none"
+            class="w-20 border-b border-ed-outline bg-transparent px-1 py-1 font-body text-sm text-ed-on-surface outline-none focus:border-ed-primary transition-colors"
           />
-          <span class="text-sm text-ctp-subtext0">to</span>
+          <span class="font-body text-sm text-ed-on-surface-muted">to</span>
           <input
             type="number"
             min={1}
@@ -252,24 +254,26 @@ export default function PageRangeSelector(props: Props) {
             onInput={(e) =>
               setEnd(parseInt(e.currentTarget.value, 10) || props.totalPages)
             }
-            class="w-20 rounded-lg border border-ctp-surface2 bg-ctp-base px-3 py-2 text-sm text-ctp-text focus:border-ctp-mauve focus:outline-none"
+            class="w-20 border-b border-ed-outline bg-transparent px-1 py-1 font-body text-sm text-ed-on-surface outline-none focus:border-ed-primary transition-colors"
           />
-          <span class="text-sm text-ctp-subtext0">of {props.totalPages}</span>
+          <span class="font-body text-sm text-ed-on-surface-muted">
+            of {props.totalPages}
+          </span>
         </div>
       </Show>
 
       {/* Content type */}
       <fieldset class="space-y-2">
-        <legend class="text-sm font-medium text-ctp-text">
+        <legend class="font-body text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-ed-primary">
           What kind of content is this?
         </legend>
         <div class="flex flex-wrap gap-2">
           {CONTENT_OPTIONS.map((opt) => (
             <label
-              class={`cursor-pointer rounded-lg border px-3 py-1.5 text-sm transition-colors ${
+              class={`cursor-pointer rounded px-3 py-1.5 font-body text-sm transition-colors ${
                 documentType() === opt.value
-                  ? "border-ctp-mauve bg-ctp-mauve/10 text-ctp-mauve"
-                  : "border-ctp-surface2 text-ctp-subtext1 hover:border-ctp-surface2 hover:bg-ctp-surface1"
+                  ? "bg-ed-primary-container text-ed-on-surface"
+                  : "bg-ed-surface-highest text-ed-on-surface-muted hover:bg-ed-surface-highest"
               }`}
             >
               <input
@@ -288,16 +292,16 @@ export default function PageRangeSelector(props: Props) {
 
       {/* Reading goal */}
       <fieldset class="space-y-2">
-        <legend class="text-sm font-medium text-ctp-text">
+        <legend class="font-body text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-ed-primary">
           What's your goal?
         </legend>
         <div class="flex flex-wrap gap-2">
           {GOAL_OPTIONS.map((opt) => (
             <label
-              class={`cursor-pointer rounded-lg border px-3 py-1.5 text-sm transition-colors ${
+              class={`cursor-pointer rounded px-3 py-1.5 font-body text-sm transition-colors ${
                 readingGoal() === opt.value
-                  ? "border-ctp-mauve bg-ctp-mauve/10 text-ctp-mauve"
-                  : "border-ctp-surface2 text-ctp-subtext1 hover:border-ctp-surface2 hover:bg-ctp-surface1"
+                  ? "bg-ed-primary-container text-ed-on-surface"
+                  : "bg-ed-surface-highest text-ed-on-surface-muted hover:bg-ed-surface-highest"
               }`}
             >
               <input
@@ -315,14 +319,18 @@ export default function PageRangeSelector(props: Props) {
       </fieldset>
 
       {/* Strategy preview */}
-      <p class="text-sm text-ctp-subtext0 italic">{strategyLabel()}</p>
+      <p class="font-body text-sm text-ed-on-surface-muted italic">
+        {strategyLabel()}
+      </p>
 
-      {error() && <p class="text-sm text-ctp-red">{error()}</p>}
+      {error() && (
+        <p class="font-body text-sm text-ctp-red">{error()}</p>
+      )}
 
       <button
         onClick={handleSubmit}
         disabled={submitting()}
-        class="rounded-lg bg-ctp-mauve px-6 py-2.5 text-sm font-medium text-ctp-base transition-colors hover:bg-ctp-mauve/90 disabled:opacity-50"
+        class="rounded bg-ed-primary px-6 py-2.5 font-body font-medium text-ed-on-primary transition-opacity hover:opacity-90 disabled:opacity-50 cursor-pointer"
       >
         {submitting() ? "Starting…" : "Start processing"}
       </button>
