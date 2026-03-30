@@ -162,6 +162,13 @@
       "when": 1774810026836,
       "tag": "0022_long_lily_hollister",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1774846720251,
+      "tag": "0023_bored_jack_power",
+      "breakpoints": true
     }
   ]
 }

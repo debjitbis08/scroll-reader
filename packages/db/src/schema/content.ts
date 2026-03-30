@@ -259,7 +259,7 @@ export const feedEvents = pgTable('feed_events', {
   userId: uuid('user_id')
     .references(() => profiles.id, { onDelete: 'cascade' })
     .notNull(),
-  cardId: uuid('card_id').references(() => cards.id),
+  cardId: uuid('card_id').references(() => cards.id, { onDelete: 'cascade' }),
   eventType: feedEventTypeEnum('event_type').notNull(),
   dwellMs: integer('dwell_ms'),
   selfGrade: integer('self_grade'), // SM-2 grade 0–5 when user self-graded (flashcard/quiz)
