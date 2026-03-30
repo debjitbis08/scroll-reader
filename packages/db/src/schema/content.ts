@@ -47,6 +47,8 @@ export const profiles = pgTable('profiles', {
   ollamaBaseUrl: text('ollama_base_url'),
   tier: tierEnum('tier').default('free').notNull(),
   virtualTime: real('virtual_time').default(0).notNull(),
+  processingLockedBy: text('processing_locked_by'),
+  processingLockedAt: timestamp('processing_locked_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 })
 

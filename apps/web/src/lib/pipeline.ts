@@ -163,6 +163,40 @@ function getDocWeight(docId: string, priorityDocId: string): number {
   return docId === priorityDocId ? DOC_PRIORITY_WEIGHT : DOC_DEFAULT_WEIGHT
 }
 
+// ── User-level Processing Lock ───────────────────────────────
+
+/**
+ * Try to acquire a processing lock for a user (stored in profiles row).
+ * Uses optimistic UPDATE … WHERE to ensure only one winner across all machines.
+ * Stale locks older than LOCK_EXPIRY_MS are broken automatically.
+ * Returns true if acquired.
+ */
+async function tryAcquireUserLock(userId: string): Promise<boolean> {
+  const staleThreshold = new Date(Date.now() - LOCK_EXPIRY_MS)
+  const result = await db
+    .update(profiles)
+    .set({ processingLockedBy: MACHINE_ID, processingLockedAt: new Date() })
+    .where(and(
+      eq(profiles.id, userId),
+      or(
+        isNull(profiles.processingLockedBy),
+        lt(profiles.processingLockedAt, staleThreshold),
+      ),
+    ))
+    .returning({ id: profiles.id })
+  return result.length > 0
+}
+
+/**
+ * Release the processing lock for a user — only if this machine holds it.
+ */
+async function releaseUserLock(userId: string): Promise<void> {
+  await db
+    .update(profiles)
+    .set({ processingLockedBy: null, processingLockedAt: null })
+    .where(and(eq(profiles.id, userId), eq(profiles.processingLockedBy, MACHINE_ID)))
+}
+
 // ── Process a single document ───────────────────────────────
 
 /**
@@ -595,6 +629,20 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
  * Returns the number of cards generated in this run.
  */
 export async function processUser(userId: string, tier: Tier): Promise<number> {
+  const acquired = await tryAcquireUserLock(userId)
+  if (!acquired) {
+    console.log(`[pipeline] user=${userId} already being processed, skipping`)
+    return 0
+  }
+
+  try {
+    return await _processUser(userId, tier)
+  } finally {
+    await releaseUserLock(userId)
+  }
+}
+
+async function _processUser(userId: string, tier: Tier): Promise<number> {
   const dailyLimit = TIER_LIMITS[tier].cardsPerDay
   const alreadyToday = await cardsGeneratedToday(userId)
   let budget = dailyLimit - alreadyToday
@@ -667,8 +715,9 @@ export async function processUser(userId: string, tier: Tier): Promise<number> {
       if (generated === 0) {
         exhausted.add(doc.id)
       } else {
-        // Log usage event — survives document deletion, used for daily limit enforcement
-        db.insert(usageEvents).values({
+        // Log usage event — survives document deletion, used for daily limit enforcement.
+        // Must be awaited so concurrent processUser calls see an accurate daily count.
+        await db.insert(usageEvents).values({
           userId,
           eventType: 'cards_generated',
           quantity: generated,

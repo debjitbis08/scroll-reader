@@ -169,6 +169,13 @@
       "when": 1774846720251,
       "tag": "0023_bored_jack_power",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1774879681067,
+      "tag": "0024_careless_gamma_corps",
+      "breakpoints": true
     }
   ]
 }
