@@ -10,11 +10,34 @@ const BACK_RE = /appendix|bibliograph|index(?:es)?|glossary|about\s*the\s*author
  */
 export function classifyTocHeuristic(toc: TocEntry[]): TocSection[] {
   let seenMain = false
+  // Stack tracks the classification of ancestor entries at each level.
+  // If a parent is 'back' (or 'front'), nested children inherit that.
+  const parentStack: { level: number; section: TocSection }[] = []
+
   return toc.map((entry) => {
-    if (!seenMain && FRONT_RE.test(entry.title)) return 'front'
-    if (BACK_RE.test(entry.title)) return 'back'
-    seenMain = true
-    return 'main'
+    // Pop entries from the stack that are at the same or deeper level
+    while (parentStack.length > 0 && parentStack[parentStack.length - 1].level >= entry.level) {
+      parentStack.pop()
+    }
+
+    const parentSection = parentStack.length > 0 ? parentStack[parentStack.length - 1].section : null
+
+    let section: TocSection
+    if (parentSection === 'back') {
+      section = 'back'
+    } else if (parentSection === 'front' && !seenMain) {
+      section = BACK_RE.test(entry.title) ? 'back' : 'front'
+    } else if (!seenMain && FRONT_RE.test(entry.title)) {
+      section = 'front'
+    } else if (BACK_RE.test(entry.title)) {
+      section = 'back'
+    } else {
+      seenMain = true
+      section = 'main'
+    }
+
+    parentStack.push({ level: entry.level, section })
+    return section
   })
 }
 
