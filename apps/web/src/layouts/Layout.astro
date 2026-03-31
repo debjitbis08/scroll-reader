@@ -2,6 +2,8 @@
 import '../styles/global.css'
 import 'katex/dist/katex.min.css'
 import Header from '../components/Header.astro'
+import PostHogInit from '../components/PostHogInit.astro'
+import { PUBLIC_POSTHOG_API_KEY } from 'astro:env/client'
 
 interface Props {
   title?: string
@@ -34,6 +36,7 @@ const { title = 'Scroll Reader' } = Astro.props
           t === 'latte' ? 'light' : t === 'mocha' ? 'dark' : 'auto'
       })()
     </script>
+    <PostHogInit apiKey={PUBLIC_POSTHOG_API_KEY} />
   </head>
   <body class="min-h-screen bg-ed-surface text-ed-on-surface antialiased">
     <Header />

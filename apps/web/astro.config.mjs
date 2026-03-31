@@ -86,6 +86,11 @@ export default defineConfig({
         context: "server",
         access: "secret",
       }),
+      PUBLIC_POSTHOG_API_KEY: envField.string({
+        context: "client",
+        access: "public",
+        optional: true,
+      }),
     },
   },
   vite: {

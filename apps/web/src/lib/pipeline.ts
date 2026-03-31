@@ -18,6 +18,7 @@ import { TIER_LIMITS, resolveCardStrategy } from '@scroll-reader/shared-types'
 import { BATCH_SIZE, EXTRACTOR_BIN, CHUNKER_BIN, FIGURE_EXTRACT_BIN } from 'astro:env/server'
 import { downloadDocument, deleteDocument, uploadImage } from './storage.ts'
 import { MACHINE_ID, addAffinity, hasAffinity, cleanAffinity } from './machine.ts'
+import { captureException } from './posthog.ts'
 
 // ── Resolve binary paths ──
 
@@ -640,11 +641,13 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
       console.warn(`[pipeline] transient error (attempt ${retryCount}/${MAX_RETRIES}): doc=${doc.id} ${message}`)
       await db.update(documents).set({ retryCount }).where(eq(documents.id, doc.id))
       await db.update(jobs).set({ status: 'failed', error: message, finishedAt: new Date() }).where(eq(jobs.id, jobId))
+      captureException(err, doc.userId, { documentId: doc.id, retryCount, transient: true })
     } else {
       // Permanent error or retries exhausted
       console.error(`[pipeline] permanent error: doc=${doc.id}`, err)
       await db.update(jobs).set({ status: 'failed', error: message, finishedAt: new Date() }).where(eq(jobs.id, jobId))
       await db.update(documents).set({ processingStatus: 'error', retryCount }).where(eq(documents.id, doc.id))
+      captureException(err, doc.userId, { documentId: doc.id, retryCount, transient: false })
     }
     await unlink(tmpPath).catch(() => {})
     await rm(imageDir, { recursive: true, force: true }).catch(() => {})
