@@ -27,10 +27,15 @@ const COST_PER_MILLION: Record<string, { input: number; output: number }> = {
   'gemini-2.5-pro': { input: 1.25, output: 10.00 },
 }
 
-function estimateCost(model: string, promptTokens: number | null, completionTokens: number | null): number | null {
+function estimateCost(model: string, usage: AIUsage): number | null {
   const pricing = COST_PER_MILLION[model]
-  if (!pricing || promptTokens == null || completionTokens == null) return null
-  return (promptTokens * pricing.input + completionTokens * pricing.output) / 1_000_000
+  if (!pricing || usage.promptTokens == null || usage.completionTokens == null) return null
+  const thinkingTokens = (usage.raw as Record<string, unknown> | undefined)?.thoughtsTokenCount as number | undefined
+  return (
+    usage.promptTokens * pricing.input
+    + usage.completionTokens * pricing.output
+    + (thinkingTokens ?? 0) * pricing.output
+  ) / 1_000_000
 }
 
 function logUsage(
@@ -42,7 +47,7 @@ function logUsage(
   usage: AIUsage,
   chunkId?: string,
 ): void {
-  const cost = estimateCost(model, usage.promptTokens, usage.completionTokens)
+  const cost = estimateCost(model, usage)
   db.insert(aiUsageLogs).values({
     userId,
     documentId,
@@ -52,6 +57,7 @@ function logUsage(
     model,
     promptTokens: usage.promptTokens,
     completionTokens: usage.completionTokens,
+    thinkingTokens: (usage.raw as Record<string, unknown> | undefined)?.thoughtsTokenCount as number ?? null,
     totalTokens: usage.totalTokens,
     durationMs: usage.durationMs,
     estimatedCostUsd: cost,

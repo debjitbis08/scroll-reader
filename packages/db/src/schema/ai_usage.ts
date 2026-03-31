@@ -20,6 +20,7 @@ export const aiUsageLogs = pgTable('ai_usage_logs', {
   model: text('model').notNull(),
   promptTokens: integer('prompt_tokens'),
   completionTokens: integer('completion_tokens'),
+  thinkingTokens: integer('thinking_tokens'),
   totalTokens: integer('total_tokens'),
   durationMs: integer('duration_ms'),
   estimatedCostUsd: real('estimated_cost_usd'),

@@ -10,6 +10,7 @@ interface GeminiResponse {
   usageMetadata?: {
     promptTokenCount?: number
     candidatesTokenCount?: number
+    thoughtsTokenCount?: number
     totalTokenCount?: number
   }
 }
@@ -64,6 +65,7 @@ export class GeminiProvider implements AIProvider {
         completionTokens: um.candidatesTokenCount ?? null,
         totalTokens: um.totalTokenCount ?? null,
         durationMs,
+        raw: um.thoughtsTokenCount ? { thoughtsTokenCount: um.thoughtsTokenCount } : undefined,
       } : null,
     }
   }

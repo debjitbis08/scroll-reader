@@ -1,0 +1,1 @@
+ALTER TABLE "ai_usage_logs" ADD COLUMN "thinking_tokens" integer;
