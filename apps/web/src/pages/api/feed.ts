@@ -366,6 +366,60 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
   })
   const selectedRegular = deduped.slice(0, remainingSlots)
 
+  // --- Fallback: if no cards survived all filters, relax cooldown + recency ---
+  // The feed should never return empty if the user has cards.
+  if (srPairs.length === 0 && selectedRegular.length === 0) {
+    const dismissedFilter = dismissedIds.length > 0
+      ? notInArray(cards.id, dismissedIds)
+      : undefined
+
+    const fallbackCards = await db
+      .select({
+        card: cards,
+        chunk: {
+          id: chunks.id,
+          content: chunks.content,
+          chapter: chunks.chapter,
+          chunkIndex: chunks.chunkIndex,
+          chunkType: chunks.chunkType,
+          language: chunks.language,
+        },
+        document: {
+          id: documents.id,
+          title: documents.title,
+          author: documents.author,
+        },
+        wordCount: chunks.wordCount,
+        lastShownAt: sql<string | null>`(
+          SELECT cs.last_shown_at FROM card_scores cs
+          WHERE cs.card_id = ${cards.id} AND cs.user_id = ${cards.userId}
+          LIMIT 1
+        )`,
+      })
+      .from(cards)
+      .innerJoin(chunks, eq(cards.chunkId, chunks.id))
+      .innerJoin(documents, eq(chunks.documentId, documents.id))
+      .where(and(
+        eq(cards.userId, user.id),
+        inArray(cards.cardType, [...eligibleTypes]),
+        dismissedFilter,
+        sql`(${documents.readingGoal} IS DISTINCT FROM 'casual' OR ${cards.cardType} NOT IN ('flashcard', 'quiz'))`,
+        prerequisiteGate,
+        collectionFilter,
+      ))
+      .orderBy(sql`(
+        SELECT cs.last_shown_at FROM card_scores cs
+        WHERE cs.card_id = ${cards.id} AND cs.user_id = ${cards.userId}
+        LIMIT 1
+      ) ASC NULLS FIRST`)
+      .limit(limit)
+
+    for (const r of fallbackCards) {
+      const { lastShownAt: _, ...rest } = r
+      selectedRegular.push({ ...rest, score: 0 })
+    }
+  }
+
   // --- 4b. Ensure quiz/flashcard cards have an intro companion in the batch ---
   // If a quiz/flashcard was selected but no discover/passage/glossary card from
   // the same chunk is in the batch, pull one in so users see context first.
