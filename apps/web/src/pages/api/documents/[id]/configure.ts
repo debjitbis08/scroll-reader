@@ -1,9 +1,12 @@
 import type { APIRoute } from 'astro'
 import { eq, and } from 'drizzle-orm'
 import { db } from '../../../../lib/db.ts'
-import { documents, profiles } from '@scroll-reader/db'
+import { documents, profiles, aiUsageLogs } from '@scroll-reader/db'
 import type { DocumentType, ReadingGoal, Tier } from '@scroll-reader/shared-types'
+import { classifyToc } from '@scroll-reader/pipeline'
+import type { TocEntry } from '@scroll-reader/pipeline'
 import { processUser } from '../../../../lib/pipeline.ts'
+import { createProvider } from '../../../../lib/ai/index.ts'
 
 const VALID_DOC_TYPES: DocumentType[] = ['book', 'paper', 'article', 'manual', 'note', 'scripture', 'other', 'fiction']
 const VALID_GOALS: ReadingGoal[] = ['casual', 'reflective', 'study']
@@ -78,6 +81,36 @@ export const POST: APIRoute = async ({ request, locals, params }) => {
   // The cron handles the rest over subsequent runs.
   setImmediate(async () => {
     try {
+      // Classify TOC entries as frontmatter/mainmatter/backmatter so the
+      // pipeline can exempt frontmatter cards from the daily budget.
+      const toc = doc.toc as TocEntry[] | null
+      if (toc && toc.length > 0) {
+        try {
+          const provider = createProvider()
+          const { classification, usage } = await classifyToc(toc, provider)
+          await db.update(documents)
+            .set({ tocClassification: classification })
+            .where(eq(documents.id, docId))
+
+          if (usage) {
+            db.insert(aiUsageLogs).values({
+              userId,
+              documentId: docId,
+              operation: 'chunking',
+              provider: provider.name,
+              model: provider.model,
+              promptTokens: usage.promptTokens,
+              completionTokens: usage.completionTokens,
+              totalTokens: usage.totalTokens,
+              durationMs: usage.durationMs,
+              metadata: usage.raw ?? null,
+            }).catch((err) => console.warn('[configure] failed to log classify-toc usage:', err))
+          }
+        } catch (err) {
+          console.warn('[configure] TOC classification failed, continuing without:', err)
+        }
+      }
+
       const [profile] = await db
         .select({ tier: profiles.tier })
         .from(profiles)

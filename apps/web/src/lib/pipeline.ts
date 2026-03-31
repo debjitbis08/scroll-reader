@@ -10,7 +10,7 @@ import {
   callSegmenter, callChunker, aiChunk,
   mergeConsecutiveCode, foldSmallCodeIntoText,
 } from '@scroll-reader/pipeline'
-import type { ImageElement, TocEntry, ExtractConfig, ChunkerConfig, AIUsage, PipelineChunk } from '@scroll-reader/pipeline'
+import type { ImageElement, TocEntry, ExtractConfig, ChunkerConfig, AIUsage, PipelineChunk, TocSection } from '@scroll-reader/pipeline'
 import { createProvider } from './ai/index.ts'
 import { generateCardsForChunk } from './cards/generate.ts'
 import type { CardType, DocumentType, ReadingGoal, Tier } from '@scroll-reader/shared-types'
@@ -101,6 +101,77 @@ const DOC_PRIORITY_WEIGHT = 3 // priority document (oldest) gets 3x weight
 const DOC_DEFAULT_WEIGHT = 1
 
 const TIER_WEIGHTS: Record<string, number> = { plus: 2, free: 1 }
+
+// ── Frontmatter detection ─────────────────────────────────
+
+/**
+ * Build the set of chunk IDs that fall within frontmatter TOC entries.
+ * Uses page/spine matching for PDF, chapter title matching for EPUB.
+ * Chunks are in document order, so once we hit mainmatter everything after is non-front.
+ */
+function getFrontmatterChunkIds(
+  allChunks: Chunk[],
+  ext: string,
+  toc: TocEntry[] | null,
+  classification: TocSection[] | null,
+  totalPages: number,
+): Set<string> {
+  if (!toc || !classification || toc.length !== classification.length) return new Set()
+
+  const frontIndices = classification
+    .map((c, i) => c === 'front' ? i : -1)
+    .filter((i) => i >= 0)
+
+  if (frontIndices.length === 0) return new Set()
+
+  const isPdf = ext === '.pdf'
+
+  if (isPdf) {
+    // Build page set for frontmatter entries (same logic as filterByToc)
+    const frontPages = new Set<number>()
+    for (const idx of frontIndices) {
+      const entry = toc[idx]
+      const nextEntry = toc.find((e, i) => i > idx && e.level <= entry.level)
+      const endPage = nextEntry ? Math.max(nextEntry.page - 1, entry.page) : totalPages
+      for (let p = entry.page; p <= endPage; p++) frontPages.add(p)
+    }
+
+    const result = new Set<string>()
+    let currentPage = 1
+    for (const chunk of allChunks) {
+      const m = chunk.chapter?.match(/^Page\s+(\d+)$/i)
+      if (m) currentPage = parseInt(m[1], 10)
+      if (frontPages.has(currentPage)) result.add(chunk.id)
+    }
+    return result
+  }
+
+  // EPUB: match chunk chapter text against frontmatter TOC titles.
+  // Since chunks are in document order and frontmatter precedes mainmatter,
+  // once we see a chunk matching a mainmatter title, stop marking as front.
+  const frontTitles = new Set(
+    frontIndices.map((i) => toc[i].title.trim().toLowerCase()),
+  )
+  const mainTitles = new Set(
+    classification
+      .map((c, i) => c === 'main' ? toc[i].title.trim().toLowerCase() : null)
+      .filter((t): t is string => t !== null),
+  )
+
+  // All chunks before the first mainmatter chapter heading are frontmatter.
+  const result = new Set<string>()
+
+  for (const chunk of allChunks) {
+    const chapterLower = chunk.chapter?.trim().toLowerCase()
+
+    // Once we hit a chunk whose chapter matches a mainmatter TOC title, stop.
+    if (chapterLower && mainTitles.has(chapterLower)) break
+
+    result.add(chunk.id)
+  }
+
+  return result
+}
 
 // ── Transient error detection ──────────────────────────────
 
@@ -524,7 +595,24 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
       .innerJoin(chunks, eq(cards.chunkId, chunks.id))
       .where(and(eq(cards.userId, doc.userId), eq(chunks.documentId, doc.id)))
     const chunksWithCards = new Set(existingCards.map((r) => r.chunkId))
-    const chunksNeedingCards = eligibleChunks.filter((c) => !chunksWithCards.has(c.id))
+    let chunksNeedingCards = eligibleChunks.filter((c) => !chunksWithCards.has(c.id))
+
+    // Prioritize mainmatter chunks so users see real content cards first,
+    // not frontmatter (title page, copyright, dedication, etc.).
+    const toc = doc.toc as TocEntry[] | null
+    const classification = doc.tocClassification as TocSection[] | null
+    const frontmatterIds = getFrontmatterChunkIds(allChunks, ext, toc, classification, doc.totalPages ?? 1)
+
+    // Reorder: mainmatter first so users see real content, then interleave
+    // frontmatter after a batch of mainmatter has been produced.
+    if (frontmatterIds.size > 0) {
+      const main = chunksNeedingCards.filter((c) => !frontmatterIds.has(c.id))
+      const front = chunksNeedingCards.filter((c) => frontmatterIds.has(c.id))
+      // Process one batch of mainmatter, then all frontmatter, then remaining mainmatter.
+      const leadMain = main.slice(0, CARDS_PER_BATCH)
+      const restMain = main.slice(CARDS_PER_BATCH)
+      chunksNeedingCards = [...leadMain, ...front, ...restMain]
+    }
 
     const provider = createProvider()
     let cardsGenerated = 0

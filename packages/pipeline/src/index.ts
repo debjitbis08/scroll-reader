@@ -31,3 +31,7 @@ export type { AIChunkResult } from './ai-chunk.ts'
 
 // Element transforms
 export { mergeConsecutiveCode, foldSmallCodeIntoText } from './element-transforms.ts'
+
+// TOC classification
+export { classifyToc, classifyTocHeuristic } from './classify-toc.ts'
+export type { TocSection } from './classify-toc.ts'
