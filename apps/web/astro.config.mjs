@@ -78,6 +78,12 @@ export default defineConfig({
         optional: true,
       }),
       CRON_SECRET: envField.string({ context: "server", access: "secret" }),
+      ADMIN_EMAILS: envField.string({
+        context: "server",
+        access: "secret",
+        optional: true,
+        default: "",
+      }),
       CF_TURNSTILE_SITE_KEY: envField.string({
         context: "client",
         access: "public",

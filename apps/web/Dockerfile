@@ -42,6 +42,7 @@ ENV SUPABASE_URL=https://placeholder.supabase.co
 ENV SUPABASE_ANON_KEY=placeholder
 ENV DATABASE_URL=postgresql://placeholder:placeholder@localhost:5432/placeholder
 ENV CRON_SECRET=placeholder
+ENV ADMIN_EMAILS=
 ENV CF_TURNSTILE_SECRET_KEY=placeholder
 # Client-context env vars — inlined at build time, pass via --build-arg
 ARG CF_TURNSTILE_SITE_KEY

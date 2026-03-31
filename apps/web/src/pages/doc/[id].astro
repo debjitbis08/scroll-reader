@@ -7,6 +7,9 @@ import { documents, chunks, cards, jobs, cardScores, feedEvents, collectionDocum
 import CollectionManager from '../../components/CollectionManager.tsx'
 import type { DocumentType, ReadingGoal, Tier } from '@scroll-reader/shared-types'
 import { resolveCardStrategy, describeStrategy, TIER_LIMITS } from '@scroll-reader/shared-types'
+import { ADMIN_EMAILS } from 'astro:env/server'
+import { createSupabaseServer } from '../../lib/supabase.ts'
+import AdminGenerate from '../../components/AdminGenerate.tsx'
 import JobPoller from '../../components/JobPoller.tsx'
 import PageRangeSelector from '../../components/PageRangeSelector.tsx'
 import LatexText from '../../components/LatexText.tsx'
@@ -18,6 +21,13 @@ import PassageRenderer from '../../components/cards/PassageRenderer.tsx'
 import type { BodyContent, FlashcardContent, QuizContent, GlossaryContent, ContrastContent, PassageContent } from '@scroll-reader/shared-types'
 
 if (!Astro.locals.user) return Astro.redirect('/login')
+
+const supabase = createSupabaseServer(Astro.request, Astro.cookies)
+const { data: { user: supaUser } } = await supabase.auth.getUser()
+const adminEmails = new Set(
+  ADMIN_EMAILS.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean),
+)
+const isAdmin = !!supaUser?.email && adminEmails.has(supaUser.email.toLowerCase())
 
 const userId = Astro.locals.user.id
 const docId = Astro.params.id!
@@ -719,6 +729,11 @@ const CARD_TYPE_HUE: Record<string, string> = {
           <p class="font-body text-sm text-ed-on-surface-muted">No cards generated for this document.</p>
         )}
       </div>
+    )}
+
+    {/* Admin: generate cards bypassing daily limits */}
+    {isAdmin && (isChunking || isGenerating) && !doc.paused && (
+      <AdminGenerate documentId={docId} client:load />
     )}
   </div>
 </Layout>
