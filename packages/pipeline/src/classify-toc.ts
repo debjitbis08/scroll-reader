@@ -50,7 +50,9 @@ Respond with ONLY a JSON array of ${toc.length} strings, one per entry in the sa
 
   try {
     const response = await provider.generate(prompt)
-    const parsed = JSON.parse(response.text) as unknown
+    // Strip markdown code fences if the model wraps the JSON in ```json ... ```
+    const raw = response.text.trim().replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '')
+    const parsed = JSON.parse(raw) as unknown
 
     if (
       Array.isArray(parsed) &&
