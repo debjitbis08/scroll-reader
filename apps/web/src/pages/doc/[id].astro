@@ -274,6 +274,19 @@ const CARD_TYPE_LABEL: Record<string, string> = {
 const PRIORITY_LABEL: Record<string, string> = {
   pinned: 'Pinned', active: 'Active', normal: 'Normal',
 }
+const TOC_SECTION_LABEL: Record<string, string> = {
+  front: 'Front matter', main: 'Main', back: 'Back matter',
+}
+const TOC_SECTION_COLOR: Record<string, string> = {
+  front: 'text-ed-on-surface-muted bg-ed-surface-highest',
+  main: 'text-ed-primary bg-ed-primary-container',
+  back: 'text-ed-on-surface-muted bg-ed-surface-highest',
+}
+
+type TocEntryDisplay = { title: string; page: number; level: number }
+const tocEntries = (doc.toc ?? []) as TocEntryDisplay[]
+const tocClassification = (doc.tocClassification ?? []) as string[]
+const hasTocClassification = !isPreview && tocEntries.length > 0 && tocClassification.length === tocEntries.length
 
 const uploadDate = doc.createdAt ? new Date(doc.createdAt).toLocaleDateString('en-US', {
   year: 'numeric', month: 'short', day: 'numeric',
@@ -412,6 +425,34 @@ const CARD_TYPE_HUE: Record<string, string> = {
         {describeStrategy(strategy)}
       </span>
     </div>}
+
+    <!-- TOC with classification -->
+    {hasTocClassification && (
+      <details class="group">
+        <summary class="flex items-center gap-2 cursor-pointer font-body text-[0.75rem] tracking-wide text-ed-on-surface-muted hover:text-ed-primary transition-colors select-none">
+          <Icon name="mdi:table-of-contents" class="size-4" />
+          Table of Contents
+          <Icon name="mdi:chevron-right" class="size-4 transition-transform group-open:rotate-90" />
+        </summary>
+        <div class="mt-2 max-h-72 overflow-y-auto rounded bg-ed-surface-high p-3 space-y-0.5">
+          {tocEntries.map((entry, i) => (
+            <div
+              class="flex items-center gap-2 py-0.5"
+              style={`padding-left: ${entry.level * 16}px`}
+            >
+              <span class="font-body text-sm text-ed-on-surface leading-snug flex-1 min-w-0 truncate">
+                {entry.title || `Page ${entry.page}`}
+              </span>
+              {tocClassification[i] && (
+                <span class={`shrink-0 rounded px-1.5 py-0.5 font-body text-[0.6rem] font-medium uppercase tracking-wider ${TOC_SECTION_COLOR[tocClassification[i]] ?? ''}`}>
+                  {TOC_SECTION_LABEL[tocClassification[i]] ?? tocClassification[i]}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      </details>
+    )}
 
     <!-- Collections -->
     <div class="mb-2">
