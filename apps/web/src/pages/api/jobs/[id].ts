@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro'
 import { eq, and } from 'drizzle-orm'
 import { db } from '../../../lib/db.ts'
-import { jobs } from '@scroll-reader/db'
+import { jobs, documents } from '@scroll-reader/db'
 
 export const GET: APIRoute = async ({ params, locals }) => {
   if (!locals.user) return new Response('Unauthorized', { status: 401 })
@@ -14,5 +14,16 @@ export const GET: APIRoute = async ({ params, locals }) => {
 
   if (!job) return new Response('Not found', { status: 404 })
 
-  return Response.json(job)
+  // Include doc status so frontend can distinguish transient (retrying) from permanent errors
+  const [doc] = await db
+    .select({ processingStatus: documents.processingStatus, retryCount: documents.retryCount })
+    .from(documents)
+    .where(eq(documents.id, job.documentId))
+    .limit(1)
+
+  return Response.json({
+    ...job,
+    docProcessingStatus: doc?.processingStatus ?? null,
+    retryCount: doc?.retryCount ?? 0,
+  })
 }

@@ -158,6 +158,7 @@ const READING_GOAL_LABEL: Record<string, string> = {
                   doc.processingStatus === "generating";
                 const isReady = doc.processingStatus === "ready";
                 const isError = doc.processingStatus === "error";
+                const isRetrying = isProcessing && (doc.retryCount ?? 0) > 0;
                 const progressPct = doc.totalElements
                   ? Math.round(
                       ((doc.elementsProcessed ?? 0) / doc.totalElements) * 100,
@@ -227,7 +228,7 @@ const READING_GOAL_LABEL: Record<string, string> = {
                                 : "text-ed-on-surface-muted",
                         ]}
                       >
-                        {doc.paused ? "Paused" : statusLabel}
+                        {doc.paused ? "Paused" : isRetrying ? "Retrying" : statusLabel}
                       </span>
                     </a>
                   </li>

@@ -95,6 +95,28 @@ const DOC_DEFAULT_WEIGHT = 1
 
 const TIER_WEIGHTS: Record<string, number> = { plus: 2, free: 1 }
 
+// ── Transient error detection ──────────────────────────────
+
+const MAX_RETRIES = 3
+
+const TRANSIENT_PATTERNS = [
+  /exited null/i,       // signal kill (OOM)
+  /exited 137/i,        // SIGKILL
+  /exited 139/i,        // SIGSEGV
+  /SIGKILL|SIGTERM/i,
+  /ENOMEM|ENOSPC/i,
+  /ETIMEDOUT|ECONNRESET|ECONNREFUSED/i,
+  /fetch failed/i,
+  /rate limit/i,
+  /Too Many Requests|429/i,
+  /Service Unavailable|503/i,
+]
+
+function isTransient(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err)
+  return TRANSIENT_PATTERNS.some(p => p.test(msg))
+}
+
 /**
  * Count how many cards a user has generated today (UTC).
  * Uses usage_events instead of cards table so the count survives document deletion.
@@ -593,6 +615,7 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
       .set({
         cardCount: docCardCount?.count ?? 0,
         ...(allDone ? { processingStatus: 'ready' as const } : {}),
+        ...(doc.retryCount ? { retryCount: 0 } : {}),
       })
       .where(eq(documents.id, doc.id))
 
@@ -610,9 +633,19 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
     return cardsGenerated
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
-    console.error(`[pipeline] error: doc=${doc.id}`, err)
-    await db.update(jobs).set({ status: 'failed', error: message, finishedAt: new Date() }).where(eq(jobs.id, jobId))
-    await db.update(documents).set({ processingStatus: 'error' }).where(eq(documents.id, doc.id))
+    const retryCount = (doc.retryCount ?? 0) + 1
+
+    if (isTransient(err) && retryCount < MAX_RETRIES) {
+      // Transient: keep doc in current status so next cron retries it
+      console.warn(`[pipeline] transient error (attempt ${retryCount}/${MAX_RETRIES}): doc=${doc.id} ${message}`)
+      await db.update(documents).set({ retryCount }).where(eq(documents.id, doc.id))
+      await db.update(jobs).set({ status: 'failed', error: message, finishedAt: new Date() }).where(eq(jobs.id, jobId))
+    } else {
+      // Permanent error or retries exhausted
+      console.error(`[pipeline] permanent error: doc=${doc.id}`, err)
+      await db.update(jobs).set({ status: 'failed', error: message, finishedAt: new Date() }).where(eq(jobs.id, jobId))
+      await db.update(documents).set({ processingStatus: 'error', retryCount }).where(eq(documents.id, doc.id))
+    }
     await unlink(tmpPath).catch(() => {})
     await rm(imageDir, { recursive: true, force: true }).catch(() => {})
     return 0

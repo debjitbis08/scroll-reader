@@ -80,6 +80,7 @@ export const documents = pgTable('documents', {
   paused: boolean('paused').default(false).notNull(),
   lockedBy: text('locked_by'),
   lockedAt: timestamp('locked_at', { withTimezone: true }),
+  retryCount: integer('retry_count').default(0).notNull(),
   docVirtualTime: real('doc_virtual_time').default(0).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 })

@@ -52,6 +52,7 @@ const isChunking = doc.processingStatus === 'chunking'
 const isGenerating = doc.processingStatus === 'generating'
 const isReady = doc.processingStatus === 'ready'
 const isError = doc.processingStatus === 'error'
+const isRetrying = (isChunking || isGenerating) && (doc.retryCount ?? 0) > 0
 const hasChunks = !isPending && !isPreview && !isError
 
 const strategy = resolveCardStrategy(
@@ -456,11 +457,23 @@ const CARD_TYPE_HUE: Record<string, string> = {
       />
     )}
 
-    <!-- Error state -->
+    <!-- Retrying after transient error -->
+    {isRetrying && (
+      <div class="rounded bg-ed-surface-high px-6 py-4">
+        <p class="font-body text-sm font-medium text-ed-on-surface">Temporarily failed, retrying automatically…</p>
+        {job?.error && <p class="mt-1 font-body text-sm text-ed-on-surface-dim opacity-80">{job.error}</p>}
+        <p class="mt-1 font-body text-xs text-ed-on-surface-muted">Attempt {doc.retryCount} of 3</p>
+      </div>
+    )}
+
+    <!-- Permanent error state -->
     {isError && (
       <div class="rounded bg-ed-surface-high px-6 py-4">
         <p class="font-body text-sm font-medium text-ed-on-surface">Processing failed</p>
         {job?.error && <p class="mt-1 font-body text-sm text-ed-on-surface-dim opacity-80">{job.error}</p>}
+        {(doc.retryCount ?? 0) > 0 && (
+          <p class="mt-1 font-body text-xs text-ed-on-surface-muted">Failed after {doc.retryCount} retries</p>
+        )}
         <a href="/upload" class="mt-3 inline-block font-body text-sm font-medium text-ed-primary underline">
           Try another document
         </a>

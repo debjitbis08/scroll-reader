@@ -14,6 +14,7 @@ const STATUS_LABELS: Record<string, string> = {
 export default function JobPoller(props: Props) {
   const [status, setStatus] = createSignal('queued')
   const [error, setError] = createSignal<string | null>(null)
+  const [retrying, setRetrying] = createSignal(false)
 
   let interval: ReturnType<typeof setInterval> | undefined
 
@@ -28,8 +29,15 @@ export default function JobPoller(props: Props) {
           clearInterval(interval)
           window.location.reload()
         } else if (job.status === 'failed') {
-          clearInterval(interval)
-          setError(job.error ?? 'An unknown error occurred.')
+          // Transient error: doc still in chunking/generating, will be retried
+          if (job.docProcessingStatus !== 'error') {
+            setRetrying(true)
+            setError(job.error ?? 'A temporary error occurred.')
+            // Keep polling — cron will create a new job on retry
+          } else {
+            clearInterval(interval)
+            setError(job.error ?? 'An unknown error occurred.')
+          }
         }
       } catch {
         // network hiccup — try again next tick
@@ -41,7 +49,7 @@ export default function JobPoller(props: Props) {
 
   return (
     <div class="flex flex-col items-center gap-4 py-16 text-center">
-      {status() !== 'failed' && (
+      {(status() !== 'failed' || retrying()) && (
         <svg
           class="size-10 animate-spin text-ctp-mauve"
           viewBox="0 0 24 24"
@@ -52,7 +60,9 @@ export default function JobPoller(props: Props) {
           <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
         </svg>
       )}
-      <p class="text-lg font-medium text-ctp-text">{STATUS_LABELS[status()] ?? status()}</p>
+      <p class="text-lg font-medium text-ctp-text">
+        {retrying() ? 'Temporarily failed, retrying…' : (STATUS_LABELS[status()] ?? status())}
+      </p>
       {error() && (
         <p class="max-w-sm rounded-lg bg-ctp-red/10 px-4 py-2 text-sm text-ctp-red">{error()}</p>
       )}

@@ -176,6 +176,13 @@
       "when": 1774879681067,
       "tag": "0024_careless_gamma_corps",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1774929058426,
+      "tag": "0025_careful_king_cobra",
+      "breakpoints": true
     }
   ]
 }
