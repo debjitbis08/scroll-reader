@@ -6,9 +6,10 @@
     "build": "turbo build",
     "typecheck": "turbo typecheck",
     "lint": "turbo lint",
-    "supabase": "pnpm --filter @scroll-reader/db supabase"
+    "supabase": "supabase"
   },
   "devDependencies": {
+    "supabase": "^2.84.0",
     "turbo": "^2.3.3",
     "typescript": "^5.7.2"
   },

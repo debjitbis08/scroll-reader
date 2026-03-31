@@ -96,5 +96,8 @@ export default defineConfig({
   vite: {
     plugins: [tailwindcss()],
     envDir: "../../",
+    ssr: {
+      external: ["posthog-node"],
+    },
   },
 });
