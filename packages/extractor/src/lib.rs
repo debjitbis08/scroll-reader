@@ -263,135 +263,147 @@ pub fn extract_pdf_with_images(
 /// `<text>` element references a font ID. We identify monospace fonts and group
 /// consecutive monospace text runs into Code blocks.
 fn extract_pdf_via_html(path: &str, output_dir: Option<&Path>) -> Option<Vec<DocElement>> {
-    let output = std::process::Command::new("pdftohtml")
-        .args([
-            "-stdout",
-            "-i",          // ignore images (handled separately via lopdf)
-            "-xml",        // XML output with per-text font references
-            "-enc", "UTF-8",
-            path,
-        ])
-        .output()
-        .ok()?;
+    // ── Pass 1: Text extraction from pdftohtml XML ──
+    // Scoped so that the XML string, Command output, and HTML DOM are all
+    // dropped before we load lopdf for image extraction.  This avoids holding
+    // ~80-130 MB of DOM + XML simultaneously with the ~50 MB lopdf Document.
+    let (mut text_by_page, page_order) = {
+        let output = std::process::Command::new("pdftohtml")
+            .args([
+                "-stdout",
+                "-i",          // ignore images (handled separately via lopdf)
+                "-xml",        // XML output with per-text font references
+                "-enc", "UTF-8",
+                path,
+            ])
+            .output()
+            .ok()?;
 
-    if !output.status.success() {
-        return None;
-    }
+        if !output.status.success() {
+            return None;
+        }
 
-    let xml = String::from_utf8_lossy(&output.stdout).to_string();
-    if xml.is_empty() {
-        return None;
-    }
+        // Use Cow<str> directly — avoids a full copy when stdout is valid UTF-8
+        let xml = String::from_utf8_lossy(&output.stdout);
+        if xml.is_empty() {
+            return None;
+        }
 
-    // Load lopdf for image extraction
-    let pdf_doc = lopdf::Document::load(path).ok();
+        let document = Html::parse_document(&xml);
+        // output.stdout and xml are no longer needed — they'll drop at block end
+
+        let page_sel = Selector::parse("page").unwrap();
+        let fontspec_sel = Selector::parse("fontspec").unwrap();
+        let text_sel = Selector::parse("text").unwrap();
+
+        let root = document.root_element();
+        let mono_fonts = build_mono_font_ids(&root, &fontspec_sel);
+        let doc_font_sizes = build_font_size_map(&root, &fontspec_sel);
+
+        let mut text_by_page: std::collections::BTreeMap<u32, Vec<DocElement>> =
+            std::collections::BTreeMap::new();
+        let mut page_order: Vec<(u32, u32)> = Vec::new(); // (physical_page, display_num)
+
+        for (seq_idx, page_el) in document.select(&page_sel).enumerate() {
+            let physical_page: u32 = (seq_idx + 1) as u32;
+
+            let display_num = page_el
+                .value()
+                .attr("number")
+                .and_then(|n| n.parse::<u32>().ok())
+                .unwrap_or(physical_page);
+
+            page_order.push((physical_page, display_num));
+            let chapter = format!("Page {display_num}");
+
+            let page_mono = build_mono_font_ids(&page_el, &fontspec_sel);
+            let all_mono: HashSet<String> = mono_fonts.union(&page_mono).cloned().collect();
+            let page_font_sizes = build_font_size_map(&page_el, &fontspec_sel);
+
+            let mut runs: Vec<PdfRun> = Vec::new();
+            for text_el in page_el.select(&text_sel) {
+                let font_id = text_el.value().attr("font").unwrap_or("");
+                let top: i32 = text_el
+                    .value()
+                    .attr("top")
+                    .and_then(|t| t.parse().ok())
+                    .unwrap_or(0);
+                let font_size = page_font_sizes.get(font_id)
+                    .or_else(|| doc_font_sizes.get(font_id))
+                    .copied()
+                    .unwrap_or(12.0);
+                let is_mono = all_mono.contains(font_id);
+                let content = collect_pdf_text_formatted(text_el);
+                if content.trim().is_empty() {
+                    continue;
+                }
+                runs.push(PdfRun { top, font_size, is_mono, text: content });
+            }
+
+            let merged = merge_pdf_runs(&runs);
+            let mut page_elements = Vec::new();
+
+            let mut i = 0;
+            while i < merged.len() {
+                let is_mono = merged[i].is_mono;
+
+                if is_mono {
+                    let mut code_lines = Vec::new();
+                    while i < merged.len() && merged[i].is_mono {
+                        code_lines.push(merged[i].text.as_str());
+                        i += 1;
+                    }
+                    let code_content = code_lines.join("\n");
+                    if !code_content.trim().is_empty() {
+                        page_elements.push(DocElement::Code {
+                            content: code_content,
+                            language: None,
+                            chapter: Some(chapter.clone()),
+                            spine_index: None,
+                            anchor_id: None,
+                        });
+                    }
+                } else {
+                    let start = i;
+                    while i < merged.len() && !merged[i].is_mono {
+                        i += 1;
+                    }
+                    let text_content = join_text_with_paragraphs(&merged[start..i]);
+                    let cleaned = clean_pdf_page(&text_content);
+                    if !cleaned.is_empty() {
+                        page_elements.push(DocElement::Text {
+                            content: cleaned,
+                            chapter: Some(chapter.clone()),
+                            spine_index: None,
+                            anchor_id: None,
+                        });
+                    }
+                }
+            }
+
+            text_by_page.insert(physical_page, page_elements);
+        }
+
+        (text_by_page, page_order)
+    }; // DOM, XML string, and Command output all dropped here
+
+    // ── Pass 2: Image extraction from lopdf ──
+    // lopdf loads the raw PDF (~2-3x file size). Since the DOM is already freed,
+    // peak memory is just lopdf + the accumulated elements.
     let mut seen_images: HashSet<String> = HashSet::new();
+    let pdf_doc = lopdf::Document::load(path).ok();
 
-    let document = Html::parse_document(&xml);
+    // ── Merge: images first, then text per page (preserves original ordering) ──
     let mut elements = Vec::new();
-
-    let page_sel = Selector::parse("page").unwrap();
-    let fontspec_sel = Selector::parse("fontspec").unwrap();
-    let text_sel = Selector::parse("text").unwrap();
-
-    // Build font ID → monospace map from document-level <fontspec> elements.
-    // In full-doc XML mode, fontspecs are at the root level (not inside pages).
-    // In per-page mode, they're inside each page. Check both.
-    let root = document.root_element();
-    let mono_fonts = build_mono_font_ids(&root, &fontspec_sel);
-    let doc_font_sizes = build_font_size_map(&root, &fontspec_sel);
-
-    // Use a sequential physical index for lopdf (which keys pages 1..N by
-    // physical position), and the XML `number` attribute only as a display
-    // label.  pdftohtml can emit duplicate `number` values when the PDF has
-    // logical page-number resets (common in textbooks with front matter +
-    // chapters), which would otherwise cause the same physical page to be
-    // extracted multiple times.
-    for (seq_idx, page_el) in document.select(&page_sel).enumerate() {
-        let physical_page: u32 = (seq_idx + 1) as u32; // 1-based, matches lopdf keys
-
-        let display_num = page_el
-            .value()
-            .attr("number")
-            .and_then(|n| n.parse::<u32>().ok())
-            .unwrap_or(physical_page);
-
-        let chapter = format!("Page {display_num}");
-
-        // Extract images for this page (from lopdf)
+    for &(physical_page, _display_num) in &page_order {
         if let Some(ref doc) = pdf_doc {
             if let Some(&page_id) = doc.get_pages().get(&physical_page) {
                 let page_images = extract_page_images(doc, page_id, physical_page, output_dir, &mut seen_images);
                 elements.extend(page_images);
             }
         }
-
-        // Merge page-level fontspecs (if any) with document-level ones
-        let page_mono = build_mono_font_ids(&page_el, &fontspec_sel);
-        let all_mono: HashSet<String> = mono_fonts.union(&page_mono).cloned().collect();
-        let page_font_sizes = build_font_size_map(&page_el, &fontspec_sel);
-
-        // Collect text runs with layout metadata
-        let mut runs: Vec<PdfRun> = Vec::new();
-        for text_el in page_el.select(&text_sel) {
-            let font_id = text_el.value().attr("font").unwrap_or("");
-            let top: i32 = text_el
-                .value()
-                .attr("top")
-                .and_then(|t| t.parse().ok())
-                .unwrap_or(0);
-            let font_size = page_font_sizes.get(font_id)
-                .or_else(|| doc_font_sizes.get(font_id))
-                .copied()
-                .unwrap_or(12.0);
-            let is_mono = all_mono.contains(font_id);
-            let content = collect_pdf_text_formatted(text_el);
-            if content.trim().is_empty() {
-                continue;
-            }
-            runs.push(PdfRun { top, font_size, is_mono, text: content });
-        }
-
-        // Merge text runs on the same line (same `top` value)
-        let merged = merge_pdf_runs(&runs);
-
-        // Group consecutive lines by type (mono vs non-mono)
-        let mut i = 0;
-        while i < merged.len() {
-            let is_mono = merged[i].is_mono;
-
-            if is_mono {
-                let mut code_lines = Vec::new();
-                while i < merged.len() && merged[i].is_mono {
-                    code_lines.push(merged[i].text.as_str());
-                    i += 1;
-                }
-                let code_content = code_lines.join("\n");
-                if !code_content.trim().is_empty() {
-                    elements.push(DocElement::Code {
-                        content: code_content,
-                        language: None,
-                        chapter: Some(chapter.clone()),
-                        spine_index: None,
-                        anchor_id: None,
-                    });
-                }
-            } else {
-                let start = i;
-                while i < merged.len() && !merged[i].is_mono {
-                    i += 1;
-                }
-                let text_content = join_text_with_paragraphs(&merged[start..i]);
-                let cleaned = clean_pdf_page(&text_content);
-                if !cleaned.is_empty() {
-                    elements.push(DocElement::Text {
-                        content: cleaned,
-                        chapter: Some(chapter.clone()),
-                        spine_index: None,
-                        anchor_id: None,
-                    });
-                }
-            }
+        if let Some(text_elements) = text_by_page.remove(&physical_page) {
+            elements.extend(text_elements);
         }
     }
 

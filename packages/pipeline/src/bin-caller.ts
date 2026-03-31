@@ -10,17 +10,18 @@ export function callBin(
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const proc = spawn(binPath, [], { stdio: ['pipe', 'pipe', 'pipe'] })
-    let stdout = ''
-    let stderr = ''
+    const stdoutChunks: Buffer[] = []
+    const stderrChunks: Buffer[] = []
 
-    proc.stdout.on('data', (d: Buffer) => { stdout += d.toString() })
-    proc.stderr.on('data', (d: Buffer) => { stderr += d.toString() })
+    proc.stdout.on('data', (d: Buffer) => { stdoutChunks.push(d) })
+    proc.stderr.on('data', (d: Buffer) => { stderrChunks.push(d) })
 
     proc.on('close', (code) => {
       if (code !== 0) {
-        reject(new Error(`${label} exited ${code}: ${stderr.trim()}`))
+        const stderr = Buffer.concat(stderrChunks).toString('utf-8').trim()
+        reject(new Error(`${label} exited ${code}: ${stderr}`))
       } else {
-        resolve(stdout)
+        resolve(Buffer.concat(stdoutChunks).toString('utf-8'))
       }
     })
 
@@ -44,17 +45,19 @@ export function callPython(
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const proc = spawn('python3', [scriptPath], { stdio: ['pipe', 'pipe', 'pipe'] })
-    let stdout = ''
-    let stderr = ''
+    const stdoutChunks: Buffer[] = []
+    const stderrChunks: Buffer[] = []
 
-    proc.stdout.on('data', (d: Buffer) => { stdout += d.toString() })
-    proc.stderr.on('data', (d: Buffer) => { stderr += d.toString() })
+    proc.stdout.on('data', (d: Buffer) => { stdoutChunks.push(d) })
+    proc.stderr.on('data', (d: Buffer) => { stderrChunks.push(d) })
 
     proc.on('close', (code) => {
+      const stdout = Buffer.concat(stdoutChunks).toString('utf-8')
       if (stdout.trim().startsWith('[')) {
         resolve(stdout)
       } else if (code !== 0) {
-        console.warn(`[${label}] exited ${code}: ${stderr.trim().slice(0, 200)}`)
+        const stderr = Buffer.concat(stderrChunks).toString('utf-8').trim()
+        console.warn(`[${label}] exited ${code}: ${stderr.slice(0, 200)}`)
         resolve('[]')
       } else {
         resolve(stdout)

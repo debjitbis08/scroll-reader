@@ -67,10 +67,8 @@ fn main() {
         std::process::exit(1);
     });
 
-    let output = serde_json::to_string(&elements).unwrap_or_else(|e| {
+    serde_json::to_writer(io::stdout(), &elements).unwrap_or_else(|e| {
         eprintln!("extractor: failed to serialize output: {e}");
         std::process::exit(1);
     });
-
-    println!("{output}");
 }
