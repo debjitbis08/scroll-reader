@@ -1,7 +1,8 @@
-node_modules
-dist
-.astro
-target
-*.md
+**/node_modules
+**/dist
+**/.astro
+**/target
 .git
 .env
+*.md
+.fly
