@@ -121,8 +121,9 @@ function createProvider(): AIProvider {
           body: JSON.stringify({ contents: [{ parts }] }),
         })
         if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`)
-        const data = await res.json() as { candidates: { content: { parts: { text: string }[] } }[] }
-        return data.candidates[0].content.parts[0].text
+        const data = await res.json() as { candidates: { content: { parts: { text: string; thought?: boolean }[] } }[] }
+        const responseParts = data.candidates[0].content.parts
+        return (responseParts.filter((p) => !p.thought).pop() ?? responseParts[responseParts.length - 1]).text
       },
     }
   }

@@ -1,10 +1,15 @@
 import type { AIProvider, AIResponse, ImagePart } from './index.ts'
 import { GEMINI_MODEL, GEMINI_API_KEY } from 'astro:env/server'
 
+interface GeminiPart {
+  text: string
+  thought?: boolean
+}
+
 interface GeminiResponse {
   candidates: Array<{
     content: {
-      parts: Array<{ text: string }>
+      parts: GeminiPart[]
     }
   }>
   usageMetadata?: {
@@ -55,7 +60,11 @@ export class GeminiProvider implements AIProvider {
     }
 
     const data = (await res.json()) as GeminiResponse
-    const text = data.candidates[0].content.parts[0].text
+    const responseParts = data.candidates[0].content.parts
+    // Thinking models (e.g. 2.5 Flash) return thought parts alongside the
+    // actual response. Pick the last non-thought part to get the real output.
+    const responsePart = responseParts.filter((p) => !p.thought).pop() ?? responseParts[responseParts.length - 1]
+    const text = responsePart.text
     const um = data.usageMetadata
 
     return {

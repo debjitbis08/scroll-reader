@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "classify": "tsx classify.ts",
     "extract": "tsx extract.ts",
     "generate": "tsx generate.ts",
     "build:client": "vite build --config vite.config.ts",

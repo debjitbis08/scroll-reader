@@ -167,12 +167,11 @@ function renderMarkdown(html: string): string {
     const headingMatch = trimmed.match(/^(#{1,3})\s+(.+)$/);
     if (headingMatch) {
       const level = headingMatch[1].length;
+      console.log("Level", level);
       const cls =
-        level === 1
-          ? "text-lg font-semibold"
-          : level < 4
-            ? "text-base font-semibold"
-            : "text-sm font-semibold";
+        level < 4
+          ? "text-lg font-display text-ed-on-surface"
+          : "text-sm font-semibold";
       return `<h${level} class="${cls}">${headingMatch[2]}</h${level}>`;
     }
 
