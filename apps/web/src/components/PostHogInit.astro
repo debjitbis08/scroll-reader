@@ -7,3 +7,7 @@ const { apiKey } = Astro.props
     posthog.init(apiKey, { api_host: 'https://us.i.posthog.com' })
 </script>
 )}
+<script>
+  import { identifyUser } from './analytics/identify.js'
+  identifyUser()
+</script>

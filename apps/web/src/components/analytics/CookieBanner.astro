@@ -1,0 +1,144 @@
+---
+---
+<div id="cookie-banner" class="cookie-banner" style="display: none;">
+  <div class="cookie-banner-inner">
+    <div class="cookie-banner-text">
+      <p class="cookie-banner-title">We use cookies</p>
+      <p class="cookie-banner-desc">
+        Some cookies are essential for Scroll Reader to function, like keeping you signed in.
+        We also use optional cookies to understand how the app is used and improve it over time.
+        Learn more in our <a href="/privacy">Privacy Policy</a>.
+        You can manage your preferences anytime.
+      </p>
+    </div>
+    <div class="cookie-banner-actions">
+      <button id="cookie-accept" class="cookie-btn">Accept All</button>
+      <button id="cookie-reject" class="cookie-btn">Reject non-essential</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  import { identifyUser } from './identify.js'
+
+  function initCookieBanner() {
+    const banner = document.getElementById('cookie-banner')!
+    const acceptBtn = document.getElementById('cookie-accept')!
+    const rejectBtn = document.getElementById('cookie-reject')!
+
+    const storedConsent = localStorage.getItem('cookie_consent')
+    if (storedConsent) return
+
+    requestIdleCallback(() => {
+      setTimeout(() => {
+        if (!localStorage.getItem('cookie_consent')) {
+          banner.style.display = ''
+        }
+      }, 1500)
+    })
+
+    acceptBtn.addEventListener('click', () => {
+      localStorage.setItem('cookie_consent', 'yes')
+      banner.style.display = 'none'
+      if (window.posthog) {
+        posthog.set_config({ persistence: 'localStorage+cookie' })
+      }
+      identifyUser()
+    })
+
+    rejectBtn.addEventListener('click', () => {
+      localStorage.setItem('cookie_consent', 'no')
+      banner.style.display = 'none'
+      identifyUser()
+    })
+  }
+
+  initCookieBanner()
+</script>
+
+<style>
+  .cookie-banner {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 9999;
+    pointer-events: none;
+  }
+
+  .cookie-banner-inner {
+    pointer-events: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1.25rem;
+    margin: 1rem;
+    border-radius: 0.5rem;
+    background: var(--ed-surface-high);
+    border: 1px solid var(--ed-outline);
+    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.1);
+  }
+
+  @media (min-width: 768px) {
+    .cookie-banner-inner {
+      flex-direction: row;
+      align-items: center;
+      gap: 1.5rem;
+      margin: 0;
+      border-radius: 0;
+      border-left: none;
+      border-right: none;
+      border-bottom: none;
+    }
+  }
+
+  .cookie-banner-text {
+    flex: 1;
+  }
+
+  .cookie-banner-title {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--ed-on-surface);
+    margin-bottom: 0.35rem;
+  }
+
+  .cookie-banner-desc {
+    font-size: 0.8rem;
+    font-weight: 300;
+    color: var(--ed-on-surface-dim);
+    line-height: 1.6;
+  }
+
+  .cookie-banner-desc a {
+    color: var(--ed-primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .cookie-banner-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-shrink: 0;
+  }
+
+  .cookie-btn {
+    padding: 0.5rem 1rem;
+    border-radius: 0.25rem;
+    border: 1px solid var(--ed-outline);
+    background: var(--ed-surface-container);
+    color: var(--ed-on-surface);
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s;
+    white-space: nowrap;
+  }
+
+  .cookie-btn:hover {
+    background: var(--ed-surface-highest);
+    border-color: var(--ed-primary);
+  }
+</style>

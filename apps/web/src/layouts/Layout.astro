@@ -3,6 +3,7 @@ import '../styles/global.css'
 import 'katex/dist/katex.min.css'
 import Header from '../components/Header.astro'
 import PostHogInit from '../components/PostHogInit.astro'
+import CookieBanner from '../components/analytics/CookieBanner.astro'
 import { PUBLIC_POSTHOG_API_KEY } from 'astro:env/client'
 
 interface Props {
@@ -10,6 +11,7 @@ interface Props {
 }
 
 const { title = 'Scroll Reader' } = Astro.props
+const user = Astro.locals.user
 ---
 
 <html lang="en">
@@ -38,9 +40,14 @@ const { title = 'Scroll Reader' } = Astro.props
     </script>
     <PostHogInit apiKey={PUBLIC_POSTHOG_API_KEY} />
   </head>
-  <body class="min-h-screen bg-ed-surface text-ed-on-surface antialiased">
+  <body
+    class="min-h-screen bg-ed-surface text-ed-on-surface antialiased"
+    data-user-id={user?.id}
+    data-user-email={user?.email}
+  >
     <Header />
     <slot />
+    <CookieBanner />
   </body>
 </html>
 

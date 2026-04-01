@@ -50,6 +50,9 @@ importers:
       '@supabase/supabase-js':
         specifier: ^2.47.0
         version: 2.97.0
+      '@thumbmarkjs/thumbmarkjs':
+        specifier: ^1.7.6
+        version: 1.7.6
       astro:
         specifier: ^5.0.0
         version: 5.17.3(@types/node@22.19.11)(jiti@2.6.1)(lightningcss@1.31.1)(rollup@4.59.0)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2)
@@ -1676,6 +1679,9 @@ packages:
     resolution: {integrity: sha512-da9mFCaHpoOgtQiWtDGIikTrSpUFBtIZCG3jy/u2BGV+l/X1/pbxzmIUxNt6JWm19N3WtGi4KlJdSH/Si83WOA==}
     peerDependencies:
       vite: ^5.2.0 || ^6 || ^7
+
+  '@thumbmarkjs/thumbmarkjs@1.7.6':
+    resolution: {integrity: sha512-ihqi09j7u7GZxinCIfPlGweSf4zdYC7f7eyQvm6yn/kbf3sMyejF5mQBNubY798SimY+tD6BTdUhBYryinxmug==}
 
   '@trysound/sax@0.2.0':
     resolution: {integrity: sha512-L7z9BgrNEcYyUYtF+HaEfiS5ebkh9jXqbszz7pC0hRBPaatV0XjSD3+eHrpqFemQfgwiFF0QPIarnIihIDn7OA==}
@@ -5024,6 +5030,8 @@ snapshots:
       '@tailwindcss/oxide': 4.2.0
       tailwindcss: 4.2.0
       vite: 6.4.1(@types/node@22.19.11)(jiti@2.6.1)(lightningcss@1.31.1)(tsx@4.21.0)(yaml@2.8.2)
+
+  '@thumbmarkjs/thumbmarkjs@1.7.6': {}
 
   '@trysound/sax@0.2.0': {}
 

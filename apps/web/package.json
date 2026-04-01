@@ -20,6 +20,7 @@
     "@scroll-reader/shared-types": "workspace:*",
     "@supabase/ssr": "^0.6.0",
     "@supabase/supabase-js": "^2.47.0",
+    "@thumbmarkjs/thumbmarkjs": "^1.7.6",
     "astro": "^5.0.0",
     "astro-icon": "^1.1.0",
     "drizzle-orm": "^0.40.0",
