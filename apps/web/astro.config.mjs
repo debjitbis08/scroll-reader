@@ -77,6 +77,11 @@ export default defineConfig({
         access: "secret",
         optional: true,
       }),
+      DISABLE_CRON: envField.boolean({
+        context: "server",
+        access: "public",
+        default: false,
+      }),
       CRON_SECRET: envField.string({ context: "server", access: "secret" }),
       ADMIN_EMAILS: envField.string({
         context: "server",
@@ -91,6 +96,11 @@ export default defineConfig({
       CF_TURNSTILE_SECRET_KEY: envField.string({
         context: "server",
         access: "secret",
+      }),
+      DISABLE_POSTHOG: envField.boolean({
+        context: "server",
+        access: "public",
+        default: false,
       }),
       PUBLIC_POSTHOG_API_KEY: envField.string({
         context: "client",

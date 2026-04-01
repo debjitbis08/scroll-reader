@@ -5,6 +5,7 @@ import Header from '../components/Header.astro'
 import PostHogInit from '../components/PostHogInit.astro'
 import CookieBanner from '../components/analytics/CookieBanner.astro'
 import { PUBLIC_POSTHOG_API_KEY } from 'astro:env/client'
+import { DISABLE_POSTHOG } from 'astro:env/server'
 
 interface Props {
   title?: string
@@ -12,6 +13,7 @@ interface Props {
 
 const { title = 'Scroll Reader' } = Astro.props
 const user = Astro.locals.user
+const posthogKey = DISABLE_POSTHOG ? undefined : PUBLIC_POSTHOG_API_KEY
 ---
 
 <html lang="en">
@@ -38,7 +40,7 @@ const user = Astro.locals.user
           t === 'latte' ? 'light' : t === 'mocha' ? 'dark' : 'auto'
       })()
     </script>
-    <PostHogInit apiKey={PUBLIC_POSTHOG_API_KEY} />
+    <PostHogInit apiKey={posthogKey} />
   </head>
   <body
     class="min-h-screen bg-ed-surface text-ed-on-surface antialiased"

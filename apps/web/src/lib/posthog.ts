@@ -1,4 +1,5 @@
 import { PostHog } from "posthog-node";
+import { DISABLE_POSTHOG } from "astro:env/server";
 
 const POSTHOG_API_KEY = import.meta.env.PUBLIC_POSTHOG_API_KEY as
   | string
@@ -7,7 +8,7 @@ const POSTHOG_API_KEY = import.meta.env.PUBLIC_POSTHOG_API_KEY as
 let client: PostHog | null = null;
 
 export function getPostHog() {
-  if (!POSTHOG_API_KEY) return null;
+  if (DISABLE_POSTHOG || !POSTHOG_API_KEY) return null;
   if (!client) {
     client = new PostHog(POSTHOG_API_KEY, {
       host: "https://us.i.posthog.com",

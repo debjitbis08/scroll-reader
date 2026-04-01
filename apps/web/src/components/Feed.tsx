@@ -263,7 +263,10 @@ export default function Feed(props: { initialCollection?: string }) {
   const [selectedCollection, setSelectedCollection] = createSignal<
     string | null
   >(props.initialCollection ?? null);
-  const [sourceModalImage, setSourceModalImage] = createSignal<{ url: string; alt: string } | null>(null);
+  const [sourceModalImage, setSourceModalImage] = createSignal<{
+    url: string;
+    alt: string;
+  } | null>(null);
   let sentinelRef: HTMLDivElement | undefined;
   let abortController: AbortController | null = null;
   let loadGeneration = 0;
@@ -478,7 +481,7 @@ export default function Feed(props: { initialCollection?: string }) {
                       fallback={
                         <LatexText
                           text={(item.card.content as BodyContent).body ?? ""}
-                          class="font-body text-[0.95rem] leading-relaxed text-ed-on-surface-dim"
+                          class="font-body text-sm leading-relaxed text-ed-on-surface-dim"
                         />
                       }
                     >
@@ -670,14 +673,22 @@ export default function Feed(props: { initialCollection?: string }) {
                                       <For each={c.images}>
                                         {(img) => {
                                           const url = `/api/images/${img.storagePath}`;
-                                          const alt = img.altText || c.content || "Document image";
+                                          const alt =
+                                            img.altText ||
+                                            c.content ||
+                                            "Document image";
                                           return (
                                             <img
                                               src={url}
                                               alt={alt}
                                               class="max-w-full cursor-zoom-in rounded"
                                               loading="lazy"
-                                              onClick={() => setSourceModalImage({ url, alt })}
+                                              onClick={() =>
+                                                setSourceModalImage({
+                                                  url,
+                                                  alt,
+                                                })
+                                              }
                                             />
                                           );
                                         }}
@@ -833,8 +844,8 @@ export default function Feed(props: { initialCollection?: string }) {
         </div>
       </Show>
       <ImageModal
-        src={sourceModalImage()?.url ?? ''}
-        alt={sourceModalImage()?.alt ?? ''}
+        src={sourceModalImage()?.url ?? ""}
+        alt={sourceModalImage()?.alt ?? ""}
         open={sourceModalImage() !== null}
         onClose={() => setSourceModalImage(null)}
       />

@@ -2,12 +2,14 @@
 import PostHogInit from '../components/PostHogInit.astro'
 import CookieBanner from '../components/analytics/CookieBanner.astro'
 import { PUBLIC_POSTHOG_API_KEY } from 'astro:env/client'
+import { DISABLE_POSTHOG } from 'astro:env/server'
 
 interface Props {
   title?: string
 }
 
 const { title = 'Scroll Reader — Read Deeply. Scroll Freely.' } = Astro.props
+const posthogKey = DISABLE_POSTHOG ? undefined : PUBLIC_POSTHOG_API_KEY
 ---
 
 <html lang="en">
@@ -29,7 +31,7 @@ const { title = 'Scroll Reader — Read Deeply. Scroll Freely.' } = Astro.props
           t === 'latte' ? 'light' : t === 'mocha' ? 'dark' : 'auto'
       })()
     </script>
-    <PostHogInit apiKey={PUBLIC_POSTHOG_API_KEY} />
+    <PostHogInit apiKey={posthogKey} />
   </head>
   <body>
     <slot />

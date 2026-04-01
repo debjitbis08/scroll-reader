@@ -4,7 +4,8 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "dev": "NODE_OPTIONS='--max-http-header-size=32768' astro dev",
+    "dev": "DISABLE_CRON=true NODE_OPTIONS='--max-http-header-size=32768' astro dev",
+    "dev:cron": "DISABLE_CRON=false NODE_OPTIONS='--max-http-header-size=32768' astro dev",
     "build": "astro build",
     "preview": "astro preview",
     "typecheck": "astro check"

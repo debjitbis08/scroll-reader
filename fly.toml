@@ -10,6 +10,7 @@ primary_region = 'iad'
   NODE_ENV = 'production'
   CHUNKER_BIN = '/usr/local/bin/chunker'
   EXTRACTOR_BIN = '/usr/local/bin/extractor'
+  DISABLE_CRON = 'false'
 
 [http_service]
   internal_port = 8080
