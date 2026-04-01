@@ -179,6 +179,9 @@ export const chunkImages = pgTable('chunk_images', {
   chunkId: uuid('chunk_id')
     .references(() => chunks.id, { onDelete: 'cascade' })
     .notNull(),
+  documentId: uuid('document_id')
+    .references(() => documents.id, { onDelete: 'cascade' })
+    .notNull(),
   storagePath: text('storage_path').notNull(),
   mimeType: text('mime_type').notNull(),
   altText: text('alt_text').default('').notNull(),
@@ -186,6 +189,7 @@ export const chunkImages = pgTable('chunk_images', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [
   index('idx_chunk_images_chunk_id').on(t.chunkId),
+  index('idx_chunk_images_document_id').on(t.documentId),
   pgPolicy('chunk_images_select_own', {
     for: 'select',
     to: authenticatedRole,

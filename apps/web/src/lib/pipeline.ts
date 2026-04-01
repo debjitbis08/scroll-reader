@@ -512,6 +512,13 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
             .returning({ id: chunks.id })
 
           // Upload images and create chunk_images rows
+          // Fetch all already-uploaded image paths for this document in one query
+          const existingImages = await db
+            .select({ storagePath: chunkImages.storagePath })
+            .from(chunkImages)
+            .where(eq(chunkImages.documentId, doc.id))
+          const existingPaths = new Set(existingImages.map((r) => r.storagePath))
+
           for (let ci = 0; ci < pendingChunks.length; ci++) {
             const pending = pendingChunks[ci]
             if (!pending.images || pending.images.length === 0) continue
@@ -520,12 +527,19 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
             for (let pos = 0; pos < pending.images.length; pos++) {
               const img = pending.images[pos]
               try {
-                const buffer = await readFile(img.file)
                 const filename = basename(img.file)
-                const storagePath = await uploadImage(doc.userId, doc.id, filename, buffer, img.mime)
+                const expectedPath = `${doc.userId}/${doc.id}/images/${filename}`
+
+                if (!existingPaths.has(expectedPath)) {
+                  const buffer = await readFile(img.file)
+                  await uploadImage(doc.userId, doc.id, filename, buffer, img.mime)
+                  existingPaths.add(expectedPath)
+                }
+
                 await db.insert(chunkImages).values({
                   chunkId,
-                  storagePath,
+                  documentId: doc.id,
+                  storagePath: expectedPath,
                   mimeType: img.mime,
                   altText: img.alt,
                   position: pos,
