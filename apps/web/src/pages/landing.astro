@@ -1,40 +1,17 @@
 ---
 import { Image } from 'astro:assets'
+import { Icon } from 'astro-icon/components'
 import LandingLayout from '../layouts/LandingLayout.astro'
+import LpNav from '../components/LpNav.astro'
 import FeedDarkImg from '../assets/images/feed-dark.png';
 import FeedLightImg from '../assets/images/feed-light.png';
-import { Icon } from 'astro-icon/components';
 
 export const prerender = true;
 ---
 
 <LandingLayout>
 
-  <!-- NAV -->
-  <nav class="lp-nav">
-    <a href="/" class="lp-logo">Scroll Reader</a>
-    <button class="lp-theme-toggle lp-theme-toggle-mobile" data-theme-toggle aria-label="Toggle theme">
-      <Icon name="fa6-solid:sun" class="lp-theme-icon" data-theme-icon="latte" />
-      <Icon name="fa6-solid:moon" class="lp-theme-icon" data-theme-icon="mocha" />
-      <Icon name="fa6-solid:desktop" class="lp-theme-icon" data-theme-icon="auto" />
-    </button>
-    <ul class="lp-nav-links">
-      <li><a href="#why">Why Scroll?</a></li>
-      <li><a href="#how">How it works</a></li>
-      <li><a href="#cards">Cards</a></li>
-      <li><a href="/demo-feed">Demo</a></li>
-      <li><a href="/pricing">Pricing</a></li>
-      <li><a href="/login">Sign In</a></li>
-      <li><a href="/register" class="lp-nav-cta">Start Reading</a></li>
-      <li>
-        <button class="lp-theme-toggle" data-theme-toggle aria-label="Toggle theme">
-          <Icon name="fa6-solid:sun" class="lp-theme-icon" data-theme-icon="latte" />
-          <Icon name="fa6-solid:moon" class="lp-theme-icon" data-theme-icon="mocha" />
-          <Icon name="fa6-solid:desktop" class="lp-theme-icon" data-theme-icon="auto" />
-        </button>
-      </li>
-    </ul>
-  </nav>
+  <LpNav />
 
   <!-- HERO -->
   <section class="lp-hero">
@@ -195,8 +172,8 @@ Drop in an EPUB or PDF. We pull out the text, divide it into sections, and pick 
       </div>
     </div>
     <p class="lp-deploy-future">
-      <strong>Coming later:</strong> A self-hosted Docker version for people who
-      want their data on their own machine, and a desktop app with offline support.
+      <strong>Coming later:</strong> A self-hosted Docker version for full control over your stack, and a
+        desktop app that processes documents locally with your own AI.
     </p>
     <p class="lp-deploy-future" style="display: none;">
       If either of those matters to you, <a href="#">leave your email</a> and

@@ -1,0 +1,32 @@
+---
+import { Icon } from 'astro-icon/components'
+
+const pathname = Astro.url.pathname.replace(/\/$/, '') || '/'
+const isLanding = pathname === '/landing' || pathname === '/'
+const anchor = (hash: string) => isLanding ? `#${hash}` : `/landing#${hash}`
+---
+
+<nav class="lp-nav">
+  <a href="/" class="lp-logo">Scroll Reader</a>
+  <button class="lp-theme-toggle lp-theme-toggle-mobile" data-theme-toggle aria-label="Toggle theme">
+    <Icon name="fa6-solid:sun" class="lp-theme-icon" data-theme-icon="latte" />
+    <Icon name="fa6-solid:moon" class="lp-theme-icon" data-theme-icon="mocha" />
+    <Icon name="fa6-solid:desktop" class="lp-theme-icon" data-theme-icon="auto" />
+  </button>
+  <ul class="lp-nav-links">
+    <li><a href={anchor('why')}>Why Scroll?</a></li>
+    <li><a href={anchor('how')}>How it works</a></li>
+    <li><a href={anchor('cards')}>Cards</a></li>
+    {pathname !== '/demo-feed' && <li><a href="/demo-feed">Demo</a></li>}
+    {pathname !== '/pricing' && <li><a href="/pricing">Pricing</a></li>}
+    <li><a href="/login">Sign In</a></li>
+    <li><a href="/register" class="lp-nav-cta">Start Reading</a></li>
+    <li>
+      <button class="lp-theme-toggle" data-theme-toggle aria-label="Toggle theme">
+        <Icon name="fa6-solid:sun" class="lp-theme-icon" data-theme-icon="latte" />
+        <Icon name="fa6-solid:moon" class="lp-theme-icon" data-theme-icon="mocha" />
+        <Icon name="fa6-solid:desktop" class="lp-theme-icon" data-theme-icon="auto" />
+      </button>
+    </li>
+  </ul>
+</nav>

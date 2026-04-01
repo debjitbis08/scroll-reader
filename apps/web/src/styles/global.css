@@ -1,41 +1,5 @@
-@import "tailwindcss";
-@import "@catppuccin/tailwindcss/mocha.css";
-
-/* Allow long equations to scroll horizontally instead of overflowing */
-.katex-display {
-  overflow-x: auto;
-  overflow-y: hidden;
-}
-
-@utility animate-fade-in {
-  animation: fade-in 0.3s ease-out;
-}
-
-@keyframes fade-in {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* Editorial Design System — Fonts (DESIGN.md) */
-@theme {
-  --font-display: 'Newsreader', Georgia, serif;
-  --font-body: 'Inter', system-ui, sans-serif;
-
-  /* Theme-aware colors via CSS variables */
-  --color-ed-primary: var(--ed-primary);
-  --color-ed-primary-container: var(--ed-primary-container);
-  --color-ed-on-primary: var(--ed-on-primary);
-  --color-ed-surface: var(--ed-surface);
-  --color-ed-surface-dim: var(--ed-surface-dim);
-  --color-ed-surface-container: var(--ed-surface-container);
-  --color-ed-surface-high: var(--ed-surface-high);
-  --color-ed-surface-highest: var(--ed-surface-highest);
-  --color-ed-on-surface: var(--ed-on-surface);
-  --color-ed-on-surface-dim: var(--ed-on-surface-dim);
-  --color-ed-on-surface-muted: var(--ed-on-surface-muted);
-  --color-ed-outline: var(--ed-outline);
-  --color-ed-outline-dim: var(--ed-outline-dim);
-}
+@import "tailwindcss/preflight";
+@import "./theme.css";
 
 /* ─── Editorial token values ─── */
 
