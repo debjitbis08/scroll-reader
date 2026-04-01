@@ -1,4 +1,5 @@
-import { For, Show } from 'solid-js'
+import { createSignal, For, Show } from 'solid-js'
+import ImageModal from '../ImageModal'
 
 interface Props {
   /** 0-based indices into chunkImageUrls */
@@ -8,6 +9,8 @@ interface Props {
 }
 
 export default function CardImages(props: Props) {
+  const [modalImage, setModalImage] = createSignal<{ url: string; alt: string } | null>(null)
+
   const images = () =>
     props.indices
       .filter((i) => i >= 0 && i < props.chunkImageUrls.length)
@@ -30,11 +33,19 @@ export default function CardImages(props: Props) {
               alt={img.alt}
               loading="lazy"
               onLoad={handleLoad}
-              class="max-w-full rounded-lg border border-ed-outline"
+              onClick={() => setModalImage(img)}
+              class="max-w-full cursor-zoom-in rounded-lg border border-ed-outline"
             />
           )}
         </For>
       </div>
+
+      <ImageModal
+        src={modalImage()?.url ?? ''}
+        alt={modalImage()?.alt ?? ''}
+        open={modalImage() !== null}
+        onClose={() => setModalImage(null)}
+      />
     </Show>
   )
 }

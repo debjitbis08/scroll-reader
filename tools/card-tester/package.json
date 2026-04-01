@@ -8,7 +8,7 @@
     "extract": "tsx extract.ts",
     "generate": "tsx generate.ts",
     "build:client": "vite build --config vite.config.ts",
-    "dev": "vite dev --config vite.config.ts",
+    "dev": "vite dev --config vite.config.ts --host",
     "serve": "tsx serve.ts"
   },
   "dependencies": {

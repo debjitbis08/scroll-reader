@@ -18,6 +18,7 @@ import GlossaryRenderer from "./cards/GlossaryRenderer.tsx";
 import ContrastRenderer from "./cards/ContrastRenderer.tsx";
 import PassageRenderer from "./cards/PassageRenderer.tsx";
 import CardImages from "./cards/CardImages.tsx";
+import ImageModal from "./ImageModal";
 import type {
   CardContent,
   BodyContent,
@@ -262,6 +263,7 @@ export default function Feed(props: { initialCollection?: string }) {
   const [selectedCollection, setSelectedCollection] = createSignal<
     string | null
   >(props.initialCollection ?? null);
+  const [sourceModalImage, setSourceModalImage] = createSignal<{ url: string; alt: string } | null>(null);
   let sentinelRef: HTMLDivElement | undefined;
   let abortController: AbortController | null = null;
   let loadGeneration = 0;
@@ -666,18 +668,19 @@ export default function Feed(props: { initialCollection?: string }) {
                                   return (
                                     <div class="space-y-2 rounded bg-ed-surface-container px-3 py-2">
                                       <For each={c.images}>
-                                        {(img) => (
-                                          <img
-                                            src={`/api/images/${img.storagePath}`}
-                                            alt={
-                                              img.altText ||
-                                              c.content ||
-                                              "Document image"
-                                            }
-                                            class="max-w-full rounded"
-                                            loading="lazy"
-                                          />
-                                        )}
+                                        {(img) => {
+                                          const url = `/api/images/${img.storagePath}`;
+                                          const alt = img.altText || c.content || "Document image";
+                                          return (
+                                            <img
+                                              src={url}
+                                              alt={alt}
+                                              class="max-w-full cursor-zoom-in rounded"
+                                              loading="lazy"
+                                              onClick={() => setSourceModalImage({ url, alt })}
+                                            />
+                                          );
+                                        }}
                                       </For>
                                       <Show when={c.content}>
                                         <p class="font-body text-xs text-ed-on-surface-dim">
@@ -829,6 +832,12 @@ export default function Feed(props: { initialCollection?: string }) {
           <div class="size-5 animate-spin rounded-full border-2 border-ed-outline border-t-ed-primary" />
         </div>
       </Show>
+      <ImageModal
+        src={sourceModalImage()?.url ?? ''}
+        alt={sourceModalImage()?.alt ?? ''}
+        open={sourceModalImage() !== null}
+        onClose={() => setSourceModalImage(null)}
+      />
     </div>
   );
 }
