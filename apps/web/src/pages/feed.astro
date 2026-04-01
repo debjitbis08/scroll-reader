@@ -39,7 +39,7 @@ resetAt.setUTCHours(24, 0, 0, 0)
 const initialCollection = Astro.url.searchParams.get('collection') || undefined
 ---
 
-<Layout title="Scroll Reader">
+<Layout title="Scroll Reader" noindex>
   <main class="min-h-screen bg-ed-surface">
     <div class="flex">
       <AppNav active="feed" />

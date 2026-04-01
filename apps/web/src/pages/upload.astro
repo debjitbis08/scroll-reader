@@ -7,7 +7,7 @@ if (!Astro.locals.user) return Astro.redirect('/login')
 const error = Astro.url.searchParams.get('error')
 ---
 
-<Layout title="Upload — Scroll Reader">
+<Layout title="Upload — Scroll Reader" noindex>
   <main class="flex h-[calc(100vh-8rem)] items-center justify-center p-6">
     <div class="w-full max-w-lg space-y-8">
       <div>

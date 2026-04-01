@@ -6,7 +6,7 @@ if (Astro.locals.user) return Astro.redirect('/')
 const error = Astro.url.searchParams.get('error')
 ---
 
-<Layout title="Sign in — Scroll Reader">
+<Layout title="Sign in — Scroll Reader" description="Sign in to your Scroll Reader account to access your personal reading feed.">
   <main class="flex min-h-[calc(100vh-4rem)] items-center justify-center px-4">
     <div class="w-full max-w-sm space-y-8 py-12">
       <div class="space-y-2">

@@ -7,7 +7,7 @@ const user = Astro.locals.user
 if (!user) return Astro.redirect('/login')
 ---
 
-<Layout title="Saved — Scroll Reader">
+<Layout title="Saved — Scroll Reader" noindex>
   <main class="min-h-screen bg-ed-surface">
     <div class="flex">
       <AppNav active="saved" />

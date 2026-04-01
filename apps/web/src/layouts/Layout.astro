@@ -2,6 +2,7 @@
 import '../styles/global.css'
 import 'katex/dist/katex.min.css'
 import Header from '../components/Header.astro'
+import SEOMeta from '../components/SEOMeta.astro'
 import PostHogInit from '../components/PostHogInit.astro'
 import CookieBanner from '../components/analytics/CookieBanner.astro'
 import { PUBLIC_POSTHOG_API_KEY } from 'astro:env/client'
@@ -9,9 +10,11 @@ import { DISABLE_POSTHOG } from 'astro:env/server'
 
 interface Props {
   title?: string
+  description?: string
+  noindex?: boolean
 }
 
-const { title = 'Scroll Reader' } = Astro.props
+const { title = 'Scroll Reader', description, noindex } = Astro.props
 const user = Astro.locals.user
 const posthogKey = DISABLE_POSTHOG ? undefined : PUBLIC_POSTHOG_API_KEY
 ---
@@ -21,6 +24,7 @@ const posthogKey = DISABLE_POSTHOG ? undefined : PUBLIC_POSTHOG_API_KEY
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
+    <SEOMeta title={title} description={description} noindex={noindex} />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

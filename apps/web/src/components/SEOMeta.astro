@@ -1,0 +1,43 @@
+---
+const {
+  title = 'Scroll Reader — Read Deeply. Scroll Freely.',
+  description = 'Turn your books, papers, and PDFs into a feed worth scrolling. Scroll Reader transforms your personal library into spaced-repetition cards — no algorithms, no noise, just your own reading.',
+  canonicalUrl = Astro.url.href,
+  noindex = false,
+} = Astro.props
+
+interface Props {
+  title?: string
+  description?: string
+  canonicalUrl?: string
+  noindex?: boolean
+}
+---
+
+<!-- Core -->
+<meta name="description" content={description} />
+<link rel="canonical" href={canonicalUrl} />
+
+<!-- Open Graph -->
+<meta property="og:type" content="website" />
+<meta property="og:url" content={canonicalUrl} />
+<meta property="og:title" content={title} />
+<meta property="og:description" content={description} />
+<meta property="og:image" content="https://www.scrollreader.app/og.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:site_name" content="Scroll Reader" />
+
+<!-- Twitter / X -->
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content={title} />
+<meta name="twitter:description" content={description} />
+<meta name="twitter:image" content="https://www.scrollreader.app/og.png" />
+
+<!-- Misc -->
+<meta name="theme-color" content="#4d6328" media="(prefers-color-scheme: light)" />
+<meta name="theme-color" content="#c8c8b0" media="(prefers-color-scheme: dark)" />
+{noindex
+  ? <meta name="robots" content="noindex, nofollow" />
+  : <meta name="robots" content="index, follow" />
+}
