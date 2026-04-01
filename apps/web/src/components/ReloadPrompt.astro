@@ -1,0 +1,41 @@
+---
+---
+
+<script src="./pwa.ts"></script>
+<div
+    id="pwa-toast"
+    role="alert"
+    aria-labelledby="toast-message"
+    class="bg-ed-surface-container text-ed-on-surface fixed bottom-4 right-4 left-4 md:left-auto p-4 rounded shadow-lg border border-ed-surface-highest z-50"
+>
+    <div class="message mb-4 flex items-start gap-2">
+      <svg xmlns="http://www.w3.org/2000/svg" class="mt-1 w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+      </svg>
+      <span id="toast-message">
+      </span>
+    </div>
+    <div class="flex items-center gap-2 justify-end">
+      <button id="pwa-close" class="border border-ed-surface-highest px-3 py-1 outline-none hover:bg-ed-surface-high rounded-sm text-sm">
+        Not Now
+      </button>
+      <button id="pwa-refresh" class="bg-ed-primary text-ed-on-primary hover:opacity-90 px-3 py-1 outline-none rounded-sm text-sm">
+        Refresh
+      </button>
+    </div>
+</div>
+
+<style>
+#pwa-toast {
+  visibility: hidden;
+}
+#pwa-toast.show {
+  visibility: visible;
+}
+button#pwa-refresh {
+  display: none;
+}
+#pwa-toast.show.refresh button#pwa-refresh {
+  display: inline-block;
+}
+</style>

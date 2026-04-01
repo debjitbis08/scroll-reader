@@ -1,4 +1,5 @@
 /// <reference path="../.astro/types.d.ts" />
+/// <reference types="@vite-pwa/astro" />
 
 declare namespace App {
   interface Locals {

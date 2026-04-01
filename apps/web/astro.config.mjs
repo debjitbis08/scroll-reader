@@ -2,6 +2,7 @@ import { defineConfig, envField } from "astro/config";
 import node from "@astrojs/node";
 import solidJs from "@astrojs/solid-js";
 import icon from "astro-icon";
+import AstroPWA from "@vite-pwa/astro";
 import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
@@ -17,6 +18,43 @@ export default defineConfig({
     solidJs(),
     icon({
       include: { mdi: ["*"] },
+    }),
+    AstroPWA({
+      injectRegister: "auto",
+      manifest: {
+        name: "Scroll Reader",
+        short_name: "Scroll Reader",
+        description:
+          "Turn your books, papers, and PDFs into a feed worth scrolling.",
+        theme_color: "#4d6328",
+        background_color: "#e8e3d8",
+        icons: [
+          {
+            src: "pwa-64x64.png",
+            sizes: "64x64",
+            type: "image/png",
+          },
+          {
+            src: "pwa-192x192.png",
+            sizes: "192x192",
+            type: "image/png",
+          },
+          {
+            src: "pwa-512x512.png",
+            sizes: "512x512",
+            type: "image/png",
+          },
+          {
+            src: "maskable-icon-512x512.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "maskable",
+          },
+        ],
+      },
+      workbox: {
+        globPatterns: ["**/*.{js,css,html,ico,png,jpg,svg,woff,woff2}"],
+      },
     }),
   ],
   env: {

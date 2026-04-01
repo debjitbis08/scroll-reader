@@ -22,6 +22,7 @@
     "@supabase/ssr": "^0.6.0",
     "@supabase/supabase-js": "^2.47.0",
     "@thumbmarkjs/thumbmarkjs": "^1.7.6",
+    "@vite-pwa/astro": "^1.2.0",
     "astro": "^5.0.0",
     "astro-icon": "^1.1.0",
     "drizzle-orm": "^0.40.0",
@@ -31,13 +32,15 @@
     "posthog-node": "^5.28.9",
     "solid-icons": "^1.2.0",
     "solid-js": "^1.9.0",
-    "tailwindcss": "^4.0.0"
+    "tailwindcss": "^4.0.0",
+    "workbox-window": "^7.4.0"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.0",
     "@catppuccin/tailwindcss": "^1.0.0",
     "@tailwindcss/vite": "^4.0.0",
     "@types/node": "^22.0.0",
+    "@vite-pwa/assets-generator": "^1.0.2",
     "sharp": "^0.34.5",
     "typescript": "^5.7.0"
   }

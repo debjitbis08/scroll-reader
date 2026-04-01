@@ -2,6 +2,8 @@
 import SEOMeta from '../components/SEOMeta.astro'
 import PostHogInit from '../components/PostHogInit.astro'
 import CookieBanner from '../components/analytics/CookieBanner.astro'
+import ReloadPrompt from '../components/ReloadPrompt.astro'
+import PWAHead from '../components/PWAHead.astro'
 import { PUBLIC_POSTHOG_API_KEY } from 'astro:env/client'
 import { DISABLE_POSTHOG } from 'astro:env/server'
 
@@ -22,6 +24,7 @@ const posthogKey = DISABLE_POSTHOG ? undefined : PUBLIC_POSTHOG_API_KEY
     <SEOMeta title={title} description={description} />
     <link rel="icon" href="/favicon.svg" media="(prefers-color-scheme: light)" type="image/svg+xml" />
     <link rel="icon" href="/favicon-dark.svg" media="(prefers-color-scheme: dark)" type="image/svg+xml" />
+    <PWAHead />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -41,6 +44,7 @@ const posthogKey = DISABLE_POSTHOG ? undefined : PUBLIC_POSTHOG_API_KEY
   <body>
     <slot />
     <CookieBanner />
+    <ReloadPrompt />
   </body>
 </html>
 
