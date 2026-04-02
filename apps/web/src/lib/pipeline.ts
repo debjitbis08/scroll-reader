@@ -3,7 +3,7 @@ import { readFile, writeFile, unlink, rm } from 'node:fs/promises'
 import { extname, basename, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { db } from './db.ts'
-import { documents, chunks, chunkImages, cards, jobs, profiles, aiUsageLogs, usageEvents, catalogCards } from '@scroll-reader/db'
+import { documents, chunks, chunkImages, cards, cardScores, jobs, profiles, aiUsageLogs, usageEvents, catalogCards } from '@scroll-reader/db'
 import type { Document, Chunk } from '@scroll-reader/db'
 import {
   extractDocument, filterByPageRange, filterByToc,
@@ -213,6 +213,25 @@ async function cardsGeneratedToday(userId: string): Promise<number> {
     ))
 
   return row?.total ?? 0
+}
+
+/**
+ * Count cards the user has that have never been shown in the feed.
+ * Used to enforce a buffer limit — stop generating if user has enough unseen cards.
+ */
+async function unseenCardCount(userId: string): Promise<number> {
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(cards)
+    .leftJoin(cardScores, and(
+      eq(cardScores.cardId, cards.id),
+      eq(cardScores.userId, cards.userId),
+    ))
+    .where(and(
+      eq(cards.userId, userId),
+      sql`(${cardScores.timesShown} IS NULL OR ${cardScores.timesShown} = 0)`,
+    ))
+  return row?.count ?? 0
 }
 
 // ── Document Locking ────────────────────────────────────────
@@ -850,6 +869,14 @@ async function _processUser(userId: string, tier: Tier): Promise<number> {
 
   if (budget <= 0) {
     console.log(`[pipeline] user=${userId} daily card limit reached (${dailyLimit})`)
+    return 0
+  }
+
+  // Pause generation if user has enough unseen cards (2-day buffer)
+  const bufferLimit = 2 * dailyLimit
+  const unseen = await unseenCardCount(userId)
+  if (unseen >= bufferLimit) {
+    console.log(`[pipeline] user=${userId} buffer full (${unseen}/${bufferLimit}), pausing`)
     return 0
   }
 
