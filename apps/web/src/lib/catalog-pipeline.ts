@@ -1,19 +1,17 @@
 /**
  * Catalog processing pipeline.
  *
- * Downloads an EPUB from Project Gutenberg, extracts content, chunks it,
- * and generates ALL card types for ALL chunks.  The result is stored in
- * the catalog_* tables as a shared cache.
+ * Downloads an EPUB from Project Gutenberg, extracts content, and chunks it.
+ * The result is stored in the catalog_* tables as a shared chunk cache.
+ * Card generation happens lazily per-user via the cron pipeline.
  */
 
 import { eq, sql } from 'drizzle-orm'
-import { writeFile, unlink, readFile, rm } from 'node:fs/promises'
-import { basename, dirname, extname, join } from 'node:path'
+import { writeFile, unlink, rm } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { db } from './db.ts'
-import { catalogBooks, catalogChunks, catalogCards } from '@scroll-reader/db'
-import type { Document, Chunk } from '@scroll-reader/db'
-import type { CardType } from '@scroll-reader/shared-types'
+import { catalogBooks, catalogChunks } from '@scroll-reader/db'
 import {
   extractDocument, extractToc, getPageCount,
   callSegmenter, callChunker, aiChunk,
@@ -21,7 +19,6 @@ import {
 } from '@scroll-reader/pipeline'
 import type { ExtractConfig, ChunkerConfig, PipelineChunk } from '@scroll-reader/pipeline'
 import { createProvider } from './ai/index.ts'
-import { generateCardsForChunk } from './cards/generate.ts'
 import { EXTRACTOR_BIN, CHUNKER_BIN, FIGURE_EXTRACT_BIN } from 'astro:env/server'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -33,11 +30,6 @@ const chunkerConfig: ChunkerConfig = {
   chunkerBin: CHUNKER_BIN || join(HERE, '../../../../packages/chunker/target/debug/chunker'),
 }
 
-const ALL_CARD_TYPES: CardType[] = [
-  'discover', 'connect', 'raw_commentary', 'flashcard',
-  'quiz', 'glossary', 'contrast', 'passage',
-]
-
 interface PendingChunk {
   chunkType: 'text' | 'image' | 'code'
   content: string
@@ -47,8 +39,8 @@ interface PendingChunk {
 }
 
 /**
- * Process a catalog book end-to-end: download → extract → chunk → generate all cards.
- * Updates catalog_books.processingStatus as it progresses.
+ * Process a catalog book: download → extract → chunk.
+ * Cards are generated lazily per-user via the cron pipeline.
  */
 export async function processCatalogBook(catalogBookId: string, epubUrl: string): Promise<void> {
   const uuid = crypto.randomUUID()
@@ -176,95 +168,12 @@ export async function processCatalogBook(catalogBookId: string, epubUrl: string)
       insertedChunkIds.push(...rows.map((r) => r.id))
     }
 
+    // ── Finalize — chunks are ready, cards generated lazily per-user via cron ──
     await db.update(catalogBooks)
-      .set({ totalChunks: insertedChunkIds.length, processingStatus: 'generating' })
+      .set({ totalChunks: insertedChunkIds.length, totalCards: 0, processingStatus: 'ready' })
       .where(eq(catalogBooks.id, catalogBookId))
 
-    console.log(`[catalog-pipeline] chunked: book=${catalogBookId} chunks=${insertedChunkIds.length}`)
-
-    // ── Fetch back the catalog book for adapter ──
-    const [book] = await db.select().from(catalogBooks).where(eq(catalogBooks.id, catalogBookId)).limit(1)
-
-    // ── Generate cards for every chunk, all card types ──
-    let totalCards = 0
-
-    for (let i = 0; i < insertedChunkIds.length; i++) {
-      const chunkId = insertedChunkIds[i]
-      const pc = pendingChunks[i]
-
-      // Build adapter objects that satisfy the Chunk and Document types
-      // Only the fields actually used by generateCardsForChunk / buildSmartPrompt matter
-      const fakeChunk = {
-        id: chunkId,
-        userId: '00000000-0000-0000-0000-000000000000', // placeholder — not used for catalog cards
-        documentId: null,
-        chunkType: pc.chunkType,
-        content: pc.content,
-        chunkIndex: i,
-        chapter: pc.chapter,
-        wordCount: pc.wordCount,
-        language: pc.language,
-        encrypted: false,
-        createdAt: new Date(),
-      } as Chunk
-
-      const prevPc = i > 0 ? pendingChunks[i - 1] : null
-      const fakePrevChunk = prevPc ? {
-        id: insertedChunkIds[i - 1],
-        userId: '00000000-0000-0000-0000-000000000000',
-        documentId: null,
-        chunkType: prevPc.chunkType,
-        content: prevPc.content,
-        chunkIndex: i - 1,
-        chapter: prevPc.chapter,
-        wordCount: prevPc.wordCount,
-        language: prevPc.language,
-        encrypted: false,
-        createdAt: new Date(),
-      } as Chunk : null
-
-      const fakeDoc = {
-        id: catalogBookId,
-        userId: '00000000-0000-0000-0000-000000000000',
-        title: book!.title,
-        author: book!.author,
-        documentType: 'book',
-        readingGoal: 'study',
-        language: 'en',
-      } as Document
-
-      try {
-        const { cards: newCards, usage } = await generateCardsForChunk(
-          fakeChunk, fakePrevChunk, fakeDoc, provider, ALL_CARD_TYPES,
-        )
-
-        if (newCards.length > 0) {
-          // Map InsertCard to catalog_cards shape
-          const catalogCardRows = newCards.map((c) => ({
-            catalogChunkId: chunkId,
-            cardType: c.cardType,
-            content: c.content,
-            aiProvider: c.aiProvider ?? provider.name,
-            aiModel: c.aiModel ?? provider.model,
-          }))
-
-          for (let j = 0; j < catalogCardRows.length; j += BATCH) {
-            await db.insert(catalogCards).values(catalogCardRows.slice(j, j + BATCH))
-          }
-          totalCards += newCards.length
-        }
-      } catch (err) {
-        console.warn(`[catalog-pipeline] card gen failed for chunk ${i}:`, err)
-        // Continue with next chunk — don't fail the whole book
-      }
-    }
-
-    // ── Finalize ──
-    await db.update(catalogBooks)
-      .set({ totalCards, processingStatus: 'ready' })
-      .where(eq(catalogBooks.id, catalogBookId))
-
-    console.log(`[catalog-pipeline] done: book=${catalogBookId} chunks=${insertedChunkIds.length} cards=${totalCards}`)
+    console.log(`[catalog-pipeline] done: book=${catalogBookId} chunks=${insertedChunkIds.length}`)
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     console.error(`[catalog-pipeline] failed: book=${catalogBookId}`, err)

@@ -108,7 +108,7 @@ export const POST: APIRoute = async ({ request, locals, params }) => {
     : textCodeChunks
   const eligibleChunkIds = new Set(eligibleChunks.map((c) => c.id))
 
-  // ── Create user document ──
+  // ── Create user document (status determined after cache check below) ──
   const [newDoc] = await db.insert(documents).values({
     userId,
     title: catalogBook.title,
@@ -117,7 +117,7 @@ export const POST: APIRoute = async ({ request, locals, params }) => {
     readingGoal: goal,
     source: 'catalog',
     catalogBookId: catalogBook.id,
-    processingStatus: 'ready',
+    processingStatus: 'generating', // will be updated to 'ready' if fully cached
     totalPages: catalogBook.totalPages,
     totalElements: allCatalogChunks.length,
     elementsProcessed: allCatalogChunks.length,
@@ -143,6 +143,7 @@ export const POST: APIRoute = async ({ request, locals, params }) => {
       wordCount: c.wordCount ?? undefined,
       language: c.language ?? 'en',
       encrypted: false,
+      catalogChunkId: c.id,
     }))).returning({ id: chunks.id })
 
     for (let j = 0; j < batch.length; j++) {
@@ -150,7 +151,7 @@ export const POST: APIRoute = async ({ request, locals, params }) => {
     }
   }
 
-  // ── Copy cards (only matching card types) ──
+  // ── Copy cached cards (only matching card types from catalog_cards) ──
   const eligibleIds = Array.from(eligibleChunkIds)
   let totalCardsCopied = 0
 
@@ -182,10 +183,20 @@ export const POST: APIRoute = async ({ request, locals, params }) => {
     totalCardsCopied += cardRows.length
   }
 
-  // Update card count
+  // ── Determine if all needed cards were served from cache ──
+  const expectedCards = eligibleChunks.length * cardTypes.length
+  const fullyCached = totalCardsCopied >= expectedCards
+
   await db.update(documents)
-    .set({ cardCount: totalCardsCopied })
+    .set({
+      cardCount: totalCardsCopied,
+      processingStatus: fullyCached ? 'ready' : 'generating',
+    })
     .where(eq(documents.id, newDoc.id))
 
-  return Response.json({ documentId: newDoc.id, cardsCopied: totalCardsCopied })
+  return Response.json({
+    documentId: newDoc.id,
+    cardsCopied: totalCardsCopied,
+    status: fullyCached ? 'ready' : 'generating',
+  })
 }

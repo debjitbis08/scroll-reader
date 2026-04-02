@@ -41,6 +41,21 @@ const posthogKey = DISABLE_POSTHOG ? undefined : PUBLIC_POSTHOG_API_KEY
       })()
     </script>
     <PostHogInit apiKey={posthogKey} />
+    <!-- Safari discards stylesheets from long-inactive tabs; reload to restore CSS -->
+    <script is:inline>
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState !== 'visible') return
+        var sheets = document.styleSheets
+        for (var i = 0; i < sheets.length; i++) {
+          try {
+            if (sheets[i].cssRules && sheets[i].cssRules.length > 0) return
+          } catch (e) {
+            return
+          }
+        }
+        window.location.reload()
+      })
+    </script>
   </head>
   <body>
     <slot />

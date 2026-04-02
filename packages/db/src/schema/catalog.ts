@@ -1,4 +1,4 @@
-import { pgTable, pgPolicy, text, integer, timestamp, uuid, jsonb, index, customType } from 'drizzle-orm/pg-core'
+import { pgTable, pgPolicy, text, integer, timestamp, uuid, jsonb, index, uniqueIndex, customType } from 'drizzle-orm/pg-core'
 import { sql } from 'drizzle-orm'
 import { authenticatedRole } from 'drizzle-orm/supabase'
 import { processingStatusEnum, chunkTypeEnum, cardTypeEnum } from './content.ts'
@@ -108,7 +108,7 @@ export const catalogCards = pgTable('catalog_cards', {
   aiProvider: text('ai_provider'),
   aiModel: text('ai_model'),
 }, (t) => [
-  index('idx_catalog_cards_chunk_type').on(t.catalogChunkId, t.cardType),
+  uniqueIndex('idx_catalog_cards_chunk_type').on(t.catalogChunkId, t.cardType),
   pgPolicy('catalog_cards_select', {
     for: 'select',
     to: authenticatedRole,

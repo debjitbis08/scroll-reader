@@ -3,7 +3,7 @@ import { readFile, writeFile, unlink, rm } from 'node:fs/promises'
 import { extname, basename, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { db } from './db.ts'
-import { documents, chunks, chunkImages, cards, jobs, profiles, aiUsageLogs, usageEvents } from '@scroll-reader/db'
+import { documents, chunks, chunkImages, cards, jobs, profiles, aiUsageLogs, usageEvents, catalogCards } from '@scroll-reader/db'
 import type { Document, Chunk } from '@scroll-reader/db'
 import {
   extractDocument, filterByPageRange, filterByToc,
@@ -306,11 +306,12 @@ async function releaseUserLock(userId: string): Promise<void> {
  * Returns the number of cards generated.
  */
 export async function processDocument(doc: Document, cardBudget: number): Promise<number> {
-  const filePath = doc.filePath!
-  const ext = extname(filePath).toLowerCase()
+  const isCatalog = doc.source === 'catalog'
+  const filePath = isCatalog ? null : doc.filePath!
+  const ext = isCatalog ? '.epub' : extname(filePath!).toLowerCase()
   const docUuid = crypto.randomUUID()
-  const tmpPath = `/tmp/scroll-${docUuid}${ext}`
-  const imageDir = `/tmp/scroll-${docUuid}-images`
+  const tmpPath = isCatalog ? null : `/tmp/scroll-${docUuid}${ext}`
+  const imageDir = isCatalog ? null : `/tmp/scroll-${docUuid}-images`
   const strategy = resolveCardStrategy(
     (doc.documentType ?? 'other') as DocumentType,
     (doc.readingGoal ?? 'reflective') as ReadingGoal,
@@ -324,7 +325,7 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
         .set({ processingStatus: 'ready', cardCount: 0 })
         .where(eq(documents.id, doc.id))
       // Delete storage — we won't need the file
-      await deleteDocument(filePath).catch(() => {})
+      if (filePath) await deleteDocument(filePath).catch(() => {})
     }
     return 0
   }
@@ -344,14 +345,15 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
 
   try {
     // ── Chunking phase (if document still has unchunked elements) ──
+    // Catalog docs have pre-copied chunks — skip chunking entirely.
     const elementsProcessed = doc.elementsProcessed ?? 0
-    const isFullyChunked = doc.totalElements !== null && elementsProcessed >= doc.totalElements
+    const isFullyChunked = isCatalog || (doc.totalElements !== null && elementsProcessed >= doc.totalElements)
 
     if (!isFullyChunked) {
-      const fileBuffer = await downloadDocument(filePath)
-      await writeFile(tmpPath, fileBuffer)
+      const fileBuffer = await downloadDocument(filePath!)
+      await writeFile(tmpPath!, fileBuffer)
 
-      let elements = await extractDocument(tmpPath, extractConfig, imageDir)
+      let elements = await extractDocument(tmpPath!, extractConfig, imageDir!)
       const selectedIndices = doc.selectedTocIndices as number[] | null
       const toc = doc.toc as TocEntry[] | null
       if (selectedIndices && toc && toc.length > 0) {
@@ -360,7 +362,7 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
         elements = filterByPageRange(elements, ext, doc.pageStart, doc.pageEnd)
       }
 
-      await unlink(tmpPath).catch(() => {})
+      await unlink(tmpPath!).catch(() => {})
 
       // Merge consecutive code elements (PDF extractor fragmentation fix)
       elements = mergeConsecutiveCode(elements)
@@ -575,7 +577,7 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
 
         // Delete storage file only when fully chunked
         if (fullyChunkedNow) {
-          await deleteDocument(filePath).catch(() => {})
+          await deleteDocument(filePath!).catch(() => {})
           console.log(`[pipeline] fully chunked: doc=${doc.id} chunks=${countRow?.count}`)
         } else {
           console.log(`[pipeline] chunk progress: doc=${doc.id} elements=${newProcessed}/${totalElements}`)
@@ -602,14 +604,26 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
       ? allTextChunks.filter((_, i) => i % interval === 0)
       : allTextChunks
 
-    // Find chunks that already have cards
+    // Find chunks that already have all required card types
     const existingCards = await db
-      .select({ chunkId: cards.chunkId })
+      .select({ chunkId: cards.chunkId, cardType: cards.cardType })
       .from(cards)
       .innerJoin(chunks, eq(cards.chunkId, chunks.id))
       .where(and(eq(cards.userId, doc.userId), eq(chunks.documentId, doc.id)))
-    const chunksWithCards = new Set(existingCards.map((r) => r.chunkId))
-    let chunksNeedingCards = eligibleChunks.filter((c) => !chunksWithCards.has(c.id))
+    const cardTypesByChunk = new Map<string, Set<string>>()
+    for (const r of existingCards) {
+      const cid = r.chunkId!
+      if (!cardTypesByChunk.has(cid)) cardTypesByChunk.set(cid, new Set())
+      cardTypesByChunk.get(cid)!.add(r.cardType)
+    }
+    const requiredTypes = new Set(cardTypes)
+    let chunksNeedingCards = eligibleChunks.filter((c) => {
+      const existing = cardTypesByChunk.get(c.id)
+      if (!existing) return true
+      // Chunk still needs cards if any required type is missing
+      for (const t of requiredTypes) { if (!existing.has(t)) return true }
+      return false
+    })
 
     // Prioritize mainmatter chunks so users see real content cards first,
     // not frontmatter (title page, copyright, dedication, etc.).
@@ -632,6 +646,16 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
     let cardsGenerated = 0
     let budgetLeft = cardBudget
     const attempted = new Set<string>()
+
+    // For catalog docs, build reverse mapping (user chunkId → catalogChunkId)
+    // so we can write generated cards back to the shared catalog_cards cache.
+    let chunkToCatalogChunk: Map<string, string> | null = null
+    if (isCatalog) {
+      chunkToCatalogChunk = new Map<string, string>()
+      for (const c of allChunks) {
+        if (c.catalogChunkId) chunkToCatalogChunk.set(c.id, c.catalogChunkId)
+      }
+    }
 
     for (let i = 0; i < chunksNeedingCards.length && budgetLeft > 0; i += BATCH_SIZE) {
       const batch = chunksNeedingCards.slice(i, i + BATCH_SIZE)
@@ -676,7 +700,12 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
           if (images.length === 0) images = undefined
         }
 
-        const { cards: newCards, usage: cardUsage } = await generateCardsForChunk(chunk, prevChunk, doc as Document, provider, cardTypes, images)
+        // Only request card types this chunk is still missing
+        const existingTypesForChunk = cardTypesByChunk.get(chunk.id)
+        const chunkCardTypes = existingTypesForChunk
+          ? (cardTypes as CardType[]).filter((t) => !existingTypesForChunk.has(t))
+          : cardTypes
+        const { cards: newCards, usage: cardUsage } = await generateCardsForChunk(chunk, prevChunk, doc as Document, provider, chunkCardTypes, images)
         attempted.add(chunk.id)
 
         if (cardUsage) {
@@ -687,6 +716,23 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
           await db.insert(cards).values(newCards)
           cardsGenerated += newCards.length
           budgetLeft -= newCards.length
+
+          // Write back to catalog_cards cache for future users
+          if (chunkToCatalogChunk) {
+            const catalogChunkId = chunkToCatalogChunk.get(chunk.id)
+            if (catalogChunkId) {
+              const cacheRows = newCards.map((c) => ({
+                catalogChunkId,
+                cardType: c.cardType,
+                content: c.content,
+                aiProvider: c.aiProvider ?? provider.name,
+                aiModel: c.aiModel ?? provider.model,
+              }))
+              await db.insert(catalogCards).values(cacheRows)
+                .onConflictDoNothing()
+                .catch((err) => console.warn('[pipeline] catalog cache write-back failed:', err))
+            }
+          }
         }
       }
     }
@@ -708,14 +754,25 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
     const fullyChunked = freshDoc!.totalElements !== null
       && (freshDoc!.elementsProcessed ?? 0) >= freshDoc!.totalElements
 
-    // Check if all eligible chunks are done
+    // Check if all eligible chunks have all required card types
     const postCards = await db
-      .select({ chunkId: cards.chunkId })
+      .select({ chunkId: cards.chunkId, cardType: cards.cardType })
       .from(cards)
       .innerJoin(chunks, eq(cards.chunkId, chunks.id))
       .where(and(eq(cards.userId, doc.userId), eq(chunks.documentId, doc.id)))
-    const postSet = new Set(postCards.map((r) => r.chunkId))
-    const stillPending = eligibleChunks.filter((c) => !postSet.has(c.id) && !attempted.has(c.id))
+    const postTypesByChunk = new Map<string, Set<string>>()
+    for (const r of postCards) {
+      const cid = r.chunkId!
+      if (!postTypesByChunk.has(cid)) postTypesByChunk.set(cid, new Set())
+      postTypesByChunk.get(cid)!.add(r.cardType)
+    }
+    const stillPending = eligibleChunks.filter((c) => {
+      if (attempted.has(c.id)) return false
+      const have = postTypesByChunk.get(c.id)
+      if (!have) return true
+      for (const t of requiredTypes) { if (!have.has(t)) return true }
+      return false
+    })
 
     const allDone = fullyChunked && stillPending.length === 0
 
@@ -737,7 +794,7 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
     }
 
     // Clean up temp image directory now that card generation is done
-    await rm(imageDir, { recursive: true, force: true }).catch(() => {})
+    if (imageDir) await rm(imageDir, { recursive: true, force: true }).catch(() => {})
 
     return cardsGenerated
   } catch (err) {
@@ -757,8 +814,8 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
       await db.update(documents).set({ processingStatus: 'error', retryCount }).where(eq(documents.id, doc.id))
       captureException(err, doc.userId, { documentId: doc.id, retryCount, transient: false })
     }
-    await unlink(tmpPath).catch(() => {})
-    await rm(imageDir, { recursive: true, force: true }).catch(() => {})
+    if (tmpPath) await unlink(tmpPath).catch(() => {})
+    if (imageDir) await rm(imageDir, { recursive: true, force: true }).catch(() => {})
     return 0
   }
 }

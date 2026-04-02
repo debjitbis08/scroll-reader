@@ -172,6 +172,7 @@ export const chunks = pgTable('chunks', {
   chapter: text('chapter'),
   wordCount: integer('word_count'), // 0 for image chunks
   language: text('language').default('en'),
+  catalogChunkId: uuid('catalog_chunk_id'), // points to catalog_chunks.id for catalog-sourced docs
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 })
 
