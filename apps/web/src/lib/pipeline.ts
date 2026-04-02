@@ -943,6 +943,7 @@ export async function processCron(): Promise<void> {
 
       if (generated === 0) {
         user.exhausted = true
+        anyProgress = users.some((u) => !u.exhausted)
       } else {
         anyProgress = true
         const weight = TIER_WEIGHTS[user.tier] ?? 1
@@ -956,6 +957,7 @@ export async function processCron(): Promise<void> {
     } catch (err) {
       console.error(`[cron] error for user=${user.userId}:`, err)
       user.exhausted = true
+      anyProgress = users.some((u) => !u.exhausted)
     }
   }
 
