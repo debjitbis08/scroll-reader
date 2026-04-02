@@ -1,5 +1,6 @@
-import { pgTable, text, integer, timestamp, uuid, jsonb, index, customType } from 'drizzle-orm/pg-core'
+import { pgTable, pgPolicy, text, integer, timestamp, uuid, jsonb, index, customType } from 'drizzle-orm/pg-core'
 import { sql } from 'drizzle-orm'
+import { authenticatedRole } from 'drizzle-orm/supabase'
 import { processingStatusEnum, chunkTypeEnum, cardTypeEnum } from './content.ts'
 
 // Custom type for Postgres tsvector columns
@@ -21,7 +22,12 @@ export const gutenbergCatalog = pgTable('gutenberg_catalog', {
   searchVector: tsvector('search_vector'),
 }, (t) => [
   index('idx_gutenberg_search').using('gin', t.searchVector),
-])
+  pgPolicy('gutenberg_catalog_select', {
+    for: 'select',
+    to: authenticatedRole,
+    using: sql`true`,
+  }),
+]).enableRLS()
 
 // ── Catalog tables ─────────────────────────────────────────────────────
 // Shared cache of pre-processed public-domain books from Project Gutenberg.
@@ -43,7 +49,13 @@ export const catalogBooks = pgTable('catalog_books', {
   processingStatus: processingStatusEnum('processing_status').default('pending'),
   error: text('error'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
-})
+}, (t) => [
+  pgPolicy('catalog_books_select', {
+    for: 'select',
+    to: authenticatedRole,
+    using: sql`true`,
+  }),
+]).enableRLS()
 
 export const catalogChunks = pgTable('catalog_chunks', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -58,7 +70,12 @@ export const catalogChunks = pgTable('catalog_chunks', {
   language: text('language').default('en'),
 }, (t) => [
   index('idx_catalog_chunks_book').on(t.catalogBookId),
-])
+  pgPolicy('catalog_chunks_select', {
+    for: 'select',
+    to: authenticatedRole,
+    using: sql`true`,
+  }),
+]).enableRLS()
 
 export const catalogCards = pgTable('catalog_cards', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -73,4 +90,9 @@ export const catalogCards = pgTable('catalog_cards', {
   aiModel: text('ai_model'),
 }, (t) => [
   index('idx_catalog_cards_chunk_type').on(t.catalogChunkId, t.cardType),
-])
+  pgPolicy('catalog_cards_select', {
+    for: 'select',
+    to: authenticatedRole,
+    using: sql`true`,
+  }),
+]).enableRLS()
