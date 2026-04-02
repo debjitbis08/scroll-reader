@@ -464,11 +464,17 @@ export default function Feed(props: { initialCollection?: string }) {
                 data-card-type={item.card.cardType}
                 data-sr-due={item.isSrDue ? "true" : "false"}
               >
-                {/* Card type label — outside the box */}
-                <div class="mb-2">
+                {/* Card type label + document title — outside the box */}
+                <div class="mb-2 flex items-baseline justify-between gap-2">
                   <span class="font-body text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-ed-primary">
                     {CARD_TYPE_LABEL[item.card.cardType] ?? item.card.cardType}
                   </span>
+                  <a
+                    href={`/doc/${item.document.id}`}
+                    class="ml-auto truncate font-body text-[0.65rem] tracking-wide text-ed-on-surface-muted hover:text-ed-primary transition-colors"
+                  >
+                    {item.document.title}
+                  </a>
                 </div>
 
                 {/* Card box */}
@@ -554,27 +560,6 @@ export default function Feed(props: { initialCollection?: string }) {
                         chunkImageUrls={item.chunkImageUrls}
                       />
                     </Show>
-                  </div>
-
-                  {/* Source */}
-                  <div class="mt-4 flex items-center gap-1.5 text-ed-on-surface-muted">
-                    <svg
-                      class="size-3 shrink-0"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                    >
-                      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-                      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-                    </svg>
-                    <a
-                      href={`/doc/${item.document.id}`}
-                      class="truncate font-body text-[0.65rem] tracking-wide hover:text-ed-primary transition-colors"
-                    >
-                      {item.document.title}
-                      {item.chunk.chapter && ` · ${item.chunk.chapter}`}
-                    </a>
                   </div>
 
                   {/* Source chunk toggle */}

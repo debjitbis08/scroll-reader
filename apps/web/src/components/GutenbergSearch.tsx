@@ -1,4 +1,4 @@
-import { createSignal, For, Show } from "solid-js";
+import { createSignal, For, Show, onMount, onCleanup } from "solid-js";
 import CatalogConfigModal from "./CatalogConfigModal.tsx";
 
 interface SearchResult {
@@ -26,6 +26,18 @@ export default function GutenbergSearch() {
   const [selectedBook, setSelectedBook] = createSignal<SearchResult | null>(
     null,
   );
+
+  // Listen for category book selections from the Astro page
+  onMount(() => {
+    function onSelectBook(e: Event) {
+      const book = (e as CustomEvent).detail as SearchResult;
+      setSelectedBook(book);
+    }
+    window.addEventListener("explore:select-book", onSelectBook);
+    onCleanup(() =>
+      window.removeEventListener("explore:select-book", onSelectBook),
+    );
+  });
 
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 

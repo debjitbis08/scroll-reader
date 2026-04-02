@@ -1,4 +1,5 @@
 export async function identifyUser() {
+  if (!window.posthog) return;
   const cookieConsent = localStorage.getItem("cookie_consent");
   const bodyUserId = document.body.dataset.userId;
   const bodyUserEmail = document.body.dataset.userEmail;

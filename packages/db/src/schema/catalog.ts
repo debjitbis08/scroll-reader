@@ -29,6 +29,25 @@ export const gutenbergCatalog = pgTable('gutenberg_catalog', {
   }),
 ]).enableRLS()
 
+// ── Featured books per category — seeded from Gutendex by popularity ──
+
+export const gutenbergFeatured = pgTable('gutenberg_featured', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  category: text('category').notNull(), // e.g. 'philosophy', 'fiction'
+  gutenbergId: integer('gutenberg_id').notNull(),
+  title: text('title').notNull(),
+  author: text('author'),
+  rank: integer('rank').notNull(), // position within category (0 = most popular)
+  downloadCount: integer('download_count'),
+}, (t) => [
+  index('idx_gutenberg_featured_category').on(t.category, t.rank),
+  pgPolicy('gutenberg_featured_select', {
+    for: 'select',
+    to: authenticatedRole,
+    using: sql`true`,
+  }),
+]).enableRLS()
+
 // ── Catalog tables ─────────────────────────────────────────────────────
 // Shared cache of pre-processed public-domain books from Project Gutenberg.
 // No userId, no RLS — these are shared infrastructure.

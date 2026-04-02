@@ -2,24 +2,118 @@
 import Layout from '../layouts/Layout.astro'
 import AppNav from '../components/AppNav.astro'
 import GutenbergSearch from '../components/GutenbergSearch.tsx'
+import { eq, asc } from 'drizzle-orm'
+import { db } from '../lib/db.ts'
+import { gutenbergFeatured } from '@scroll-reader/db'
 
 const user = Astro.locals.user
 if (!user) return Astro.redirect('/login')
+
+const CATEGORY_LABELS: Record<string, string> = {
+  philosophy: 'Philosophy',
+  science: 'Science',
+  history: 'History',
+  psychology: 'Psychology',
+  economics: 'Economics',
+  mathematics: 'Mathematics',
+  fiction: 'Fiction',
+  poetry: 'Poetry',
+  drama: 'Drama',
+}
+
+// Fetch all featured books (small table, ~90 rows)
+const allFeatured = await db
+  .select()
+  .from(gutenbergFeatured)
+  .orderBy(gutenbergFeatured.category, asc(gutenbergFeatured.rank))
+
+// Group by category, preserving rank order
+const categoryMap = new Map<string, typeof allFeatured>()
+for (const row of allFeatured) {
+  const list = categoryMap.get(row.category) ?? []
+  list.push(row)
+  categoryMap.set(row.category, list)
+}
+
+const categoryResults = Array.from(categoryMap.entries()).map(([category, books]) => ({
+  label: CATEGORY_LABELS[category] ?? category,
+  books: books.map((b) => ({
+    gutenbergId: b.gutenbergId,
+    title: b.title,
+    author: b.author,
+  })),
+}))
 ---
 
 <Layout title="Explore — Scroll Reader" noindex>
   <main class="min-h-screen bg-ed-surface">
     <div class="flex">
       <AppNav />
-      <section class="mx-auto w-full max-w-3xl px-4 py-8 space-y-6">
+      <section class="mx-auto w-full max-w-3xl px-4 py-8 space-y-8">
         <div>
           <h1 class="font-display text-2xl font-semibold text-ed-on-surface">Explore</h1>
           <p class="mt-1 font-body text-sm text-ed-on-surface-muted">
             Search thousands of public domain books from Project Gutenberg. Cards are generated automatically.
           </p>
         </div>
+
         <GutenbergSearch client:load />
+
+        {/* Category shelves */}
+        <div class="space-y-8 mt-8">
+            <h2 class="font-display text-lg font-semibold text-ed-on-surface">Popular Books</h2>
+          {categoryResults.filter((c) => c.books.length > 0).map((cat) => (
+            <div class="space-y-3">
+              <h3 class="font-display text-base font-semibold text-ed-on-surface">{cat.label}</h3>
+              <div class="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-thin">
+                {cat.books.map((book) => (
+                  <a
+                    href={`#search-${book.gutenbergId}`}
+                    data-explore-book={JSON.stringify({
+                      gutenbergId: book.gutenbergId,
+                      title: book.title,
+                      author: book.author,
+                      subjects: [],
+                      bookshelves: [],
+                      coverUrl: `https://www.gutenberg.org/cache/epub/${book.gutenbergId}/pg${book.gutenbergId}.cover.medium.jpg`,
+                      epubUrl: `https://www.gutenberg.org/cache/epub/${book.gutenbergId}/pg${book.gutenbergId}-images.epub`,
+                      cacheStatus: null,
+                    })}
+                    class="group flex w-28 shrink-0 flex-col gap-2 cursor-pointer"
+                  >
+                    <div class="relative h-40 w-28 overflow-hidden rounded bg-ed-surface-high transition-transform group-hover:scale-[1.03]">
+                      <img
+                        src={`https://www.gutenberg.org/cache/epub/${book.gutenbergId}/pg${book.gutenbergId}.cover.medium.jpg`}
+                        alt={book.title}
+                        class="h-full w-full object-cover"
+                        loading="lazy"
+                        onerror="this.parentElement.innerHTML='<div class=&quot;flex h-full w-full items-center justify-center bg-ed-surface-container&quot;><svg class=&quot;size-8 text-ed-on-surface-muted&quot; viewBox=&quot;0 0 24 24&quot; fill=&quot;none&quot; stroke=&quot;currentColor&quot; stroke-width=&quot;1.5&quot;><path d=&quot;M4 19.5A2.5 2.5 0 0 1 6.5 17H20&quot;/><path d=&quot;M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z&quot;/></svg></div>'"
+                      />
+                    </div>
+                    <div class="min-w-0">
+                      <p class="font-body text-xs font-medium text-ed-on-surface leading-tight line-clamp-2">{book.title}</p>
+                      {book.author && (
+                        <p class="font-body text-[0.65rem] text-ed-on-surface-muted truncate mt-0.5">{book.author}</p>
+                      )}
+                    </div>
+                  </a>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
       </section>
     </div>
   </main>
 </Layout>
+
+<script>
+  // When a category book is clicked, open the config modal via the search component
+  document.querySelectorAll('[data-explore-book]').forEach((el) => {
+    el.addEventListener('click', (e) => {
+      e.preventDefault()
+      const book = JSON.parse((el as HTMLElement).dataset.exploreBook!)
+      window.dispatchEvent(new CustomEvent('explore:select-book', { detail: book }))
+    })
+  })
+</script>

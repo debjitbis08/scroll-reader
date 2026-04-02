@@ -10,7 +10,7 @@ export default function PassageRenderer(props: Props) {
     <div class="space-y-3">
       {/* Excerpt — serif italic with left accent */}
       <div class="border-l-2 border-ed-primary/40 pl-4">
-        <p class="font-display text-base italic leading-relaxed text-ed-on-surface">
+        <p class="font-display text-base italic leading-relaxed text-ed-on-surface whitespace-pre-line">
           "{props.content.excerpt}"
         </p>
       </div>

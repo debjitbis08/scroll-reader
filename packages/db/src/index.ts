@@ -29,7 +29,7 @@ export {
 } from './schema/content.ts'
 
 // Catalog — shared cache of pre-processed public-domain books
-export { gutenbergCatalog, catalogBooks, catalogChunks, catalogCards } from './schema/catalog.ts'
+export { gutenbergCatalog, gutenbergFeatured, catalogBooks, catalogChunks, catalogCards } from './schema/catalog.ts'
 
 // AI usage tracking
 export { aiOperationEnum, aiUsageLogs } from './schema/ai_usage.ts'
