@@ -29,14 +29,17 @@ function restoreLatexEscapes(text: string): string {
   // corrupt the LaTeX. Restore them within math delimiters — but ONLY when
   // followed by letters that form a known LaTeX command, not when the
   // character is just whitespace before e.g. a variable name like P.
+  // After matching the escaped char (\x08 for \b, \t for \t, etc.), the
+  // lookahead sits after that char, so we match the *remainder* of the LaTeX
+  // command (e.g. \times → tab + "imes", so lookahead needs "imes").
   const nCmds =
-    "nabla|nu|neg|neq|newline|nleq|ngeq|nmid|notin|not|ni|nolimits|nonumber|norm";
+    "abla|u(?![a-z])|eg|eq|ewline|leq|geq|mid|otin|ot(?![a-z])|i(?![a-z])|olimits|onumber|orm";
   const tCmds =
-    "times|theta|tau|text|textbf|textit|textrm|to|top|triangle|tan|tanh|tfrac";
+    "imes|heta|au|ext|extbf|extit|extrm|o(?![a-z])|op|riangle|an(?![a-z])|anh|frac";
   const bCmds =
-    "beta|binom|bar|big|Big|bigg|Bigg|bigcap|bigcup|bigvee|bigwedge|bot|boldsymbol|bf";
-  const rCmds = "rho|right|Rightarrow|rightarrow|rangle|rceil|rfloor|rm|root";
-  const fCmds = "frac|forall|flat|frown";
+    "eta|inom|ar(?![a-z])|ig(?![a-z])|igg(?![a-z])|igcap|igcup|igvee|igwedge|ot(?![a-z])|oldsymbol|f(?![a-z])";
+  const rCmds = "ho|ight(?![a-z])|ightarrow|angle|ceil|floor|m(?![a-z])|oot";
+  const fCmds = "rac|orall|lat|rown";
 
   return text.replace(/\$\$[\s\S]*?\$\$|\$(?:[^$\\]|\\.)*?\$/g, (match) => {
     return match
@@ -54,10 +57,13 @@ function literalEscapesToNewlines(text: string): string {
   // Convert literal \n to actual newlines everywhere, but inside math
   // delimiters protect known LaTeX commands (\nabla, \nu, \theta, etc.)
   // by using a negative lookahead for their command names.
+  // After matching the 2-char literal \n or \t, the lookahead sits right
+  // after the escape letter, so we match the *remainder* of the LaTeX command
+  // (e.g. \times → after \t the remainder is "imes", not "times").
   const nProtect =
-    "nabla|nu|neg|neq|newline|nleq|ngeq|nmid|notin|not(?![a-z])|ni|nolimits|nonumber|norm";
+    "abla|u(?![a-z])|eg|eq|ewline|leq|geq|mid|otin|ot(?![a-z])|i(?![a-z])|olimits|onumber|orm";
   const tProtect =
-    "times|theta|tau|text|textbf|textit|textrm|to(?![a-z])|top|triangle|tan|tanh|tfrac";
+    "imes|heta|au|ext|extbf|extit|extrm|o(?![a-z])|op|riangle|an(?![a-z])|anh|frac";
   const mathNlReplace = new RegExp(`\\\\n(?!${nProtect})`, "g");
   const mathTabReplace = new RegExp(`\\\\t(?!${tProtect})`, "g");
 

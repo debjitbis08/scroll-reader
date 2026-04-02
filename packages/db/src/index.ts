@@ -28,6 +28,9 @@ export {
   jobs,
 } from './schema/content.ts'
 
+// Catalog — shared cache of pre-processed public-domain books
+export { gutenbergCatalog, catalogBooks, catalogChunks, catalogCards } from './schema/catalog.ts'
+
 // AI usage tracking
 export { aiOperationEnum, aiUsageLogs } from './schema/ai_usage.ts'
 
@@ -38,6 +41,7 @@ export { usageEventTypeEnum, usageEvents } from './schema/usage_events.ts'
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm'
 import type { users, sessions } from './schema/auth.ts'
 import type { profiles, documents, collections, collectionDocuments, chunks, chunkImages, cards, cardActions, feedEvents, cardScores, jobs } from './schema/content.ts'
+import type { catalogBooks, catalogChunks, catalogCards } from './schema/catalog.ts'
 import type { aiUsageLogs } from './schema/ai_usage.ts'
 import type { usageEvents } from './schema/usage_events.ts'
 
@@ -71,3 +75,11 @@ export type InsertAiUsageLog = InferInsertModel<typeof aiUsageLogs>
 
 export type UsageEvent = InferSelectModel<typeof usageEvents>
 export type InsertUsageEvent = InferInsertModel<typeof usageEvents>
+
+// Catalog types
+export type CatalogBook = InferSelectModel<typeof catalogBooks>
+export type CatalogChunk = InferSelectModel<typeof catalogChunks>
+export type CatalogCard = InferSelectModel<typeof catalogCards>
+export type InsertCatalogBook = InferInsertModel<typeof catalogBooks>
+export type InsertCatalogChunk = InferInsertModel<typeof catalogChunks>
+export type InsertCatalogCard = InferInsertModel<typeof catalogCards>

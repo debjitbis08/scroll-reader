@@ -533,6 +533,25 @@ const CARD_TYPE_HUE: Record<string, string> = {
       </div>
     )}
 
+    <!-- Processing started but no chunks yet -->
+    {(isChunking || isGenerating) && (estimatedTotalChunks ?? totalTextChunks) === 0 && (
+      <div class="rounded bg-ed-surface-high px-6 py-8 space-y-5">
+        <div class="flex items-center gap-3">
+          <span class="inline-block size-2 shrink-0 rounded-full bg-ed-primary animate-pulse" />
+          <p class="font-body text-sm font-medium text-ed-on-surface">Processing has started</p>
+        </div>
+        <div class="space-y-2 pl-5">
+          <p class="font-body text-sm text-ed-on-surface-muted">Here's what happens next:</p>
+          <ol class="list-decimal list-inside space-y-1 font-body text-sm text-ed-on-surface-muted">
+            <li>We read through your document and split it into meaningful sections</li>
+            <li>Each section gets turned into cards tailored to your reading goal</li>
+            <li>Cards appear on your <a href="/feed" class="text-ed-primary underline">home feed</a> as they're generated</li>
+          </ol>
+        </div>
+        <p class="pl-5 font-body text-xs text-ed-on-surface-dim">This page will update automatically — no need to refresh. Larger books are processed in batches over multiple days.</p>
+      </div>
+    )}
+
     <!-- Hero: Processing map with funnel -->
     {hasChunks && (estimatedTotalChunks ?? totalTextChunks) > 0 && (
       <div class="rounded bg-ed-surface-high p-6 space-y-6">

@@ -1,0 +1,25 @@
+---
+import Layout from '../layouts/Layout.astro'
+import AppNav from '../components/AppNav.astro'
+import GutenbergSearch from '../components/GutenbergSearch.tsx'
+
+const user = Astro.locals.user
+if (!user) return Astro.redirect('/login')
+---
+
+<Layout title="Explore — Scroll Reader" noindex>
+  <main class="min-h-screen bg-ed-surface">
+    <div class="flex">
+      <AppNav />
+      <section class="mx-auto w-full max-w-3xl px-4 py-8 space-y-6">
+        <div>
+          <h1 class="font-display text-2xl font-semibold text-ed-on-surface">Explore</h1>
+          <p class="mt-1 font-body text-sm text-ed-on-surface-muted">
+            Search thousands of public domain books from Project Gutenberg. Cards are generated automatically.
+          </p>
+        </div>
+        <GutenbergSearch client:load />
+      </section>
+    </div>
+  </main>
+</Layout>

@@ -44,7 +44,7 @@ export type ProcessingStatus = 'pending' | 'preview' | 'chunking' | 'generating'
 
 export type AIProvider = 'gemini' | 'ollama'
 
-export type DocumentSource = 'desktop' | 'upload' | 'server'
+export type DocumentSource = 'desktop' | 'upload' | 'server' | 'catalog'
 
 export type DocumentPriority = 'pinned' | 'active' | 'normal'
 

@@ -15,6 +15,7 @@ const user = Astro.locals.user
     <div class="hidden items-center gap-2 md:flex">
       {user && (
         <>
+          <a href="/explore" class="px-2 font-body text-sm text-ed-on-surface-muted hover:text-ed-on-surface transition-colors">Explore</a>
           <a href="/library" class="px-2 font-body text-sm text-ed-on-surface-muted hover:text-ed-on-surface transition-colors">Library</a>
           <a
             href="/upload"
@@ -63,6 +64,10 @@ const user = Astro.locals.user
       <div id="mobile-menu" class="absolute right-0 top-full mt-2 hidden w-48 rounded-lg border border-ed-outline-dim bg-ed-surface-high p-1.5 shadow-lg">
         {user && (
           <>
+            <a href="/explore" class="flex items-center gap-3 rounded px-3 py-2.5 font-body text-sm text-ed-on-surface-dim transition-colors hover:bg-ed-surface hover:text-ed-on-surface">
+              <Icon name="mdi:book-search" class="size-5" />
+              Explore
+            </a>
             <a href="/library" class="flex items-center gap-3 rounded px-3 py-2.5 font-body text-sm text-ed-on-surface-dim transition-colors hover:bg-ed-surface hover:text-ed-on-surface">
               <Icon name="mdi:bookshelf" class="size-5" />
               Library

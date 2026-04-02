@@ -74,9 +74,14 @@ const error = Astro.url.searchParams.get('error')
         </button>
       </form>
 
-      <p class="text-center font-body text-sm text-ed-on-surface-muted">
-        <a href="/library" class="font-medium text-ed-primary hover:underline">← Back to library</a>
-      </p>
+      <div class="text-center space-y-2">
+        <p class="font-body text-sm text-ed-on-surface-muted">
+          Or <a href="/explore" class="font-medium text-ed-primary hover:underline">browse public domain books</a> from Project Gutenberg
+        </p>
+        <p class="font-body text-sm text-ed-on-surface-muted">
+          <a href="/library" class="font-medium text-ed-primary hover:underline">← Back to library</a>
+        </p>
+      </div>
     </div>
   </main>
 </Layout>

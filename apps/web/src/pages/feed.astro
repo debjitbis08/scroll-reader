@@ -4,7 +4,7 @@ import AppNav from '../components/AppNav.astro'
 import FeedComp from '../components/Feed.tsx'
 import { eq, and, sql, gte } from 'drizzle-orm'
 import { db } from '../lib/db.ts'
-import { profiles, usageEvents } from '@scroll-reader/db'
+import { profiles, usageEvents, feedEvents } from '@scroll-reader/db'
 import type { Tier } from '@scroll-reader/shared-types'
 import { TIER_LIMITS } from '@scroll-reader/shared-types'
 
@@ -36,6 +36,13 @@ const quotaExhausted = cardsToday >= dailyLimit
 const resetAt = new Date()
 resetAt.setUTCHours(24, 0, 0, 0)
 
+// Show onboarding guide if user has never scrolled the feed
+const [impressionRow] = await db
+  .select({ count: sql<number>`count(*)::int` })
+  .from(feedEvents)
+  .where(eq(feedEvents.userId, user.id))
+const isNewUser = (impressionRow?.count ?? 0) === 0
+
 const initialCollection = Astro.url.searchParams.get('collection') || undefined
 ---
 
@@ -60,6 +67,57 @@ const initialCollection = Astro.url.searchParams.get('collection') || undefined
             </div>
           </div>
         </div>
+        {isNewUser && (
+          <div id="feed-onboarding" class="rounded bg-ed-surface-high p-5 space-y-4">
+            <div class="flex items-start justify-between gap-3">
+              <h2 class="font-display text-base text-ed-on-surface">How your feed works</h2>
+              <button
+                id="dismiss-onboarding"
+                class="shrink-0 text-ed-on-surface-muted hover:text-ed-on-surface transition-colors"
+                aria-label="Dismiss"
+              >
+                <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              </button>
+            </div>
+            <p class="font-body text-sm text-ed-on-surface-muted">
+              When you upload a document, we break it into sections and generate <strong class="text-ed-on-surface-dim">cards</strong> from each one.
+              The type of cards depends on what you chose during setup — your content type and reading goal.
+            </p>
+            <div class="grid grid-cols-2 gap-x-4 gap-y-2 font-body text-[0.75rem]">
+              <div>
+                <span class="font-semibold text-ed-on-surface-dim">Discovery</span>
+                <span class="text-ed-on-surface-muted"> — key ideas and summaries from the text</span>
+              </div>
+              <div>
+                <span class="font-semibold text-ed-on-surface-dim">Notes</span>
+                <span class="text-ed-on-surface-muted"> — commentary and analysis on a passage</span>
+              </div>
+              <div>
+                <span class="font-semibold text-ed-on-surface-dim">Active Recall</span>
+                <span class="text-ed-on-surface-muted"> — flip cards to test your memory</span>
+              </div>
+              <div>
+                <span class="font-semibold text-ed-on-surface-dim">Quiz</span>
+                <span class="text-ed-on-surface-muted"> — multiple choice questions from the material</span>
+              </div>
+              <div>
+                <span class="font-semibold text-ed-on-surface-dim">Glossary</span>
+                <span class="text-ed-on-surface-muted"> — definitions of key terms</span>
+              </div>
+              <div>
+                <span class="font-semibold text-ed-on-surface-dim">Passage</span>
+                <span class="text-ed-on-surface-muted"> — notable excerpts worth revisiting</span>
+              </div>
+              <div>
+                <span class="font-semibold text-ed-on-surface-dim">Contrast</span>
+                <span class="text-ed-on-surface-muted"> — side-by-side comparison of related ideas</span>
+              </div>
+            </div>
+            <p class="font-body text-xs text-ed-on-surface-dim">
+              Just scroll. Cards you interact with are spaced out and resurface over time to help you retain what you've read.
+            </p>
+          </div>
+        )}
         <FeedComp initialCollection={initialCollection} client:load />
       </section>
     </div>
@@ -67,6 +125,13 @@ const initialCollection = Astro.url.searchParams.get('collection') || undefined
 </Layout>
 
 <script>
+  const dismissBtn = document.getElementById('dismiss-onboarding')
+  if (dismissBtn) {
+    dismissBtn.addEventListener('click', () => {
+      document.getElementById('feed-onboarding')?.remove()
+    })
+  }
+
   const el = document.getElementById('feed-quota-reset')
   if (el) {
     const dt = new Date(el.getAttribute('datetime')!)

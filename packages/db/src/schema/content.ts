@@ -15,7 +15,7 @@ export const processingStatusEnum = pgEnum('processing_status', [
 ])
 
 export const documentSourceEnum = pgEnum('document_source', [
-  'desktop', 'upload', 'server',
+  'desktop', 'upload', 'server', 'catalog',
 ])
 
 export const documentPriorityEnum = pgEnum('document_priority', [
@@ -82,6 +82,7 @@ export const documents = pgTable('documents', {
   lockedBy: text('locked_by'),
   lockedAt: timestamp('locked_at', { withTimezone: true }),
   retryCount: integer('retry_count').default(0).notNull(),
+  catalogBookId: uuid('catalog_book_id'),
   docVirtualTime: real('doc_virtual_time').default(0).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 })
