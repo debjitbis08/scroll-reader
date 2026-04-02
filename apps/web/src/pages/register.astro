@@ -72,8 +72,11 @@ const errorMsg: Record<string, string> = {
           />
         </div>
 
-        <div class="cf-turnstile" data-size="flexible" data-sitekey={CF_TURNSTILE_SITE_KEY}></div>
-        <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" defer></script>
+        <div>
+            <div class="mb-2 font-body text-xs text-ed-on-surface-dim">Let us know you are human</div>
+            <div class="cf-turnstile" data-size="flexible" data-sitekey={CF_TURNSTILE_SITE_KEY}></div>
+            <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" defer></script>
+        </div>
 
         <button
           type="submit"
