@@ -13,7 +13,8 @@ import {
 import type { ImageElement, TocEntry, ExtractConfig, ChunkerConfig, AIUsage, PipelineChunk, TocSection } from '@scroll-reader/pipeline'
 import { createProvider } from './ai/index.ts'
 import { generateCardsForChunk } from './cards/generate.ts'
-import type { CardType, DocumentType, ReadingGoal, Tier } from '@scroll-reader/shared-types'
+import { summarizeCard } from './cards/prompts.ts'
+import type { CardType, CardContent, DocumentType, ReadingGoal, Tier } from '@scroll-reader/shared-types'
 import { TIER_LIMITS, resolveCardStrategy } from '@scroll-reader/shared-types'
 import { BATCH_SIZE, EXTRACTOR_BIN, CHUNKER_BIN, FIGURE_EXTRACT_BIN } from 'astro:env/server'
 import { downloadDocument, deleteDocument, uploadImage } from './storage.ts'
@@ -676,6 +677,9 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
       }
     }
 
+    const recentCardSummaries: string[] = []
+    const MAX_RECENT_SUMMARIES = 15
+
     for (let i = 0; i < chunksNeedingCards.length && budgetLeft > 0; i += BATCH_SIZE) {
       const batch = chunksNeedingCards.slice(i, i + BATCH_SIZE)
 
@@ -724,7 +728,7 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
         const chunkCardTypes = existingTypesForChunk
           ? (cardTypes as CardType[]).filter((t) => !existingTypesForChunk.has(t))
           : cardTypes
-        const { cards: newCards, usage: cardUsage } = await generateCardsForChunk(chunk, prevChunk, doc as Document, provider, chunkCardTypes, images)
+        const { cards: newCards, usage: cardUsage } = await generateCardsForChunk(chunk, prevChunk, doc as Document, provider, chunkCardTypes, images, recentCardSummaries.length > 0 ? recentCardSummaries : undefined)
         attempted.add(chunk.id)
 
         if (cardUsage) {
@@ -735,6 +739,14 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
           await db.insert(cards).values(newCards)
           cardsGenerated += newCards.length
           budgetLeft -= newCards.length
+
+          // Accumulate summaries for dedup context (rolling window)
+          for (const card of newCards) {
+            recentCardSummaries.push(summarizeCard(card.cardType as CardType, card.content as CardContent))
+          }
+          if (recentCardSummaries.length > MAX_RECENT_SUMMARIES) {
+            recentCardSummaries.splice(0, recentCardSummaries.length - MAX_RECENT_SUMMARIES)
+          }
 
           // Write back to catalog_cards cache for future users
           if (chunkToCatalogChunk) {

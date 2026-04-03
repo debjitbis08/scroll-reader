@@ -5,12 +5,14 @@ import { db } from './db.ts'
 import { documents, chunks, cards, aiUsageLogs } from '@scroll-reader/db'
 import type { Document, Chunk } from '@scroll-reader/db'
 import type { AIProvider, AIUsage } from './ai/index.ts'
+import type { CardType, CardContent } from '@scroll-reader/shared-types'
 import {
   extractDocument, callSegmenter, callChunker, aiChunk,
   mergeConsecutiveCode, foldSmallCodeIntoText,
 } from '@scroll-reader/pipeline'
 import type { ExtractConfig, ChunkerConfig, PipelineChunk } from '@scroll-reader/pipeline'
 import { generateCardsForChunk } from './cards/generate.ts'
+import { summarizeCard } from './cards/prompts.ts'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const extractConfig: ExtractConfig = {
@@ -224,18 +226,28 @@ export async function processDocument(filePath: string, userId: string): Promise
     // Generate cards for text and code chunks (skip image-only chunks)
     const cardChunkRows = insertedChunks.filter((c) => c.chunkType === 'text' || c.chunkType === 'code')
     let totalCards = 0
+    const recentCardSummaries: string[] = []
+    const MAX_RECENT_SUMMARIES = 15
 
     for (let i = 0; i < cardChunkRows.length; i++) {
       const chunk = cardChunkRows[i]
       // Fetch chunk N-1 regardless of type — image chunks provide alt text context
       const prevChunk: Chunk | null = insertedChunks[insertedChunks.indexOf(chunk) - 1] ?? null
 
-      const { cards: newCards, usage: cardUsage } = await generateCardsForChunk(chunk, prevChunk, doc as Document, provider)
+      const { cards: newCards, usage: cardUsage } = await generateCardsForChunk(chunk, prevChunk, doc as Document, provider, undefined, recentCardSummaries.length > 0 ? recentCardSummaries : undefined)
       if (cardUsage) {
         logUsage(userId, doc.id, 'card_generation', provider.name, provider.model, cardUsage, chunk.id)
       }
       await db.insert(cards).values(newCards)
       totalCards += newCards.length
+
+      // Accumulate summaries for dedup context (rolling window)
+      for (const card of newCards) {
+        recentCardSummaries.push(summarizeCard(card.cardType as CardType, card.content as CardContent))
+      }
+      if (recentCardSummaries.length > MAX_RECENT_SUMMARIES) {
+        recentCardSummaries.splice(0, recentCardSummaries.length - MAX_RECENT_SUMMARIES)
+      }
     }
 
     // --- Done ---

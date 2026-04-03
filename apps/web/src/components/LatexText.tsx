@@ -157,7 +157,9 @@ function renderMarkdown(html: string): string {
   html = html.replace(/\*\*([^*]+?)\*\*/g, "<strong>$1</strong>");
 
   // Italic: *text* → <em> (but not inside <strong> tags' asterisks)
-  html = html.replace(/(?<!\*)\*([^*]+?)\*(?!\*)/g, "<em>$1</em>");
+  // Require no space after opening * and no space before closing * (CommonMark flanking rules)
+  // so that bare multiplication like 1 * 2 * 3 is not treated as emphasis.
+  html = html.replace(/(?<!\*)\*(?! )([^*]+?)(?<! )\*(?!\*)/g, "<em>$1</em>");
 
   // Process block-level elements within paragraph breaks
   const blocks = html.split(/\n\n+/);

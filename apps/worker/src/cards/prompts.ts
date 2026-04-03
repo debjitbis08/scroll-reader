@@ -1,5 +1,33 @@
 import type { Document, Chunk } from "@scroll-reader/db";
-import type { CardType, CardStrategy } from "@scroll-reader/shared-types";
+import type { CardType, CardStrategy, CardContent } from "@scroll-reader/shared-types";
+
+/** Compact one-line summary of a card for dedup context (keeps prompt small). */
+export function summarizeCard(type: CardType, content: CardContent): string {
+  const c = content as Record<string, unknown>
+  switch (type) {
+    case 'discover':
+    case 'raw_commentary':
+    case 'connect':
+      return `${type}: ${truncate(String(c.title ?? c.body ?? ''), 80)}`
+    case 'flashcard':
+      return `flashcard: ${truncate(String(c.question ?? ''), 80)}`
+    case 'quiz':
+      return `quiz: ${truncate(String(c.question ?? ''), 80)}`
+    case 'glossary':
+      return `glossary: ${truncate(String(c.term ?? ''), 40)}`
+    case 'contrast':
+      return `contrast: ${truncate(String(c.itemA ?? ''), 30)} vs ${truncate(String(c.itemB ?? ''), 30)}`
+    case 'passage':
+      return `passage: ${truncate(String(c.excerpt ?? ''), 80)}`
+    default:
+      return `${type}: (card)`
+  }
+}
+
+function truncate(s: string, max: number): string {
+  const oneLine = s.replace(/\n/g, ' ').trim()
+  return oneLine.length <= max ? oneLine : oneLine.slice(0, max) + '…'
+}
 
 const CARD_TYPE_DESCRIPTIONS: Record<CardType, string> = {
   discover:
@@ -29,6 +57,7 @@ export function buildSmartPrompt(
   prevChunk: Chunk | null,
   doc: Document,
   strategy?: CardStrategy | null,
+  recentCardSummaries?: string[],
 ): string {
   const docLabel = doc.title ?? "Untitled";
 
@@ -68,8 +97,10 @@ You are a reading companion AI. Analyze the ${isCodeChunk ? "code sample" : "pas
 
 SUGGESTED CARD TYPES (you may adjust based on the content):
 ${typeDescriptions}
-${codeInstructions}
-INSTRUCTIONS:
+${codeInstructions}${recentCardSummaries && recentCardSummaries.length > 0 ? `ALREADY GENERATED (do NOT repeat these topics — find a fresh angle or skip if the passage covers the same ground):
+${recentCardSummaries.map((s) => `  - ${s}`).join("\n")}
+
+` : ""}INSTRUCTIONS:
 1. First, understand what kind of content this is (prose, reference table, notation, formula, code sample, exercises/questions, table of contents, etc.).
 2. If the content TEACHES something (explains a concept, presents an argument, demonstrates a technique), generate a "discover" card first when it is in the suggested types — it is the primary card type. Then add other types only if the content warrants them.
 3. If the content is primarily exercises, homework questions, discussion prompts, review questions, or a table of contents/index — do NOT generate a "discover" card. These are questions, not teachings. Instead, generate flashcard or quiz cards that ANSWER the most important questions if possible, or return an empty array if the questions are too open-ended or require external work.
