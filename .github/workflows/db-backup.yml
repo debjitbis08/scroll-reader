@@ -26,7 +26,7 @@ jobs:
           set -eo pipefail
 
           TIMESTAMP=$(date -u +"%Y-%m-%dT%H-%M-%SZ")
-          FILENAME="scroll-reader-backup-${TIMESTAMP}.sql.gz"
+          FILENAME="backup-${TIMESTAMP}.sql.gz"
           echo "FILENAME=${FILENAME}" >> $GITHUB_ENV
 
           /usr/lib/postgresql/17/bin/pg_dump "${{ secrets.DATABASE_URL }}" \
@@ -54,7 +54,7 @@ jobs:
           AWS_DEFAULT_REGION: auto
         run: |
           aws s3 cp "${FILENAME}" \
-            "s3://${{ secrets.R2_BUCKET_NAME }}/${FILENAME}" \
+            "s3://${{ secrets.R2_BUCKET_NAME }}/scroll-reader/${FILENAME}" \
             --endpoint-url "https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com"
 
       - name: Delete local backup file
