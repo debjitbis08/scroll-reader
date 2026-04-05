@@ -912,13 +912,13 @@ async function _processUser(userId: string, tier: Tier): Promise<number> {
 
   if (activeDocs.length === 0) return 0
 
-  // Priority doc = pinned > active > normal, then oldest by createdAt
+  // Priority doc = pinned > active (user-set); no createdAt tiebreak so
+  // equal-priority docs compete fairly via virtual time.
   const PRIORITY_RANK: Record<string, number> = { pinned: 0, active: 1, normal: 2 }
   const priorityDocId = activeDocs.reduce((best, doc) => {
     const bestRank = PRIORITY_RANK[best.priority] ?? 2
     const docRank = PRIORITY_RANK[doc.priority] ?? 2
     if (docRank < bestRank) return doc
-    if (docRank === bestRank && doc.createdAt! < best.createdAt!) return doc
     return best
   }).id
 

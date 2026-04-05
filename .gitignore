@@ -9,5 +9,8 @@ dist/
 target/
 Cargo.lock
 
+# Private tooling (separate repos)
+tools/
+
 # OS
 .DS_Store
