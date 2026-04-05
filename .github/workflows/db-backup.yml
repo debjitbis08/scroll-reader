@@ -26,7 +26,7 @@ jobs:
           set -eo pipefail
 
           TIMESTAMP=$(date -u +"%Y-%m-%dT%H-%M-%SZ")
-          FILENAME="backup-${TIMESTAMP}.sql.gz"
+          FILENAME="scroll-reader-backup-${TIMESTAMP}.sql.gz"
           echo "FILENAME=${FILENAME}" >> $GITHUB_ENV
 
           /usr/lib/postgresql/17/bin/pg_dump "${{ secrets.DATABASE_URL }}" \
