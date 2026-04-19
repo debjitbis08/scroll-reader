@@ -50,7 +50,7 @@ export async function processCatalogBook(catalogBookId: string, epubUrl: string)
   try {
     // ── Download EPUB ──
     await db.update(catalogBooks)
-      .set({ processingStatus: 'chunking' })
+      .set({ processingStatus: 'chunking', processingStartedAt: new Date() })
       .where(eq(catalogBooks.id, catalogBookId))
 
     const res = await fetch(epubUrl, { signal: AbortSignal.timeout(60_000) })

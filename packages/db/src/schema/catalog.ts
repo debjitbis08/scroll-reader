@@ -67,6 +67,7 @@ export const catalogBooks = pgTable('catalog_books', {
   tocClassification: jsonb('toc_classification').$type<('front' | 'main' | 'back')[] | null>(),
   processingStatus: processingStatusEnum('processing_status').default('pending'),
   error: text('error'),
+  processingStartedAt: timestamp('processing_started_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 }, (t) => [
   pgPolicy('catalog_books_select', {

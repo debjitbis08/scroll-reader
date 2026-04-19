@@ -1,10 +1,21 @@
 import type { APIRoute } from 'astro'
 import { eq, and, inArray } from 'drizzle-orm'
+import { writeFile, unlink } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { db } from '../../../../lib/db.ts'
-import { documents, chunks, cards, catalogBooks, catalogChunks, catalogCards } from '@scroll-reader/db'
+import { documents, chunks, cards, jobs, catalogBooks, catalogChunks, catalogCards } from '@scroll-reader/db'
 import type { CardType, DocumentType, ReadingGoal } from '@scroll-reader/shared-types'
 import { resolveCardStrategy } from '@scroll-reader/shared-types'
+import { getPageCount, extractToc } from '@scroll-reader/pipeline'
+import { uploadDocument } from '../../../../lib/storage.ts'
+import { EXTRACTOR_BIN } from 'astro:env/server'
 import { processCatalogBook } from '../../../../lib/catalog-pipeline.ts'
+
+const HERE = dirname(fileURLToPath(import.meta.url))
+const extractConfig = {
+  extractorBin: EXTRACTOR_BIN || join(HERE, '../../../../../../packages/extractor/target/debug/extractor'),
+}
 
 const VALID_DOC_TYPES: DocumentType[] = ['book', 'paper', 'article', 'manual', 'note', 'scripture', 'other', 'fiction']
 const VALID_GOALS: ReadingGoal[] = ['casual', 'reflective', 'study']
@@ -32,70 +43,7 @@ export const POST: APIRoute = async ({ request, locals, params }) => {
   const goal: ReadingGoal = (readingGoal && VALID_GOALS.includes(readingGoal as ReadingGoal))
     ? readingGoal as ReadingGoal : 'reflective'
 
-  // ── Find or create catalog book ──
-  let catalogBook
-  if (isGutenbergId) {
-    const gutenbergId = parseInt(gutenbergIdParam, 10)
-    const [existing] = await db.select().from(catalogBooks)
-      .where(eq(catalogBooks.gutenbergId, gutenbergId)).limit(1)
-
-    if (existing) {
-      catalogBook = existing
-    } else {
-      // Cache miss — need to process this book
-      if (!epubUrl) {
-        return Response.json({ error: 'epubUrl required for uncached book' }, { status: 400 })
-      }
-
-      // Create catalog entry and kick off processing
-      const [newBook] = await db.insert(catalogBooks).values({
-        gutenbergId,
-        title: body.title ?? 'Untitled',
-        author: body.author ?? null,
-        subjects: body.subjects ?? null,
-        languages: body.languages ?? ['en'],
-        coverImageUrl: body.coverUrl ?? null,
-        processingStatus: 'pending',
-      }).returning()
-
-      // Start processing in background
-      setImmediate(() => {
-        processCatalogBook(newBook.id, epubUrl).catch((err) => {
-          console.error('[catalog/add] background processing error:', err)
-        })
-      })
-
-      return Response.json({
-        status: 'processing',
-        catalogBookId: newBook.id,
-      }, { status: 202 })
-    }
-  } else {
-    // Direct catalog book ID
-    const [existing] = await db.select().from(catalogBooks)
-      .where(eq(catalogBooks.id, gutenbergIdParam)).limit(1)
-    if (!existing) return new Response('Catalog book not found', { status: 404 })
-    catalogBook = existing
-  }
-
-  // If still processing, return status
-  if (catalogBook.processingStatus !== 'ready') {
-    return Response.json({
-      status: catalogBook.processingStatus === 'error' ? 'error' : 'processing',
-      catalogBookId: catalogBook.id,
-      error: catalogBook.error ?? undefined,
-    }, { status: catalogBook.processingStatus === 'error' ? 500 : 202 })
-  }
-
-  // ── Dedup check ──
-  const [existingDoc] = await db.select({ id: documents.id }).from(documents)
-    .where(and(eq(documents.userId, userId), eq(documents.catalogBookId, catalogBook.id)))
-    .limit(1)
-  if (existingDoc) {
-    return Response.json({ error: 'Book already in your library', documentId: existingDoc.id }, { status: 409 })
-  }
-
-  // ── Resolve strategy ──
+  // ── Resolve card strategy ──
   const VALID_CARD_TYPES: CardType[] = ['discover', 'connect', 'raw_commentary', 'flashcard', 'quiz', 'glossary', 'contrast', 'passage']
   const validatedCardTypes = cardTypesOverride && Array.isArray(cardTypesOverride) && cardTypesOverride.length > 0
     ? cardTypesOverride.filter((t): t is CardType => VALID_CARD_TYPES.includes(t as CardType))
@@ -104,11 +52,156 @@ export const POST: APIRoute = async ({ request, locals, params }) => {
     ? chunkIntervalOverride
     : null
 
+  // ── Find catalog book ──
+  let catalogBook
+  if (isGutenbergId) {
+    const gutenbergId = parseInt(gutenbergIdParam, 10)
+    const [existing] = await db.select().from(catalogBooks)
+      .where(eq(catalogBooks.gutenbergId, gutenbergId)).limit(1)
+    catalogBook = existing ?? null
+  } else {
+    const [existing] = await db.select().from(catalogBooks)
+      .where(eq(catalogBooks.id, gutenbergIdParam)).limit(1)
+    if (!existing) return new Response('Catalog book not found', { status: 404 })
+    catalogBook = existing
+  }
+
+  // ── If catalog book is ready, use the fast cached path ──
+  if (catalogBook?.processingStatus === 'ready') {
+    return addFromCache(userId, catalogBook, docType, goal, validatedCardTypes, validatedInterval)
+  }
+
+  // ── Dedup check (for catalog books still processing or uncached) ──
+  if (catalogBook) {
+    const [existingDoc] = await db.select({ id: documents.id }).from(documents)
+      .where(and(eq(documents.userId, userId), eq(documents.catalogBookId, catalogBook.id)))
+      .limit(1)
+    if (existingDoc) {
+      return Response.json({ error: 'Book already in your library', documentId: existingDoc.id }, { status: 409 })
+    }
+  }
+
+  // ── Uncached or still processing: download EPUB and treat like an upload ──
+  if (!epubUrl) {
+    return Response.json({ error: 'epubUrl required for uncached book' }, { status: 400 })
+  }
+
+  // Download EPUB from Gutenberg
+  let buffer: Buffer
+  try {
+    const res = await fetch(epubUrl, { signal: AbortSignal.timeout(60_000) })
+    if (!res.ok) throw new Error(`Download failed: ${res.status}`)
+    buffer = Buffer.from(await res.arrayBuffer())
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Download failed'
+    return Response.json({ error: `Could not download book: ${msg}` }, { status: 502 })
+  }
+
+  // Extract page count + TOC (fast Rust extraction)
+  const tmpPath = `/tmp/scroll-${crypto.randomUUID()}.epub`
+  let totalPages = 1
+  let toc: { title: string; page: number; level: number; fragment?: string }[] = []
+  try {
+    await writeFile(tmpPath, buffer)
+    const [pageCount, tocEntries] = await Promise.all([
+      getPageCount(tmpPath, extractConfig),
+      extractToc(tmpPath, extractConfig),
+    ])
+    totalPages = pageCount
+    toc = tocEntries
+  } catch (err) {
+    console.error('[catalog/add] preview extraction failed:', err)
+  } finally {
+    await unlink(tmpPath).catch(() => {})
+  }
+
+  // Create or find catalog book entry (for future caching, but don't block on it)
+  let catalogBookId: string | null = catalogBook?.id ?? null
+  if (!catalogBook && isGutenbergId) {
+    const gutenbergId = parseInt(gutenbergIdParam, 10)
+    const [newBook] = await db.insert(catalogBooks).values({
+      gutenbergId,
+      title: body.title ?? 'Untitled',
+      author: body.author ?? null,
+      subjects: body.subjects ?? null,
+      languages: body.languages ?? ['en'],
+      coverImageUrl: body.coverUrl ?? null,
+      totalPages,
+      toc: toc.length > 0 ? toc : null,
+      processingStatus: 'pending',
+    }).returning()
+    catalogBookId = newBook.id
+
+    // Kick off catalog processing in background (for future users)
+    setImmediate(() => {
+      processCatalogBook(newBook.id, epubUrl).catch((err) => {
+        console.error('[catalog/add] background catalog processing error:', err)
+      })
+    })
+  }
+
+  // Create document — same as upload flow, but skip 'preview' since config is done
+  const [doc] = await db
+    .insert(documents)
+    .values({
+      userId,
+      title: body.title ?? 'Untitled',
+      author: body.author ?? null,
+      documentType: docType,
+      readingGoal: goal,
+      cardTypesOverride: validatedCardTypes,
+      chunkIntervalOverride: validatedInterval,
+      source: 'catalog',
+      catalogBookId: catalogBookId,
+      filePath: '',
+      fileSize: buffer.length,
+      processingStatus: 'chunking',
+      totalPages,
+      pageStart: 1,
+      pageEnd: totalPages,
+      toc: toc.length > 0 ? toc : null,
+    })
+    .returning()
+
+  // Upload to Supabase Storage
+  try {
+    const path = await uploadDocument(userId, doc.id, '.epub', buffer)
+    await db.update(documents).set({ filePath: path }).where(eq(documents.id, doc.id))
+  } catch (err) {
+    console.error('[catalog/add] storage upload failed:', err)
+    await db.delete(documents).where(eq(documents.id, doc.id))
+    return Response.json({ error: 'Could not store document' }, { status: 500 })
+  }
+
+  // Create job row for polling
+  await db.insert(jobs).values({ userId, documentId: doc.id })
+
+  return Response.json({ documentId: doc.id, status: 'processing' })
+}
+
+// ── Fast path: copy pre-processed chunks and cards from catalog cache ──
+
+async function addFromCache(
+  userId: string,
+  catalogBook: typeof catalogBooks.$inferSelect,
+  docType: DocumentType,
+  goal: ReadingGoal,
+  validatedCardTypes: CardType[] | null,
+  validatedInterval: number | null,
+) {
+  // Dedup check
+  const [existingDoc] = await db.select({ id: documents.id }).from(documents)
+    .where(and(eq(documents.userId, userId), eq(documents.catalogBookId, catalogBook.id)))
+    .limit(1)
+  if (existingDoc) {
+    return Response.json({ error: 'Book already in your library', documentId: existingDoc.id }, { status: 409 })
+  }
+
   const baseStrategy = resolveCardStrategy(docType, goal)
   const cardTypes = validatedCardTypes ?? baseStrategy.cardTypes
   const chunkInterval = validatedInterval ?? baseStrategy.chunkInterval
 
-  // ── Fetch catalog chunks ──
+  // Fetch catalog chunks
   const allCatalogChunks = await db.select().from(catalogChunks)
     .where(eq(catalogChunks.catalogBookId, catalogBook.id))
     .orderBy(catalogChunks.chunkIndex)
@@ -120,7 +213,7 @@ export const POST: APIRoute = async ({ request, locals, params }) => {
     : textCodeChunks
   const eligibleChunkIds = new Set(eligibleChunks.map((c) => c.id))
 
-  // ── Create user document (status determined after cache check below) ──
+  // Create user document
   const [newDoc] = await db.insert(documents).values({
     userId,
     title: catalogBook.title,
@@ -140,8 +233,7 @@ export const POST: APIRoute = async ({ request, locals, params }) => {
     tocClassification: catalogBook.tocClassification,
   }).returning()
 
-  // ── Copy chunks ──
-  // Map catalogChunkId → new user chunkId
+  // Copy chunks
   const chunkIdMap = new Map<string, string>()
   const BATCH = 500
 
@@ -165,7 +257,7 @@ export const POST: APIRoute = async ({ request, locals, params }) => {
     }
   }
 
-  // ── Copy cached cards (only matching card types from catalog_cards) ──
+  // Copy cached cards
   const eligibleIds = Array.from(eligibleChunkIds)
   let totalCardsCopied = 0
 
@@ -197,7 +289,7 @@ export const POST: APIRoute = async ({ request, locals, params }) => {
     totalCardsCopied += cardRows.length
   }
 
-  // ── Determine if all needed cards were served from cache ──
+  // Determine if all needed cards were served from cache
   const expectedCards = eligibleChunks.length * cardTypes.length
   const fullyCached = totalCardsCopied >= expectedCards
 

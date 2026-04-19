@@ -53,11 +53,7 @@ export default function CatalogConfigModal(props: Props) {
   const [documentType, setDocumentType] = createSignal<DocumentType>("book");
   const [readingGoal, setReadingGoal] = createSignal<ReadingGoal>("reflective");
   const [submitting, setSubmitting] = createSignal(false);
-  const [polling, setPolling] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
-  const [processingStatus, setProcessingStatus] = createSignal<string | null>(
-    null,
-  );
   const [advancedOpen, setAdvancedOpen] = createSignal(false);
   const [cardTypesOverride, setCardTypesOverride] = createSignal<CardType[] | null>(null);
   const [chunkIntervalOverride, setChunkIntervalOverride] = createSignal<number | null>(null);
@@ -102,36 +98,6 @@ export default function CatalogConfigModal(props: Props) {
   onMount(() => document.addEventListener("keydown", onKeyDown));
   onCleanup(() => document.removeEventListener("keydown", onKeyDown));
 
-  let pollTimer: ReturnType<typeof setInterval> | undefined;
-  onCleanup(() => clearInterval(pollTimer));
-
-  async function pollStatus(catalogBookId: string) {
-    setPolling(true);
-    setProcessingStatus("processing");
-
-    pollTimer = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/catalog/${catalogBookId}/status`);
-        if (!res.ok) return;
-        const data = await res.json();
-        setProcessingStatus(data.status);
-
-        if (data.status === "ready") {
-          clearInterval(pollTimer);
-          // Now add to library
-          await addToLibrary();
-        } else if (data.status === "error") {
-          clearInterval(pollTimer);
-          setPolling(false);
-          setSubmitting(false);
-          setError(data.error ?? "Processing failed. Please try again later.");
-        }
-      } catch {
-        // Keep polling
-      }
-    }, 3000);
-  }
-
   async function addToLibrary() {
     setSubmitting(true);
     setError(null);
@@ -159,12 +125,6 @@ export default function CatalogConfigModal(props: Props) {
 
       const data = await res.json();
 
-      if (res.status === 202) {
-        // Processing started — poll for completion
-        await pollStatus(data.catalogBookId);
-        return;
-      }
-
       if (res.status === 409) {
         // Already in library
         window.location.href = `/doc/${data.documentId}`;
@@ -177,23 +137,21 @@ export default function CatalogConfigModal(props: Props) {
         return;
       }
 
-      // Success — redirect to doc page
+      // Success — redirect to doc page (processing continues via cron)
       window.location.href = `/doc/${data.documentId}`;
     } catch {
       setError("Network error. Please try again.");
       setSubmitting(false);
-      setPolling(false);
     }
   }
 
-  const isProcessing = () => submitting() || polling();
   const isCached = () => props.book.cacheStatus === "ready";
 
   return (
     <div
       class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
       onClick={(e) => {
-        if (e.target === e.currentTarget && !isProcessing()) props.onClose();
+        if (e.target === e.currentTarget && !submitting()) props.onClose();
       }}
     >
       <div class="w-full max-w-lg rounded-lg bg-ed-surface p-6 space-y-5 shadow-xl">
@@ -212,7 +170,7 @@ export default function CatalogConfigModal(props: Props) {
           <button
             type="button"
             onClick={props.onClose}
-            disabled={isProcessing()}
+            disabled={submitting()}
             class="shrink-0 text-ed-on-surface-muted hover:text-ed-on-surface transition-colors disabled:opacity-50"
           >
             <svg
@@ -227,22 +185,8 @@ export default function CatalogConfigModal(props: Props) {
           </button>
         </div>
 
-        {/* Processing status overlay */}
-        <Show when={polling()}>
-          <div class="rounded bg-ed-surface-high px-4 py-6 text-center space-y-3">
-            <div class="size-5 mx-auto animate-spin rounded-full border-2 border-ed-outline border-t-ed-primary" />
-            <p class="font-body text-sm text-ed-on-surface">
-              Preparing this book for the first time...
-            </p>
-            <p class="font-body text-xs text-ed-on-surface-muted">
-              This may take a few minutes. The book will be instantly available
-              for future readers.
-            </p>
-          </div>
-        </Show>
-
         {/* Config form */}
-        <Show when={!polling()}>
+        <Show when={!submitting()}>
           <Show when={isCached()}>
             <p class="rounded-full bg-ed-primary-container px-3 py-1 inline-block font-body text-xs font-semibold text-ed-primary">
               Ready — cards are pre-generated
@@ -409,30 +353,24 @@ export default function CatalogConfigModal(props: Props) {
         </Show>
 
         {/* Actions */}
-        <Show when={!polling()}>
-          <div class="flex gap-3 justify-end">
-            <button
-              type="button"
-              onClick={props.onClose}
-              disabled={isProcessing()}
-              class="rounded px-4 py-2 font-body text-sm text-ed-on-surface-muted hover:bg-ed-surface-high transition-colors disabled:opacity-50 cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={addToLibrary}
-              disabled={isProcessing()}
-              class="rounded bg-ed-primary px-5 py-2 font-body text-sm font-medium text-ed-on-primary transition-opacity hover:opacity-90 disabled:opacity-50 cursor-pointer"
-            >
-              {submitting()
-                ? "Adding..."
-                : isCached()
-                  ? "Add to library"
-                  : "Add to library"}
-            </button>
-          </div>
-        </Show>
+        <div class="flex gap-3 justify-end">
+          <button
+            type="button"
+            onClick={props.onClose}
+            disabled={submitting()}
+            class="rounded px-4 py-2 font-body text-sm text-ed-on-surface-muted hover:bg-ed-surface-high transition-colors disabled:opacity-50 cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={addToLibrary}
+            disabled={submitting()}
+            class="rounded bg-ed-primary px-5 py-2 font-body text-sm font-medium text-ed-on-primary transition-opacity hover:opacity-90 disabled:opacity-50 cursor-pointer"
+          >
+            {submitting() ? "Adding..." : "Add to library"}
+          </button>
+        </div>
       </div>
     </div>
   );
