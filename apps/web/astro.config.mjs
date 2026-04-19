@@ -121,6 +121,12 @@ export default defineConfig({
         default: false,
       }),
       CRON_SECRET: envField.string({ context: "server", access: "secret" }),
+      BOT_USER_ID: envField.string({
+        context: "server",
+        access: "secret",
+        optional: true,
+        default: "",
+      }),
       ADMIN_EMAILS: envField.string({
         context: "server",
         access: "secret",

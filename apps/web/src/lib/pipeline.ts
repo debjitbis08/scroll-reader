@@ -16,7 +16,7 @@ import { generateCardsForChunk } from './cards/generate.ts'
 import { summarizeCard } from './cards/prompts.ts'
 import type { CardType, CardContent, DocumentType, ReadingGoal, Tier } from '@scroll-reader/shared-types'
 import { TIER_LIMITS, resolveCardStrategy } from '@scroll-reader/shared-types'
-import { BATCH_SIZE, EXTRACTOR_BIN, CHUNKER_BIN, FIGURE_EXTRACT_BIN } from 'astro:env/server'
+import { BATCH_SIZE, EXTRACTOR_BIN, CHUNKER_BIN, FIGURE_EXTRACT_BIN, BOT_USER_ID } from 'astro:env/server'
 import { downloadDocument, deleteDocument, uploadImage } from './storage.ts'
 import { MACHINE_ID, addAffinity, hasAffinity, cleanAffinity } from './machine.ts'
 import { captureException } from './posthog.ts'
@@ -595,9 +595,7 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
         // Defer image directory cleanup until after card generation
         // so we can read images from disk instead of re-downloading from Supabase
 
-        // Delete storage file only when fully chunked
         if (fullyChunkedNow) {
-          await deleteDocument(filePath!).catch(() => {})
           console.log(`[pipeline] fully chunked: doc=${doc.id} chunks=${countRow?.count}`)
         } else {
           console.log(`[pipeline] chunk progress: doc=${doc.id} elements=${newProcessed}/${totalElements}`)
@@ -885,11 +883,15 @@ async function _processUser(userId: string, tier: Tier): Promise<number> {
   }
 
   // Pause generation if user has enough unseen cards (2-day buffer)
-  const bufferLimit = 2 * dailyLimit
-  const unseen = await unseenCardCount(userId)
-  if (unseen >= bufferLimit) {
-    console.log(`[pipeline] user=${userId} buffer full (${unseen}/${bufferLimit}), pausing`)
-    return 0
+  // Skip buffer check for the bot account — it needs a large card pool for curation
+  const isBot = BOT_USER_ID !== '' && userId === BOT_USER_ID
+  if (!isBot) {
+    const bufferLimit = 2 * dailyLimit
+    const unseen = await unseenCardCount(userId)
+    if (unseen >= bufferLimit) {
+      console.log(`[pipeline] user=${userId} buffer full (${unseen}/${bufferLimit}), pausing`)
+      return 0
+    }
   }
 
   const staleThreshold = new Date(Date.now() - LOCK_EXPIRY_MS)

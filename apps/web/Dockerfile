@@ -43,6 +43,7 @@ ENV SUPABASE_ANON_KEY=placeholder
 ENV DATABASE_URL=postgresql://placeholder:placeholder@localhost:5432/placeholder
 ENV DISABLE_CRON=false
 ENV CRON_SECRET=placeholder
+ENV BOT_USER_ID=
 ENV ADMIN_EMAILS=
 ENV CF_TURNSTILE_SECRET_KEY=placeholder
 ENV DISABLE_POSTHOG=false

@@ -43,7 +43,7 @@ class SupabaseStorage implements StorageProvider {
     const { data, error } = await this.client.storage
       .from(BUCKET)
       .download(path)
-    if (error) throw new Error(`Storage download failed: ${error.message}`)
+    if (error) throw new Error(`Storage download failed: ${error.message ?? JSON.stringify(error)}`)
     return Buffer.from(await data.arrayBuffer())
   }
 

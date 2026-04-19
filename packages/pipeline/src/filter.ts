@@ -70,7 +70,7 @@ export function filterByToc(
 
     if (hasAnchors) {
       let inside = false
-      return elements.filter((el) => {
+      const filtered = elements.filter((el) => {
         const si = el.spine_index ?? 0
         const anchor = el.anchor_id
 
@@ -86,6 +86,9 @@ export function filterByToc(
 
         return inside
       })
+      // If fragment matching found nothing (e.g. extractor doesn't split by
+      // these specific anchors), fall through to spine_index filtering.
+      if (filtered.length > 0) return filtered
     }
   }
 
