@@ -1,5 +1,5 @@
 import { createSignal, createMemo, createEffect, For, Show } from "solid-js";
-import type { DocumentType, ReadingGoal } from "@scroll-reader/shared-types";
+import type { CardType, DocumentType, ReadingGoal } from "@scroll-reader/shared-types";
 import {
   resolveCardStrategy,
   describeStrategy,
@@ -33,6 +33,22 @@ const GOAL_OPTIONS: { label: string; value: ReadingGoal }[] = [
   { label: "Studying to retain", value: "study" },
 ];
 
+const CARD_TYPE_OPTIONS: { label: string; value: CardType }[] = [
+  { label: "Passage", value: "passage" },
+  { label: "Discover", value: "discover" },
+  { label: "Notes", value: "raw_commentary" },
+  { label: "Flashcard", value: "flashcard" },
+  { label: "Quiz", value: "quiz" },
+  { label: "Glossary", value: "glossary" },
+  { label: "Contrast", value: "contrast" },
+];
+
+const FREQUENCY_OPTIONS: { label: string; value: number }[] = [
+  { label: "Every chunk", value: 1 },
+  { label: "Every 2nd chunk", value: 2 },
+  { label: "Every 3rd chunk", value: 3 },
+];
+
 export default function PageRangeSelector(props: Props) {
   const [start, setStart] = createSignal(props.initialStart);
   const [end, setEnd] = createSignal(props.initialEnd);
@@ -40,6 +56,9 @@ export default function PageRangeSelector(props: Props) {
   const [readingGoal, setReadingGoal] = createSignal<ReadingGoal>("reflective");
   const [submitting, setSubmitting] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
+  const [advancedOpen, setAdvancedOpen] = createSignal(false);
+  const [cardTypesOverride, setCardTypesOverride] = createSignal<CardType[] | null>(null);
+  const [chunkIntervalOverride, setChunkIntervalOverride] = createSignal<number | null>(null);
 
   const [tocData, setTocData] = createSignal<TocEntry[]>(props.toc ?? []);
   const [refreshing, setRefreshing] = createSignal(false);
@@ -119,10 +138,14 @@ export default function PageRangeSelector(props: Props) {
     setSelectedChapters(new Set() as Set<number>);
   }
 
-  const strategy = createMemo(() =>
+  const baseStrategy = createMemo(() =>
     resolveCardStrategy(documentType(), readingGoal()),
   );
-  const strategyLabel = createMemo(() => describeStrategy(strategy()));
+  const effectiveStrategy = createMemo(() => ({
+    cardTypes: cardTypesOverride() ?? baseStrategy().cardTypes,
+    chunkInterval: chunkIntervalOverride() ?? baseStrategy().chunkInterval,
+  }));
+  const strategyLabel = createMemo(() => describeStrategy(effectiveStrategy()));
 
   const handleSubmit = async () => {
     if (start() < 1 || end() > props.totalPages || start() > end()) {
@@ -145,6 +168,8 @@ export default function PageRangeSelector(props: Props) {
           ...(hasToc()
             ? { selectedTocIndices: Array.from(selectedChapters()) }
             : {}),
+          ...(cardTypesOverride() ? { cardTypesOverride: cardTypesOverride() } : {}),
+          ...(chunkIntervalOverride() ? { chunkIntervalOverride: chunkIntervalOverride() } : {}),
         }),
       });
 
@@ -317,6 +342,98 @@ export default function PageRangeSelector(props: Props) {
           ))}
         </div>
       </fieldset>
+
+      {/* Advanced card settings */}
+      <div class="space-y-3">
+        <button
+          type="button"
+          onClick={() => setAdvancedOpen(!advancedOpen())}
+          class="flex items-center gap-1.5 font-body text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-ed-on-surface-muted hover:text-ed-primary transition-colors cursor-pointer"
+        >
+          <span class={`transition-transform ${advancedOpen() ? "rotate-90" : ""}`}>&#9654;</span>
+          Advanced
+        </button>
+        <Show when={advancedOpen()}>
+          <div class="space-y-4 pl-4 border-l border-ed-outline">
+            {/* Card types */}
+            <fieldset class="space-y-2">
+              <legend class="font-body text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-ed-primary">
+                Card types
+              </legend>
+              <div class="flex flex-wrap gap-2">
+                <For each={CARD_TYPE_OPTIONS}>
+                  {(opt) => {
+                    const isSelected = () => {
+                      const override = cardTypesOverride();
+                      const types = override ?? baseStrategy().cardTypes;
+                      return types.includes(opt.value);
+                    };
+                    return (
+                      <label
+                        class={`cursor-pointer rounded px-3 py-1.5 font-body text-sm transition-colors ${
+                          isSelected()
+                            ? "bg-ed-primary-container text-ed-on-surface"
+                            : "bg-ed-surface-highest text-ed-on-surface-muted hover:bg-ed-surface-highest"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected()}
+                          onChange={() => {
+                            const current = cardTypesOverride() ?? [...baseStrategy().cardTypes];
+                            const next = isSelected()
+                              ? current.filter((t) => t !== opt.value)
+                              : [...current, opt.value];
+                            setCardTypesOverride(next.length > 0 ? next : null);
+                          }}
+                          class="sr-only"
+                        />
+                        {opt.label}
+                      </label>
+                    );
+                  }}
+                </For>
+              </div>
+            </fieldset>
+
+            {/* Frequency */}
+            <fieldset class="space-y-2">
+              <legend class="font-body text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-ed-primary">
+                Frequency
+              </legend>
+              <div class="flex flex-wrap gap-2">
+                <For each={FREQUENCY_OPTIONS}>
+                  {(opt) => {
+                    const isSelected = () => {
+                      const interval = chunkIntervalOverride() ?? baseStrategy().chunkInterval;
+                      return interval === opt.value;
+                    };
+                    return (
+                      <label
+                        class={`cursor-pointer rounded px-3 py-1.5 font-body text-sm transition-colors ${
+                          isSelected()
+                            ? "bg-ed-primary-container text-ed-on-surface"
+                            : "bg-ed-surface-highest text-ed-on-surface-muted hover:bg-ed-surface-highest"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="chunkInterval"
+                          value={opt.value}
+                          checked={isSelected()}
+                          onChange={() => setChunkIntervalOverride(opt.value)}
+                          class="sr-only"
+                        />
+                        {opt.label}
+                      </label>
+                    );
+                  }}
+                </For>
+              </div>
+            </fieldset>
+          </div>
+        </Show>
+      </div>
 
       {/* Strategy preview */}
       <p class="font-body text-sm text-ed-on-surface-muted italic">

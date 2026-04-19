@@ -19,10 +19,12 @@ export const POST: APIRoute = async ({ request, locals, params }) => {
   const isGutenbergId = /^\d+$/.test(gutenbergIdParam)
 
   const body = await request.json()
-  const { documentType, readingGoal, epubUrl } = body as {
+  const { documentType, readingGoal, epubUrl, cardTypesOverride, chunkIntervalOverride } = body as {
     documentType?: string
     readingGoal?: string
     epubUrl?: string
+    cardTypesOverride?: string[]
+    chunkIntervalOverride?: number
   }
 
   const docType: DocumentType = (documentType && VALID_DOC_TYPES.includes(documentType as DocumentType))
@@ -94,7 +96,17 @@ export const POST: APIRoute = async ({ request, locals, params }) => {
   }
 
   // ── Resolve strategy ──
-  const { cardTypes, chunkInterval } = resolveCardStrategy(docType, goal)
+  const VALID_CARD_TYPES: CardType[] = ['discover', 'connect', 'raw_commentary', 'flashcard', 'quiz', 'glossary', 'contrast', 'passage']
+  const validatedCardTypes = cardTypesOverride && Array.isArray(cardTypesOverride) && cardTypesOverride.length > 0
+    ? cardTypesOverride.filter((t): t is CardType => VALID_CARD_TYPES.includes(t as CardType))
+    : null
+  const validatedInterval = chunkIntervalOverride && typeof chunkIntervalOverride === 'number' && chunkIntervalOverride >= 1 && chunkIntervalOverride <= 5
+    ? chunkIntervalOverride
+    : null
+
+  const baseStrategy = resolveCardStrategy(docType, goal)
+  const cardTypes = validatedCardTypes ?? baseStrategy.cardTypes
+  const chunkInterval = validatedInterval ?? baseStrategy.chunkInterval
 
   // ── Fetch catalog chunks ──
   const allCatalogChunks = await db.select().from(catalogChunks)
@@ -115,6 +127,8 @@ export const POST: APIRoute = async ({ request, locals, params }) => {
     author: catalogBook.author,
     documentType: docType,
     readingGoal: goal,
+    cardTypesOverride: validatedCardTypes,
+    chunkIntervalOverride: validatedInterval,
     source: 'catalog',
     catalogBookId: catalogBook.id,
     processingStatus: 'generating', // will be updated to 'ready' if fully cached

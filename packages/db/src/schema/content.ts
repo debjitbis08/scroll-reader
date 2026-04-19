@@ -77,6 +77,8 @@ export const documents = pgTable('documents', {
   chunkCount: integer('chunk_count').default(0),
   cardCount: integer('card_count').default(0),
   readingGoal: readingGoalEnum('reading_goal'),
+  cardTypesOverride: jsonb('card_types_override').$type<string[] | null>(),
+  chunkIntervalOverride: integer('chunk_interval_override'),
   priority: documentPriorityEnum('priority').default('normal').notNull(),
   paused: boolean('paused').default(false).notNull(),
   lockedBy: text('locked_by'),

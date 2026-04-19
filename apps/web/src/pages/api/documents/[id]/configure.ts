@@ -2,7 +2,7 @@ import type { APIRoute } from 'astro'
 import { eq, and } from 'drizzle-orm'
 import { db } from '../../../../lib/db.ts'
 import { documents, profiles, aiUsageLogs } from '@scroll-reader/db'
-import type { DocumentType, ReadingGoal, Tier } from '@scroll-reader/shared-types'
+import type { CardType, DocumentType, ReadingGoal, Tier } from '@scroll-reader/shared-types'
 import { classifyToc } from '@scroll-reader/pipeline'
 import type { TocEntry } from '@scroll-reader/pipeline'
 import { processUser } from '../../../../lib/pipeline.ts'
@@ -30,12 +30,14 @@ export const POST: APIRoute = async ({ request, locals, params }) => {
   }
 
   const body = await request.json()
-  const { pageStart, pageEnd, documentType, readingGoal, selectedTocIndices } = body as {
+  const { pageStart, pageEnd, documentType, readingGoal, selectedTocIndices, cardTypesOverride, chunkIntervalOverride } = body as {
     pageStart: number
     pageEnd: number
     documentType?: string
     readingGoal?: string
     selectedTocIndices?: number[]
+    cardTypesOverride?: string[]
+    chunkIntervalOverride?: number
   }
 
   if (
@@ -64,6 +66,15 @@ export const POST: APIRoute = async ({ request, locals, params }) => {
     ? readingGoal as ReadingGoal
     : 'reflective'
 
+  // Validate card strategy overrides
+  const VALID_CARD_TYPES: CardType[] = ['discover', 'connect', 'raw_commentary', 'flashcard', 'quiz', 'glossary', 'contrast', 'passage']
+  const validatedCardTypes = cardTypesOverride && Array.isArray(cardTypesOverride) && cardTypesOverride.length > 0
+    ? cardTypesOverride.filter((t): t is CardType => VALID_CARD_TYPES.includes(t as CardType))
+    : null
+  const validatedInterval = chunkIntervalOverride && typeof chunkIntervalOverride === 'number' && chunkIntervalOverride >= 1 && chunkIntervalOverride <= 5
+    ? chunkIntervalOverride
+    : null
+
   // Save page range, TOC selection, doc type, goal, and transition to chunking
   await db
     .update(documents)
@@ -73,6 +84,8 @@ export const POST: APIRoute = async ({ request, locals, params }) => {
       selectedTocIndices: selectedTocIndices ?? null,
       documentType: docType,
       readingGoal: goal,
+      cardTypesOverride: validatedCardTypes,
+      chunkIntervalOverride: validatedInterval,
       processingStatus: 'chunking',
     })
     .where(eq(documents.id, docId))

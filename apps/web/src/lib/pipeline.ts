@@ -14,7 +14,7 @@ import type { ImageElement, TocEntry, ExtractConfig, ChunkerConfig, AIUsage, Pip
 import { createProvider } from './ai/index.ts'
 import { generateCardsForChunk } from './cards/generate.ts'
 import { summarizeCard } from './cards/prompts.ts'
-import type { CardType, CardContent, DocumentType, ReadingGoal, Tier } from '@scroll-reader/shared-types'
+import type { CardType, CardContent, CardStrategy, DocumentType, ReadingGoal, Tier } from '@scroll-reader/shared-types'
 import { TIER_LIMITS, resolveCardStrategy } from '@scroll-reader/shared-types'
 import { BATCH_SIZE, EXTRACTOR_BIN, CHUNKER_BIN, FIGURE_EXTRACT_BIN, BOT_USER_ID } from 'astro:env/server'
 import { downloadDocument, deleteDocument, uploadImage } from './storage.ts'
@@ -332,10 +332,14 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
   const docUuid = crypto.randomUUID()
   const tmpPath = isCatalog ? null : `/tmp/scroll-${docUuid}${ext}`
   const imageDir = isCatalog ? null : `/tmp/scroll-${docUuid}-images`
-  const strategy = resolveCardStrategy(
+  const baseStrategy = resolveCardStrategy(
     (doc.documentType ?? 'other') as DocumentType,
     (doc.readingGoal ?? 'reflective') as ReadingGoal,
   )
+  const strategy: CardStrategy = {
+    cardTypes: (doc.cardTypesOverride as CardType[] | null) ?? baseStrategy.cardTypes,
+    chunkInterval: doc.chunkIntervalOverride ?? baseStrategy.chunkInterval,
+  }
 
   // If strategy says no cards, finish immediately
   if (strategy.cardTypes.length === 0) {
