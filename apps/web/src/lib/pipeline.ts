@@ -218,9 +218,23 @@ async function cardsGeneratedToday(userId: string): Promise<number> {
 
 /**
  * Count cards the user has that have never been shown in the feed.
+ * Only counts cards of types the user is currently eligible to see
+ * (cold start phases restrict which types are served).
  * Used to enforce a buffer limit — stop generating if user has enough unseen cards.
  */
 async function unseenCardCount(userId: string): Promise<number> {
+  // Determine cold start phase to know which card types are eligible
+  const [coldStart] = await db
+    .select({ count: sql<number>`count(distinct ${cardScores.cardId})::int` })
+    .from(cardScores)
+    .where(eq(cardScores.userId, userId))
+  const totalShown = coldStart?.count ?? 0
+
+  let eligibleTypes: string[]
+  if (totalShown <= 30) eligibleTypes = ['discover', 'raw_commentary', 'passage']
+  else if (totalShown <= 80) eligibleTypes = ['discover', 'raw_commentary', 'passage', 'flashcard', 'glossary', 'contrast']
+  else eligibleTypes = ['discover', 'raw_commentary', 'passage', 'flashcard', 'glossary', 'contrast', 'quiz']
+
   const [row] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(cards)
@@ -230,6 +244,7 @@ async function unseenCardCount(userId: string): Promise<number> {
     ))
     .where(and(
       eq(cards.userId, userId),
+      inArray(cards.cardType, eligibleTypes),
       sql`(${cardScores.timesShown} IS NULL OR ${cardScores.timesShown} = 0)`,
     ))
   return row?.count ?? 0
