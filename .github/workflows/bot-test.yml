@@ -1,0 +1,51 @@
+name: Bot — Test
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/bluesky-bot/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'tools/bluesky-bot/**'
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Typecheck bot
+        run: pnpm --filter bluesky-bot exec tsc --noEmit
+
+  build:
+    runs-on: ubuntu-latest
+    needs: [typecheck]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build bot
+        run: pnpm --filter bluesky-bot build

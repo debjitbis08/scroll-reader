@@ -1,0 +1,30 @@
+name: Web — Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/web/**'
+      - 'packages/db/**'
+      - 'packages/shared-types/**'
+      - 'packages/pipeline/**'
+      - 'packages/chunker/**'
+      - 'packages/extractor/**'
+      - 'fly.toml'
+
+concurrency:
+  group: web-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy to Fly.io
+        run: flyctl deploy --remote-only --build-arg CF_TURNSTILE_SITE_KEY=${{ secrets.CF_TURNSTILE_SITE_KEY }} --build-arg PUBLIC_POSTHOG_API_KEY=${{ secrets.PUBLIC_POSTHOG_API_KEY }}
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

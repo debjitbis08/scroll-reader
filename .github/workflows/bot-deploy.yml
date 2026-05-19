@@ -1,0 +1,27 @@
+name: Bot — Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/bluesky-bot/**'
+
+concurrency:
+  group: bot-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tools/bluesky-bot
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy to Fly.io
+        run: flyctl deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_BOT }}

@@ -342,11 +342,16 @@ async function releaseUserLock(userId: string): Promise<void> {
  */
 export async function processDocument(doc: Document, cardBudget: number): Promise<number> {
   const isCatalog = doc.source === 'catalog'
-  const filePath = isCatalog ? null : doc.filePath!
-  const ext = isCatalog ? '.epub' : extname(filePath!).toLowerCase()
+  // Catalog docs with pre-copied chunks skip chunking. But uncached catalog
+  // docs (added before catalog processing finished) still need chunking via
+  // the regular pipeline — detect by checking if chunks already exist.
+  const hasCopiedChunks = isCatalog && doc.totalElements !== null && (doc.elementsProcessed ?? 0) >= doc.totalElements
+  const needsChunking = !hasCopiedChunks
+  const filePath = needsChunking ? (doc.filePath || null) : null
+  const ext = filePath ? extname(filePath).toLowerCase() : '.epub'
   const docUuid = crypto.randomUUID()
-  const tmpPath = isCatalog ? null : `/tmp/scroll-${docUuid}${ext}`
-  const imageDir = isCatalog ? null : `/tmp/scroll-${docUuid}-images`
+  const tmpPath = needsChunking && filePath ? `/tmp/scroll-${docUuid}${ext}` : null
+  const imageDir = needsChunking && filePath ? `/tmp/scroll-${docUuid}-images` : null
   const baseStrategy = resolveCardStrategy(
     (doc.documentType ?? 'other') as DocumentType,
     (doc.readingGoal ?? 'reflective') as ReadingGoal,
@@ -384,9 +389,8 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
 
   try {
     // ── Chunking phase (if document still has unchunked elements) ──
-    // Catalog docs have pre-copied chunks — skip chunking entirely.
     const elementsProcessed = doc.elementsProcessed ?? 0
-    const isFullyChunked = isCatalog || (doc.totalElements !== null && elementsProcessed >= doc.totalElements)
+    const isFullyChunked = hasCopiedChunks || (doc.totalElements !== null && elementsProcessed >= doc.totalElements)
 
     if (!isFullyChunked) {
       const fileBuffer = await downloadDocument(filePath!)
