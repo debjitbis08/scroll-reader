@@ -31,9 +31,9 @@ function truncate(s: string, max: number): string {
 
 const CARD_TYPE_DESCRIPTIONS: Record<CardType, string> = {
   discover:
-    "Discover — distill the core idea or argument into a vivid, self-contained summary. Name the topic and explain what it is and why it matters — a reader with no other context should fully understand the card. Use multiple paragraphs separated by \\n\\n when the idea has distinct parts. Optionally include a short, evocative title (3-6 words).",
+    "Discover — distill the core idea or argument into a vivid, self-contained summary. Name the topic and explain what it is and why it matters — a reader with no other context should fully understand the card. Use multiple paragraphs separated by \\n\\n when the idea has distinct parts. Optionally include a short, evocative title (3-6 words). Do NOT frame the card as a comparison or 'X vs Y' — if you see two contrasting concepts, use a 'contrast' card instead.",
   raw_commentary:
-    "Notes — a sharp marginal note: question an assumption, surface a tension, connect to a broader idea, or reframe what is taken for granted. Opinionated and specific, not a summary. Must make sense without any surrounding context. Use multiple paragraphs if needed.",
+    "Notes — a sharp marginal note: question an assumption, surface a tension, connect to a broader idea, or reframe what is taken for granted. Opinionated and specific, not a summary. Must make sense without any surrounding context. Use multiple paragraphs if needed. Do NOT structure as a comparison or 'X vs Y' — use a 'contrast' card for that.",
   connect:
     "Connect — links a concept here to ideas from elsewhere in the book or other works. Name both ideas explicitly.",
   flashcard:
