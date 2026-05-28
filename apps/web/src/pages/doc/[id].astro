@@ -216,8 +216,10 @@ if (hasChunks) {
 
   seenChunkIndices = new Set(seenRows.map((r) => r.chunkIndex))
 
-  // Mastered chunks: chunk indices where at least one card has srRepetition >= 3
-  const masteredRows = await db
+  // Mastered chunks: either (a) has flashcard/quiz with srRepetition >= 3,
+  // or (b) has NO flashcard/quiz cards and ALL cards have timesEngaged >= 3
+  const MASTERY_ENGAGED_THRESHOLD = 3
+  const srMasteredRows = await db
     .select({ chunkIndex: chunks.chunkIndex })
     .from(cardScores)
     .innerJoin(cards, eq(cardScores.cardId, cards.id))
@@ -229,7 +231,37 @@ if (hasChunks) {
     ))
     .groupBy(chunks.chunkIndex)
 
-  masteredChunkIndices = new Set(masteredRows.map((r) => r.chunkIndex))
+  // Non-SR mastery: chunks with no flashcard/quiz where all cards are engaged >= threshold
+  const engagementMasteredRows = await db
+    .select({ chunkIndex: chunks.chunkIndex })
+    .from(chunks)
+    .innerJoin(cards, eq(cards.chunkId, chunks.id))
+    .where(and(
+      eq(cards.userId, userId),
+      eq(chunks.documentId, docId),
+      // Only chunks that have NO flashcard/quiz cards
+      sql`NOT EXISTS (
+        SELECT 1 FROM cards c_sr
+        WHERE c_sr.chunk_id = ${chunks.id}
+          AND c_sr.user_id = ${userId}
+          AND c_sr.card_type IN ('flashcard', 'quiz')
+      )`,
+    ))
+    .groupBy(chunks.chunkIndex, chunks.id)
+    // Every card in the chunk must have timesEngaged >= threshold
+    .having(sql`
+      count(*) > 0
+      AND count(*) = count(*) FILTER (WHERE EXISTS (
+        SELECT 1 FROM card_scores cs
+        WHERE cs.card_id = ${cards.id} AND cs.user_id = ${userId}
+          AND cs.times_engaged >= ${MASTERY_ENGAGED_THRESHOLD}
+      ))
+    `)
+
+  masteredChunkIndices = new Set([
+    ...srMasteredRows.map((r) => r.chunkIndex),
+    ...engagementMasteredRows.map((r) => r.chunkIndex),
+  ])
 
   // Chunk estimation
   if (isReady) {
