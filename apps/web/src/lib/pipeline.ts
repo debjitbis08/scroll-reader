@@ -220,6 +220,8 @@ async function cardsGeneratedToday(userId: string): Promise<number> {
  * Count cards the user has that have never been shown in the feed.
  * Only counts cards of types the user is currently eligible to see
  * (cold start phases restrict which types are served).
+ * Excludes cards from mastered chunks — those will never appear in the feed
+ * and should not block new card generation.
  * Used to enforce a buffer limit — stop generating if user has enough unseen cards.
  */
 async function unseenCardCount(userId: string): Promise<number> {
@@ -235,6 +237,39 @@ async function unseenCardCount(userId: string): Promise<number> {
   else if (totalShown <= 80) eligibleTypes = ['discover', 'raw_commentary', 'passage', 'flashcard', 'glossary', 'contrast']
   else eligibleTypes = ['discover', 'raw_commentary', 'passage', 'flashcard', 'glossary', 'contrast', 'quiz']
 
+  // Exclude cards from mastered chunks (mirrors chunkMasteryGate in feed.ts).
+  // A chunk is mastered if:
+  //   (a) it has flashcard/quiz cards and any has srRepetition >= 3, OR
+  //   (b) it has NO flashcard/quiz cards and ALL its cards have timesEngaged >= 3
+  const MASTERY_ENGAGED_THRESHOLD = 3
+  const chunkNotMastered = sql`NOT EXISTS (
+    SELECT 1 FROM (
+      SELECT chunk_id,
+        bool_or(card_type IN ('flashcard', 'quiz')) AS has_sr_cards
+      FROM cards c_all
+      WHERE c_all.chunk_id = ${cards.chunkId} AND c_all.user_id = ${userId}
+      GROUP BY chunk_id
+    ) chunk_info
+    WHERE CASE
+      WHEN chunk_info.has_sr_cards THEN
+        EXISTS (
+          SELECT 1 FROM cards c_sr
+          JOIN card_scores cs ON cs.card_id = c_sr.id AND cs.user_id = ${userId}
+          WHERE c_sr.chunk_id = ${cards.chunkId}
+            AND c_sr.card_type IN ('flashcard', 'quiz')
+            AND cs.sr_repetition >= 3
+        )
+      ELSE
+        NOT EXISTS (
+          SELECT 1 FROM cards c_eng
+          LEFT JOIN card_scores cs ON cs.card_id = c_eng.id AND cs.user_id = ${userId}
+          WHERE c_eng.chunk_id = ${cards.chunkId}
+            AND c_eng.user_id = ${userId}
+            AND (cs.times_engaged IS NULL OR cs.times_engaged < ${MASTERY_ENGAGED_THRESHOLD})
+        )
+    END
+  )`
+
   const [row] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(cards)
@@ -246,6 +281,7 @@ async function unseenCardCount(userId: string): Promise<number> {
       eq(cards.userId, userId),
       inArray(cards.cardType, eligibleTypes),
       sql`(${cardScores.timesShown} IS NULL OR ${cardScores.timesShown} = 0)`,
+      chunkNotMastered,
     ))
   return row?.count ?? 0
 }
