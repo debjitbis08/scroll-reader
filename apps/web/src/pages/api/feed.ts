@@ -1,16 +1,22 @@
 import type { APIRoute } from 'astro'
 import { eq, and, sql, inArray, notInArray, desc } from 'drizzle-orm'
+import type { SQL } from 'drizzle-orm'
 import { db } from '../../lib/db.ts'
 import { cards, chunks, chunkImages, documents, cardActions, cardScores, feedEvents, collections, collectionDocuments } from '@scroll-reader/db'
 import { createSupabaseServer } from '../../lib/supabase.ts'
 
-// 'connect' is defined but not yet eligible — requires the embeddings pipeline (not built yet)
-type CardType = 'discover' | 'connect' | 'raw_commentary' | 'flashcard' | 'quiz' | 'glossary' | 'contrast' | 'passage'
+import {
+  eligibleTypesFor, shownCardCount, chunkMasteryGate as buildMasteryGate,
+  prerequisiteGate as buildPrerequisiteGate, casualGoalGate, neverShownGate,
+} from '../../lib/feed-gates.ts'
+import type { FeedCardType } from '../../lib/feed-gates.ts'
 
-// Cold start card type tiers
-const EARLY_TYPES: CardType[] = ['discover', 'raw_commentary', 'passage']
-const MID_TYPES: CardType[] = [...EARLY_TYPES, 'flashcard', 'glossary', 'contrast']
-const ALL_TYPES: CardType[] = [...MID_TYPES, 'quiz']
+// 'connect' is defined but not yet eligible — requires the embeddings pipeline (not built yet)
+type CardType = FeedCardType
+
+// Share of regular feed slots reserved for never-shown cards, so a growing
+// pool of previously-seen cards can't crowd new content out of the feed.
+const FRESH_SLOT_SHARE = 0.6
 
 
 // Companion card types surfaced before SR-due reviews — any card that orients
@@ -55,17 +61,8 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
   // --- 1. User context ---
 
   // Cold start: how many distinct cards has the user seen?
-  const [coldStart] = await db
-    .select({ count: sql<number>`count(distinct ${cardScores.cardId})::int` })
-    .from(cardScores)
-    .where(eq(cardScores.userId, user.id))
-  const totalShown = coldStart?.count ?? 0
-
   // Eligible card types based on cold start phase
-  let eligibleTypes: CardType[]
-  if (totalShown <= 30) eligibleTypes = EARLY_TYPES
-  else if (totalShown <= 80) eligibleTypes = MID_TYPES
-  else eligibleTypes = ALL_TYPES
+  const eligibleTypes: CardType[] = eligibleTypesFor(await shownCardCount(user.id))
 
   // Recently shown card IDs (dedup — last 20)
   const recentRows = await db
@@ -111,61 +108,11 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
   // Uses a WHERE EXISTS subquery instead of JOIN to avoid row amplification
   // from potential duplicate card_scores rows.
 
-  // Chunk mastery gate: exclude cards from chunks the user has already mastered.
-  // A chunk is mastered if:
-  //   (a) it has flashcard/quiz cards and any has srRepetition >= 3, OR
-  //   (b) it has NO flashcard/quiz cards and ALL its cards have timesEngaged >= 3
-  const MASTERY_ENGAGED_THRESHOLD = 3
+  // Chunk mastery + quiz/flashcard prerequisite gates (shared with the
+  // pipeline's buffer check — see lib/feed-gates.ts)
   const userId = user.id
-  const chunkMasteryGate = sql`NOT EXISTS (
-    SELECT 1 FROM (
-      SELECT chunk_id,
-        bool_or(card_type IN ('flashcard', 'quiz')) AS has_sr_cards
-      FROM cards c_all
-      WHERE c_all.chunk_id = ${cards.chunkId} AND c_all.user_id = ${userId}
-      GROUP BY chunk_id
-    ) chunk_info
-    WHERE CASE
-      WHEN chunk_info.has_sr_cards THEN
-        EXISTS (
-          SELECT 1 FROM cards c_sr
-          JOIN card_scores cs ON cs.card_id = c_sr.id AND cs.user_id = ${userId}
-          WHERE c_sr.chunk_id = ${cards.chunkId}
-            AND c_sr.card_type IN ('flashcard', 'quiz')
-            AND cs.sr_repetition >= 3
-        )
-      ELSE
-        NOT EXISTS (
-          SELECT 1 FROM cards c_eng
-          LEFT JOIN card_scores cs ON cs.card_id = c_eng.id AND cs.user_id = ${userId}
-          WHERE c_eng.chunk_id = ${cards.chunkId}
-            AND c_eng.user_id = ${userId}
-            AND (cs.times_engaged IS NULL OR cs.times_engaged < ${MASTERY_ENGAGED_THRESHOLD})
-        )
-    END
-  )`
-
-  // Chunk prerequisite gate: quiz/flashcard cards require the user to have
-  // at least seen (glanced or engaged) a non-quiz/flashcard card from the same chunk
-  const prerequisiteGate = sql`(
-    ${cards.cardType} NOT IN ('quiz', 'flashcard')
-    OR EXISTS (
-      SELECT 1 FROM feed_events fe
-      JOIN cards c2 ON c2.id = fe.card_id
-      WHERE c2.chunk_id = ${cards.chunkId}
-        AND c2.card_type NOT IN ('quiz', 'flashcard')
-        AND fe.user_id = ${userId}
-        AND fe.event_type IN ('glanced', 'engaged')
-    )
-    OR EXISTS (
-      SELECT 1 FROM card_actions ca2
-      JOIN cards c3 ON c3.id = ca2.card_id
-      WHERE c3.chunk_id = ${cards.chunkId}
-        AND c3.card_type NOT IN ('quiz', 'flashcard')
-        AND ca2.user_id = ${userId}
-        AND ca2.action = 'like'
-    )
-  )`
+  const chunkMasteryGate = buildMasteryGate(userId)
+  const prerequisiteGate = buildPrerequisiteGate(userId)
 
   // SR-due cards must also respect cold-start tiers
   const srEligibleTypes = eligibleTypes.filter(
@@ -319,42 +266,56 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
     )
   )`
 
-  const regularCards = remainingSlots > 0
-    ? await db
-        .select({
-          card: cards,
-          chunk: {
-            id: chunks.id,
-            content: chunks.content,
-            chapter: chunks.chapter,
-            chunkIndex: chunks.chunkIndex,
-            chunkType: chunks.chunkType,
-            language: chunks.language,
-          },
-          document: {
-            id: documents.id,
-            title: documents.title,
-            author: documents.author,
-          },
-          wordCount: chunks.wordCount,
-        })
-        .from(cards)
-        .innerJoin(chunks, eq(cards.chunkId, chunks.id))
-        .innerJoin(documents, eq(chunks.documentId, documents.id))
-        .where(and(
-          eq(cards.userId, user.id),
-          inArray(cards.cardType, [...eligibleTypes]),
-          allExcludeIds.length > 0 ? notInArray(cards.id, allExcludeIds) : undefined,
-          // Casual docs: exclude study-only types (flashcard/quiz); all other docs: allow all
-          sql`(${documents.readingGoal} IS DISTINCT FROM 'casual' OR ${cards.cardType} NOT IN ('flashcard', 'quiz'))`,
-          chunkMasteryGate,
-          cooldownSubquery,
-          prerequisiteGate,
-          collectionFilter,
-        ))
-        .orderBy(sql`random()`)
-        .limit(remainingSlots * 3) // Over-fetch for affinity scoring
-    : []
+  // Two pools share the same gates and differ only in their freshness filter:
+  //   - fresh:   never-shown cards, guaranteed a share of the slots
+  //   - general: anything off cooldown (includes re-shows of older cards)
+  // Without the reserved share, a reader who has been around a while has far
+  // more off-cooldown old cards than new ones, so a random sample is mostly
+  // repeats and new content barely surfaces.
+  const regularPool = (freshnessFilter: SQL, poolLimit: number) => db
+    .select({
+      card: cards,
+      chunk: {
+        id: chunks.id,
+        content: chunks.content,
+        chapter: chunks.chapter,
+        chunkIndex: chunks.chunkIndex,
+        chunkType: chunks.chunkType,
+        language: chunks.language,
+      },
+      document: {
+        id: documents.id,
+        title: documents.title,
+        author: documents.author,
+      },
+      wordCount: chunks.wordCount,
+    })
+    .from(cards)
+    .innerJoin(chunks, eq(cards.chunkId, chunks.id))
+    .innerJoin(documents, eq(chunks.documentId, documents.id))
+    .where(and(
+      eq(cards.userId, user.id),
+      inArray(cards.cardType, [...eligibleTypes]),
+      allExcludeIds.length > 0 ? notInArray(cards.id, allExcludeIds) : undefined,
+      // Casual docs: exclude study-only types (flashcard/quiz); all other docs: allow all
+      casualGoalGate,
+      chunkMasteryGate,
+      freshnessFilter,
+      prerequisiteGate,
+      collectionFilter,
+    ))
+    .orderBy(sql`random()`)
+    .limit(poolLimit) // Over-fetch for affinity scoring
+
+  const freshQuota = Math.ceil(remainingSlots * FRESH_SLOT_SHARE)
+  const [freshCards, generalCards] = remainingSlots > 0
+    ? await Promise.all([
+        regularPool(neverShownGate, freshQuota * 3),
+        regularPool(cooldownSubquery, remainingSlots * 3),
+      ])
+    : [[], []]
+  const freshIds = new Set(freshCards.map((r) => r.card.id))
+  const regularCards = [...freshCards, ...generalCards]
 
   // --- 4. Type affinity scoring + selection ---
   // Fetch scores separately to avoid JOIN amplification
@@ -393,13 +354,21 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
   // Sort by score descending, take what we need
   scored.sort((a, b) => b.score - a.score)
   // Deduplicate — same card ID should never appear twice in the feed
+  // (a never-shown card can be in both pools)
   const seenIds = new Set<string>(allExcludeIds)
   const deduped = scored.filter((r) => {
     if (seenIds.has(r.card.id)) return false
     seenIds.add(r.card.id)
     return true
   })
-  const selectedRegular = deduped.slice(0, remainingSlots)
+  // Fill the reserved fresh slots first, then the rest by score from everything left.
+  // If there aren't enough fresh cards, the general pool takes the unused slots.
+  const freshPicks = deduped.filter((r) => freshIds.has(r.card.id)).slice(0, freshQuota)
+  const freshPickIds = new Set(freshPicks.map((r) => r.card.id))
+  const otherPicks = deduped
+    .filter((r) => !freshPickIds.has(r.card.id))
+    .slice(0, remainingSlots - freshPicks.length)
+  const selectedRegular = [...freshPicks, ...otherPicks].sort((a, b) => b.score - a.score)
 
   // --- Fallback: if no cards survived all filters, relax cooldown + recency ---
   // The feed should never return empty if the user has cards.
@@ -438,7 +407,7 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
         eq(cards.userId, user.id),
         inArray(cards.cardType, [...eligibleTypes]),
         dismissedFilter,
-        sql`(${documents.readingGoal} IS DISTINCT FROM 'casual' OR ${cards.cardType} NOT IN ('flashcard', 'quiz'))`,
+        casualGoalGate,
         chunkMasteryGate,
         prerequisiteGate,
         collectionFilter,
