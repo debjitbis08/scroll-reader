@@ -5,9 +5,8 @@ dist/
 *.env
 .env.local
 
-# Rust
+# Rust (Cargo.lock is committed: these crates build binaries)
 target/
-Cargo.lock
 
 # Private tooling (separate repos)
 tools/

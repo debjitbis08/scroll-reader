@@ -15,7 +15,7 @@ export default defineConfig({
     },
     resizeOptions: { background: "#e8e3d8", fit: "contain" },
     darkResizeOptions: { background: "#1e1e2e", fit: "contain" },
-    name: (landscape: boolean, size, dark: boolean) =>
+    name: (landscape, size, dark) =>
       `apple-splash-${landscape ? "landscape" : "portrait"}-${dark ? "dark-" : "light-"}${size.width}x${size.height}.png`,
   }),
   images: ["public/favicon.svg"],
