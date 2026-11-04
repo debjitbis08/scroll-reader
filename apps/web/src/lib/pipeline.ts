@@ -194,6 +194,7 @@ const TRANSIENT_PATTERNS = [
   /rate limit/i,
   /Too Many Requests|429/i,
   /Service Unavailable|503/i,
+  /HTTP 5\d\d/,         // storage/API 5xx (see describeStorageError)
 ]
 
 function isTransient(err: unknown): boolean {
@@ -380,6 +381,14 @@ export async function processDocument(doc: Document, cardBudget: number): Promis
       // Delete storage — we won't need the file
       if (filePath) await deleteDocument(filePath).catch(() => {})
     }
+    return 0
+  }
+
+  // A doc that still needs chunking but has no file path hasn't finished
+  // uploading yet. Skip it (without touching jobs or marking it failed) and let
+  // a later cron run pick it up — downloading "" would fail permanently.
+  if (needsChunking && !filePath && !(doc.totalElements !== null && (doc.elementsProcessed ?? 0) >= doc.totalElements)) {
+    console.warn(`[pipeline] skipping doc=${doc.id}: file not uploaded yet`)
     return 0
   }
 

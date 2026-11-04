@@ -140,7 +140,10 @@ export const POST: APIRoute = async ({ request, locals, params }) => {
     })
   }
 
-  // Create document — same as upload flow, but skip 'preview' since config is done
+  // Create document — same as upload flow. It's inserted as 'preview' (which the
+  // cron ignores) and only flipped to 'chunking' once the file is in storage;
+  // otherwise the cron can pick it up mid-upload with an empty filePath and fail
+  // permanently with "Storage download failed".
   const [doc] = await db
     .insert(documents)
     .values({
@@ -155,7 +158,7 @@ export const POST: APIRoute = async ({ request, locals, params }) => {
       catalogBookId: catalogBookId,
       filePath: '',
       fileSize: buffer.length,
-      processingStatus: 'chunking',
+      processingStatus: 'preview',
       totalPages,
       pageStart: 1,
       pageEnd: totalPages,
@@ -166,7 +169,7 @@ export const POST: APIRoute = async ({ request, locals, params }) => {
   // Upload to Supabase Storage
   try {
     const path = await uploadDocument(userId, doc.id, '.epub', buffer)
-    await db.update(documents).set({ filePath: path }).where(eq(documents.id, doc.id))
+    await db.update(documents).set({ filePath: path, processingStatus: 'chunking' }).where(eq(documents.id, doc.id))
   } catch (err) {
     console.error('[catalog/add] storage upload failed:', err)
     await db.delete(documents).where(eq(documents.id, doc.id))

@@ -43,7 +43,7 @@ class SupabaseStorage implements StorageProvider {
     const { data, error } = await this.client.storage
       .from(BUCKET)
       .download(path)
-    if (error) throw new Error(`Storage download failed: ${error.message ?? JSON.stringify(error)}`)
+    if (error) throw new Error(`Storage download failed for ${path}: ${await describeStorageError(error)}`)
     return Buffer.from(await data.arrayBuffer())
   }
 
@@ -78,6 +78,28 @@ class SupabaseStorage implements StorageProvider {
     if (error) throw new Error(`Storage signedUrl failed: ${error.message}`)
     return data.signedUrl
   }
+}
+
+/**
+ * storage-js wraps non-2xx download responses (which use noResolveJson) in a
+ * StorageUnknownError whose message is JSON.stringify(Response) === "{}".
+ * Pull the HTTP status and body out of the original Response so the error
+ * says what actually went wrong (e.g. "HTTP 400: {...Object not found...}").
+ */
+async function describeStorageError(error: unknown): Promise<string> {
+  const e = error as { message?: string; status?: number; originalError?: unknown }
+  const res = e.originalError as { status?: number; statusText?: string; text?: () => Promise<string> } | undefined
+  if (res && typeof res.status === 'number') {
+    let body = ''
+    try {
+      body = (await res.text?.())?.slice(0, 300) ?? ''
+    } catch { /* body already consumed or unreadable */ }
+    return `HTTP ${res.status}${res.statusText ? ` ${res.statusText}` : ''}${body ? `: ${body}` : ''}`
+  }
+  if (e.message && e.message !== '{}') {
+    return e.status ? `${e.message} (HTTP ${e.status})` : e.message
+  }
+  return String(error)
 }
 
 // ── Singleton + public API ──────────────────────────────────
