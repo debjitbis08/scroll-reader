@@ -4,6 +4,7 @@ import {
   resolveCardStrategy,
   describeStrategy,
 } from "@scroll-reader/shared-types";
+import BookDetails, { type BookDetailsData, type SummaryData } from "./BookDetails.tsx";
 
 interface Book {
   gutenbergId: number;
@@ -67,28 +68,65 @@ export default function CatalogConfigModal(props: Props) {
   }));
   const strategyLabel = createMemo(() => describeStrategy(effectiveStrategy()));
 
-  // Try to guess content type from subjects
-  onMount(() => {
-    const subjects = props.book.subjects.join(" ").toLowerCase();
+  // The modal opens on the book's details; "Add to library" moves to configuration.
+  const [step, setStep] = createSignal<"details" | "configure">("details");
+  const [details, setDetails] = createSignal<BookDetailsData | null>(null);
+  const [detailsError, setDetailsError] = createSignal<string | null>(null);
+  const [summary, setSummary] = createSignal<SummaryData | null>(null);
+  const [summaryLoading, setSummaryLoading] = createSignal(true);
+  const [docTypeTouched, setDocTypeTouched] = createSignal(false);
+  const [coverFailed, setCoverFailed] = createSignal(false);
+
+  // Category shelves on the explore page don't carry subjects, so prefer the
+  // ones from the details fetch once they arrive.
+  const subjects = () =>
+    details()?.subjects?.length ? details()!.subjects : props.book.subjects;
+
+  // Try to guess content type from subjects (unless the user already picked one)
+  function guessDocumentType(list: string[]) {
+    if (docTypeTouched()) return;
+    const text = list.join(" ").toLowerCase();
     if (
-      subjects.includes("fiction") ||
-      subjects.includes("novel") ||
-      subjects.includes("stories")
+      text.includes("fiction") ||
+      text.includes("novel") ||
+      text.includes("stories")
     ) {
       setDocumentType("fiction");
     } else if (
-      subjects.includes("religion") ||
-      subjects.includes("spiritual") ||
-      subjects.includes("philosophy")
+      text.includes("religion") ||
+      text.includes("spiritual") ||
+      text.includes("philosophy")
     ) {
       setDocumentType("scripture");
     } else if (
-      subjects.includes("textbook") ||
-      subjects.includes("manual") ||
-      subjects.includes("science")
+      text.includes("textbook") ||
+      text.includes("manual") ||
+      text.includes("science")
     ) {
       setDocumentType("manual");
     }
+  }
+
+  onMount(() => {
+    guessDocumentType(props.book.subjects);
+    const id = props.book.gutenbergId;
+
+    fetch(`/api/gutenberg/${id}`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error(String(res.status));
+        const data = (await res.json()) as BookDetailsData;
+        setDetails(data);
+        guessDocumentType(data.subjects);
+      })
+      .catch(() => setDetailsError("Couldn't load book details."));
+
+    fetch(`/api/gutenberg/${id}/summary`)
+      .then(async (res) => (res.ok ? ((await res.json()) as SummaryData) : null))
+      .catch(() => null)
+      .then((data) => {
+        setSummary(data);
+        setSummaryLoading(false);
+      });
   });
 
   // Close on Escape
@@ -115,7 +153,7 @@ export default function CatalogConfigModal(props: Props) {
             ...(chunkIntervalOverride() ? { chunkIntervalOverride: chunkIntervalOverride() } : {}),
             title: props.book.title,
             author: props.book.author,
-            subjects: props.book.subjects,
+            subjects: subjects(),
             languages: ['en'],
             coverUrl: props.book.coverUrl,
             epubUrl: props.book.epubUrl,
@@ -145,7 +183,8 @@ export default function CatalogConfigModal(props: Props) {
     }
   }
 
-  const isCached = () => props.book.cacheStatus === "ready";
+  const isCached = () =>
+    (details()?.cacheStatus ?? props.book.cacheStatus) === "ready";
 
   return (
     <div
@@ -154,18 +193,43 @@ export default function CatalogConfigModal(props: Props) {
         if (e.target === e.currentTarget && !submitting()) props.onClose();
       }}
     >
-      <div class="w-full max-w-lg rounded-lg bg-ed-surface p-6 space-y-5 shadow-xl">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="catalog-modal-title"
+        class="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-lg bg-ed-surface p-6 space-y-5 shadow-xl"
+      >
         {/* Header */}
         <div class="flex items-start justify-between gap-3">
-          <div class="min-w-0">
-            <h2 class="font-display text-lg text-ed-on-surface truncate">
-              {props.book.title}
-            </h2>
-            <Show when={props.book.author}>
-              <p class="font-body text-sm text-ed-on-surface-muted">
-                {props.book.author}
-              </p>
+          <div class="flex min-w-0 gap-4">
+            <Show when={props.book.coverUrl && !coverFailed()}>
+              <img
+                src={props.book.coverUrl!}
+                alt=""
+                onError={() => setCoverFailed(true)}
+                class="h-28 w-20 shrink-0 rounded object-cover bg-ed-surface-high"
+              />
             </Show>
+            <div class="min-w-0">
+              <h2
+                id="catalog-modal-title"
+                class="font-display text-lg leading-snug text-ed-on-surface"
+              >
+                {details()?.title ?? props.book.title}
+              </h2>
+              <Show when={details()?.contributors?.[0]?.name ?? props.book.author}>
+                {(name) => (
+                  <p class="mt-1 font-body text-sm text-ed-on-surface-muted">
+                    {name()}
+                  </p>
+                )}
+              </Show>
+              <Show when={isCached()}>
+                <p class="mt-2 rounded-full bg-ed-primary-container px-3 py-1 inline-block font-body text-xs font-semibold text-ed-primary">
+                  Ready — cards are pre-generated
+                </p>
+              </Show>
+            </div>
           </div>
           <button
             type="button"
@@ -185,13 +249,18 @@ export default function CatalogConfigModal(props: Props) {
           </button>
         </div>
 
+        {/* Details step */}
+        <Show when={step() === "details"}>
+          <BookDetails
+            details={details()}
+            detailsError={detailsError()}
+            summary={summary()}
+            summaryLoading={summaryLoading()}
+          />
+        </Show>
+
         {/* Config form */}
-        <Show when={!submitting()}>
-          <Show when={isCached()}>
-            <p class="rounded-full bg-ed-primary-container px-3 py-1 inline-block font-body text-xs font-semibold text-ed-primary">
-              Ready — cards are pre-generated
-            </p>
-          </Show>
+        <Show when={step() === "configure" && !submitting()}>
 
           {/* Content type */}
           <fieldset class="space-y-2">
@@ -212,7 +281,10 @@ export default function CatalogConfigModal(props: Props) {
                     name="catalogDocType"
                     value={opt.value}
                     checked={documentType() === opt.value}
-                    onChange={() => setDocumentType(opt.value)}
+                    onChange={() => {
+                      setDocTypeTouched(true);
+                      setDocumentType(opt.value);
+                    }}
                     class="sr-only"
                   />
                   {opt.label}
@@ -352,19 +424,19 @@ export default function CatalogConfigModal(props: Props) {
           <p class="font-body text-sm text-ctp-red">{error()}</p>
         </Show>
 
-        {/* Actions */}
-        <div class="flex gap-3 justify-end">
+        {/* Actions (stay visible while the details scroll) */}
+        <div class="sticky -bottom-6 -mx-6 -mb-6 flex gap-3 justify-end bg-ed-surface px-6 py-4">
           <button
             type="button"
-            onClick={props.onClose}
+            onClick={() => (step() === "configure" ? setStep("details") : props.onClose())}
             disabled={submitting()}
             class="rounded px-4 py-2 font-body text-sm text-ed-on-surface-muted hover:bg-ed-surface-high transition-colors disabled:opacity-50 cursor-pointer"
           >
-            Cancel
+            {step() === "configure" ? "Back" : "Close"}
           </button>
           <button
             type="button"
-            onClick={addToLibrary}
+            onClick={() => (step() === "details" ? setStep("configure") : addToLibrary())}
             disabled={submitting()}
             class="rounded bg-ed-primary px-5 py-2 font-body text-sm font-medium text-ed-on-primary transition-opacity hover:opacity-90 disabled:opacity-50 cursor-pointer"
           >
