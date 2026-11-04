@@ -76,6 +76,7 @@ export default function CatalogConfigModal(props: Props) {
   const [summaryLoading, setSummaryLoading] = createSignal(true);
   const [docTypeTouched, setDocTypeTouched] = createSignal(false);
   const [coverFailed, setCoverFailed] = createSignal(false);
+  const coverUrl = () => props.book.coverUrl ?? details()?.coverUrl ?? null;
 
   // Category shelves on the explore page don't carry subjects, so prefer the
   // ones from the details fetch once they arrive.
@@ -188,7 +189,7 @@ export default function CatalogConfigModal(props: Props) {
 
   return (
     <div
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      class="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 sm:p-4"
       onClick={(e) => {
         if (e.target === e.currentTarget && !submitting()) props.onClose();
       }}
@@ -197,17 +198,34 @@ export default function CatalogConfigModal(props: Props) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="catalog-modal-title"
-        class="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-lg bg-ed-surface p-6 space-y-5 shadow-xl"
+        class="flex h-[100dvh] w-full flex-col gap-5 overflow-y-auto overscroll-contain bg-ed-surface p-6 shadow-xl sm:h-auto sm:max-h-[90vh] sm:max-w-lg sm:rounded-lg"
       >
         {/* Header */}
         <div class="flex items-start justify-between gap-3">
           <div class="flex min-w-0 gap-4">
-            <Show when={props.book.coverUrl && !coverFailed()}>
+            <Show
+              when={coverUrl() && !coverFailed()}
+              fallback={
+                <div class="flex h-36 w-24 shrink-0 items-center justify-center rounded bg-ed-surface-high">
+                  <svg
+                    class="size-8 text-ed-on-surface-muted"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    aria-hidden="true"
+                  >
+                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                  </svg>
+                </div>
+              }
+            >
               <img
-                src={props.book.coverUrl!}
-                alt=""
+                src={coverUrl()!}
+                alt={`Cover of ${details()?.title ?? props.book.title}`}
                 onError={() => setCoverFailed(true)}
-                class="h-28 w-20 shrink-0 rounded object-cover bg-ed-surface-high"
+                class="h-36 w-24 shrink-0 rounded object-cover shadow-md bg-ed-surface-high"
               />
             </Show>
             <div class="min-w-0">
@@ -225,8 +243,8 @@ export default function CatalogConfigModal(props: Props) {
                 )}
               </Show>
               <Show when={isCached()}>
-                <p class="mt-2 rounded-full bg-ed-primary-container px-3 py-1 inline-block font-body text-xs font-semibold text-ed-primary">
-                  Ready — cards are pre-generated
+                <p class="mt-2 inline-block whitespace-nowrap rounded bg-ed-primary-container px-2.5 py-1 font-body text-xs font-semibold text-ed-on-surface">
+                  Instant · cards ready
                 </p>
               </Show>
             </div>
@@ -235,6 +253,7 @@ export default function CatalogConfigModal(props: Props) {
             type="button"
             onClick={props.onClose}
             disabled={submitting()}
+            aria-label="Close"
             class="shrink-0 text-ed-on-surface-muted hover:text-ed-on-surface transition-colors disabled:opacity-50"
           >
             <svg
@@ -425,7 +444,7 @@ export default function CatalogConfigModal(props: Props) {
         </Show>
 
         {/* Actions (stay visible while the details scroll) */}
-        <div class="sticky -bottom-6 -mx-6 -mb-6 flex gap-3 justify-end bg-ed-surface px-6 py-4">
+        <div class="sticky -bottom-6 -mx-6 -mb-6 mt-auto flex gap-3 justify-end bg-ed-surface px-6 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <button
             type="button"
             onClick={() => (step() === "configure" ? setStep("details") : props.onClose())}

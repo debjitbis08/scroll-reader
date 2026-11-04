@@ -17,6 +17,7 @@ export interface BookDetailsData {
   language: string | null;
   issuedAt: string | null;
   gutenbergUrl: string;
+  coverUrl: string | null;
   cacheStatus: string | null;
   totalCards: number | null;
 }
