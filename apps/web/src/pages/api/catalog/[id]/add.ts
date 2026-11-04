@@ -266,7 +266,7 @@ async function addFromCache(
     const catCards = await db.select().from(catalogCards)
       .where(and(
         inArray(catalogCards.catalogChunkId, batchIds),
-        inArray(catalogCards.cardType, cardTypes as string[]),
+        inArray(catalogCards.cardType, cardTypes),
       ))
 
     if (catCards.length === 0) continue
@@ -277,7 +277,7 @@ async function addFromCache(
         userId,
         chunkId: chunkIdMap.get(c.catalogChunkId)!,
         cardType: c.cardType,
-        content: c.content,
+        content: c.content as Record<string, unknown>,
         encrypted: false,
         aiProvider: c.aiProvider ?? undefined,
         aiModel: c.aiModel ?? undefined,

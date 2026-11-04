@@ -1,0 +1,123 @@
+name: Web — Test & Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/web/**'
+      - 'packages/**'
+      - 'pnpm-lock.yaml'
+      - 'package.json'
+      - 'fly.toml'
+      - '.github/workflows/web.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/web/**'
+      - 'packages/**'
+      - 'pnpm-lock.yaml'
+      - 'package.json'
+      - 'fly.toml'
+      - '.github/workflows/web.yml'
+  workflow_dispatch:
+
+# Keep in sync with the rust-builder stage in apps/web/Dockerfile
+env:
+  RUST_TOOLCHAIN: '1.88'
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # pnpm version comes from "packageManager" in package.json
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Typecheck web app
+        run: pnpm --filter @scroll-reader/web typecheck
+
+  test-pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Run pipeline tests
+        run: pnpm --filter @scroll-reader/pipeline test
+
+  test-rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            packages/chunker
+            packages/extractor
+      - name: Test chunker
+        run: cargo test --locked
+        working-directory: packages/chunker
+      - name: Test extractor
+        run: cargo test --locked
+        working-directory: packages/extractor
+
+  build:
+    runs-on: ubuntu-latest
+    needs: [typecheck, test-pipeline]
+    env:
+      SUPABASE_URL: https://placeholder.supabase.co
+      SUPABASE_ANON_KEY: placeholder
+      DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
+      DISABLE_CRON: "false"
+      CRON_SECRET: placeholder
+      BOT_USER_ID: ""
+      ADMIN_EMAILS: ""
+      CF_TURNSTILE_SECRET_KEY: placeholder
+      CF_TURNSTILE_SITE_KEY: placeholder
+      PUBLIC_POSTHOG_API_KEY: placeholder
+      DISABLE_POSTHOG: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build web app
+        run: pnpm --filter @scroll-reader/web build
+
+  deploy:
+    # Only deploy from main, and only after every check has passed
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    needs: [build, test-rust]
+    runs-on: ubuntu-latest
+    concurrency:
+      group: web-deploy
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Check Fly.io token
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          if [ -z "$FLY_API_TOKEN" ]; then
+            echo "::error::FLY_API_TOKEN secret is not set for this repository"
+            exit 1
+          fi
+      - name: Deploy to Fly.io
+        run: flyctl deploy --remote-only --build-arg CF_TURNSTILE_SITE_KEY=${{ secrets.CF_TURNSTILE_SITE_KEY }} --build-arg PUBLIC_POSTHOG_API_KEY=${{ secrets.PUBLIC_POSTHOG_API_KEY }}
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

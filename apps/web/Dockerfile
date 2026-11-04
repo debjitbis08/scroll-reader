@@ -7,11 +7,11 @@ WORKDIR /build
 
 # Build chunker
 COPY packages/chunker/ packages/chunker/
-RUN cd packages/chunker && cargo build --release
+RUN cd packages/chunker && cargo build --release --locked
 
 # Build extractor
 COPY packages/extractor/ packages/extractor/
-RUN cd packages/extractor && cargo build --release
+RUN cd packages/extractor && cargo build --release --locked
 
 # Stage 2: Build Node.js app
 FROM node:22-slim AS node-builder

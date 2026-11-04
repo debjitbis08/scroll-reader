@@ -41,7 +41,7 @@
       localStorage.setItem('cookie_consent', 'yes')
       banner.style.display = 'none'
       if (window.posthog) {
-        posthog.set_config({ persistence: 'localStorage+cookie' })
+        window.posthog.set_config({ persistence: 'localStorage+cookie' })
       }
       identifyUser()
     })

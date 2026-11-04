@@ -81,7 +81,7 @@ export default function PageRangeSelector(props: Props) {
       const data = await res.json();
       if (data.toc) {
         setTocData(data.toc);
-        setSelectedChapters(new Set(data.toc.map((_: TocEntry, i: number) => i)));
+        setSelectedChapters(new Set<number>(data.toc.map((_: TocEntry, i: number) => i)));
       }
     } finally {
       setRefreshing(false);
