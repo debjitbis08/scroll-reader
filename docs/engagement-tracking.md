@@ -520,9 +520,9 @@ Derived from `COUNT(DISTINCT card_id)` in `card_scores`:
 |-------|---------------------|-------|
 | 0 – 30 | `discover`, `raw_commentary`, `passage` | Linear from first uploaded document |
 | 31 – 80 | + `flashcard`, `glossary`, `contrast` | Cap flashcard at 20% of session |
-| 81+ | + `quiz` | Cap quiz at 10%. Never for `casual` reading goal |
+| 81+ | + `quiz` | Cap quiz at 10% |
 
-**Reading goal interaction:** Documents with `casual` reading goal never produce quiz or flashcard cards in the feed — even if the cards exist in the database (they may have been generated before the user changed their goal). The feed query filters by joining `cards → chunks → documents` and checking `documents.reading_goal`. Discover, passage, raw_commentary, glossary, and contrast cards are always eligible regardless of reading goal — these are the backbone of the passive scroll experience.
+**Reading goal interaction:** The feed does not filter by reading goal. Which card types a document gets is decided at generation time, by its document type + reading goal strategy (e.g. `casual` strategies don't include quiz or flashcard) or by the card types the user picks when adding the book. Whatever cards exist are eligible for the feed.
 
 ### Type affinity scorer
 
@@ -633,7 +633,7 @@ ORDER BY chunk_id, sort_order
 
 **Why not make discover/note cards SR-eligible?** SR strengthens recall through spaced retrieval practice — the user must actively retrieve an answer. Discover and note cards are passive: the user reads them, and showing them again on a schedule is just repetition, not retrieval practice. The engagement tracker already captures whether the user read them via `engaged` events and type affinity scoring. Companion resurfacing gives them the right role: priming memory before a test, not being tested themselves.
 
-**Companion resurfacing only applies to study/reflective goals.** For `casual` reading goal documents, flashcard/quiz cards are never served, so companions are never triggered. The discover and note cards for casual documents appear organically in the feed based on type affinity and deduplication — no SR machinery involved.
+**Companion resurfacing follows the cards that exist.** Default `casual` strategies don't generate flashcard/quiz cards, so their discover and note cards appear organically in the feed based on type affinity and deduplication — no SR machinery involved. If the user chose flashcards or quizzes for a casual document, those go through SR and companion resurfacing like any other.
 
 ---
 

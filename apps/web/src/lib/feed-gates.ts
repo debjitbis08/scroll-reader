@@ -1,7 +1,7 @@
 import { eq, sql } from 'drizzle-orm'
 import type { SQL } from 'drizzle-orm'
 import { db } from './db.ts'
-import { cards, cardScores, documents } from '@scroll-reader/db'
+import { cards, cardScores } from '@scroll-reader/db'
 
 /**
  * Shared feed-eligibility rules.
@@ -101,12 +101,6 @@ export function prerequisiteGate(userId: string): SQL {
     )
   )`
 }
-
-/**
- * Casual docs never serve study-only types (flashcard/quiz).
- * Requires `documents` to be joined into the query.
- */
-export const casualGoalGate: SQL = sql`(${documents.readingGoal} IS DISTINCT FROM 'casual' OR ${cards.cardType} NOT IN ('flashcard', 'quiz'))`
 
 /** Card has never been shown to the user. */
 export const neverShownGate: SQL = sql`NOT EXISTS (

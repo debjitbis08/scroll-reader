@@ -7,7 +7,7 @@ import { createSupabaseServer } from '../../lib/supabase.ts'
 
 import {
   eligibleTypesFor, shownCardCount, chunkMasteryGate as buildMasteryGate,
-  prerequisiteGate as buildPrerequisiteGate, casualGoalGate, neverShownGate,
+  prerequisiteGate as buildPrerequisiteGate, neverShownGate,
 } from '../../lib/feed-gates.ts'
 import type { FeedCardType } from '../../lib/feed-gates.ts'
 
@@ -155,8 +155,6 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
             AND cs.sr_due_at <= now()
           LIMIT 1
         )`,
-        // Study/reflective only — never serve SR cards for casual docs
-        sql`(${documents.readingGoal} IS NULL OR ${documents.readingGoal} != 'casual')`,
         // Exclude dismissed
         excludeIds.length > 0
           ? notInArray(cards.id, excludeIds)
@@ -297,8 +295,6 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
       eq(cards.userId, user.id),
       inArray(cards.cardType, [...eligibleTypes]),
       allExcludeIds.length > 0 ? notInArray(cards.id, allExcludeIds) : undefined,
-      // Casual docs: exclude study-only types (flashcard/quiz); all other docs: allow all
-      casualGoalGate,
       chunkMasteryGate,
       freshnessFilter,
       prerequisiteGate,
@@ -407,7 +403,6 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
         eq(cards.userId, user.id),
         inArray(cards.cardType, [...eligibleTypes]),
         dismissedFilter,
-        casualGoalGate,
         chunkMasteryGate,
         prerequisiteGate,
         collectionFilter,
