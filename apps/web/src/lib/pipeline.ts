@@ -3,7 +3,7 @@ import { readFile, writeFile, unlink, rm } from 'node:fs/promises'
 import { extname, basename, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { db } from './db.ts'
-import { documents, chunks, chunkImages, cards, cardScores, jobs, profiles, aiUsageLogs, usageEvents, catalogCards } from '@scroll-reader/db'
+import { documents, chunks, chunkImages, cards, feedEvents, jobs, profiles, aiUsageLogs, usageEvents, catalogCards } from '@scroll-reader/db'
 import type { Document, Chunk } from '@scroll-reader/db'
 import {
   extractDocument, filterByPageRange, filterByToc,
@@ -20,6 +20,11 @@ import { BATCH_SIZE, EXTRACTOR_BIN, CHUNKER_BIN, FIGURE_EXTRACT_BIN, BOT_USER_ID
 import { downloadDocument, deleteDocument, uploadImage } from './storage.ts'
 import { MACHINE_ID, addAffinity, hasAffinity, cleanAffinity } from './machine.ts'
 import { captureException } from './posthog.ts'
+import {
+  eligibleTypesFor, shownCardCount, chunkMasteryGate, prerequisiteGate,
+  casualGoalGate, neverShownGate, notDismissedGate,
+  adaptiveBufferTarget, CONSUMPTION_WINDOW_DAYS,
+} from './feed-gates.ts'
 
 // ── Resolve binary paths ──
 
@@ -217,73 +222,43 @@ async function cardsGeneratedToday(userId: string): Promise<number> {
 }
 
 /**
- * Count cards the user has that have never been shown in the feed.
- * Only counts cards of types the user is currently eligible to see
- * (cold start phases restrict which types are served).
- * Excludes cards from mastered chunks — those will never appear in the feed
- * and should not block new card generation.
- * Used to enforce a buffer limit — stop generating if user has enough unseen cards.
+ * Count cards that are unseen AND the feed could actually serve right now.
+ * Uses the same gates as the feed endpoint (cold-start types, mastery,
+ * quiz/flashcard prerequisites, casual-goal exclusion, dismissals). Cards the
+ * feed can never show must not count, or they keep the buffer "full" while the
+ * user only gets re-shown old cards.
  */
-async function unseenCardCount(userId: string): Promise<number> {
-  // Determine cold start phase to know which card types are eligible
-  const [coldStart] = await db
-    .select({ count: sql<number>`count(distinct ${cardScores.cardId})::int` })
-    .from(cardScores)
-    .where(eq(cardScores.userId, userId))
-  const totalShown = coldStart?.count ?? 0
-
-  let eligibleTypes: string[]
-  if (totalShown <= 30) eligibleTypes = ['discover', 'raw_commentary', 'passage']
-  else if (totalShown <= 80) eligibleTypes = ['discover', 'raw_commentary', 'passage', 'flashcard', 'glossary', 'contrast']
-  else eligibleTypes = ['discover', 'raw_commentary', 'passage', 'flashcard', 'glossary', 'contrast', 'quiz']
-
-  // Exclude cards from mastered chunks (mirrors chunkMasteryGate in feed.ts).
-  // A chunk is mastered if:
-  //   (a) it has flashcard/quiz cards and any has srRepetition >= 3, OR
-  //   (b) it has NO flashcard/quiz cards and ALL its cards have timesEngaged >= 3
-  const MASTERY_ENGAGED_THRESHOLD = 3
-  const chunkNotMastered = sql`NOT EXISTS (
-    SELECT 1 FROM (
-      SELECT chunk_id,
-        bool_or(card_type IN ('flashcard', 'quiz')) AS has_sr_cards
-      FROM cards c_all
-      WHERE c_all.chunk_id = ${cards.chunkId} AND c_all.user_id = ${userId}
-      GROUP BY chunk_id
-    ) chunk_info
-    WHERE CASE
-      WHEN chunk_info.has_sr_cards THEN
-        EXISTS (
-          SELECT 1 FROM cards c_sr
-          JOIN card_scores cs ON cs.card_id = c_sr.id AND cs.user_id = ${userId}
-          WHERE c_sr.chunk_id = ${cards.chunkId}
-            AND c_sr.card_type IN ('flashcard', 'quiz')
-            AND cs.sr_repetition >= 3
-        )
-      ELSE
-        NOT EXISTS (
-          SELECT 1 FROM cards c_eng
-          LEFT JOIN card_scores cs ON cs.card_id = c_eng.id AND cs.user_id = ${userId}
-          WHERE c_eng.chunk_id = ${cards.chunkId}
-            AND c_eng.user_id = ${userId}
-            AND (cs.times_engaged IS NULL OR cs.times_engaged < ${MASTERY_ENGAGED_THRESHOLD})
-        )
-    END
-  )`
+async function servableUnseenCount(userId: string): Promise<number> {
+  const eligibleTypes = eligibleTypesFor(await shownCardCount(userId))
 
   const [row] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(cards)
-    .leftJoin(cardScores, and(
-      eq(cardScores.cardId, cards.id),
-      eq(cardScores.userId, cards.userId),
-    ))
+    .innerJoin(chunks, eq(cards.chunkId, chunks.id))
+    .innerJoin(documents, eq(chunks.documentId, documents.id))
     .where(and(
       eq(cards.userId, userId),
       inArray(cards.cardType, eligibleTypes),
-      sql`(${cardScores.timesShown} IS NULL OR ${cardScores.timesShown} = 0)`,
-      chunkNotMastered,
+      neverShownGate,
+      notDismissedGate,
+      casualGoalGate,
+      chunkMasteryGate(userId),
+      prerequisiteGate(userId),
     ))
   return row?.count ?? 0
+}
+
+/**
+ * Distinct cards the user has seen per day, averaged over the recent window.
+ * Drives the adaptive buffer size.
+ */
+async function recentCardsSeenPerDay(userId: string): Promise<number> {
+  const since = new Date(Date.now() - CONSUMPTION_WINDOW_DAYS * 24 * 60 * 60 * 1000)
+  const [row] = await db
+    .select({ count: sql<number>`count(distinct ${feedEvents.cardId})::int` })
+    .from(feedEvents)
+    .where(and(eq(feedEvents.userId, userId), gte(feedEvents.createdAt, since)))
+  return (row?.count ?? 0) / CONSUMPTION_WINDOW_DAYS
 }
 
 // ── Document Locking ────────────────────────────────────────
@@ -941,16 +916,24 @@ async function _processUser(userId: string, tier: Tier): Promise<number> {
     return 0
   }
 
-  // Pause generation if user has enough unseen cards (2-day buffer)
+  // Adaptive buffer: keep ~BUFFER_DAYS of the user's recent consumption ready
+  // as servable unseen cards. Quiet readers get a small buffer, so generation
+  // keeps trickling in fresh cards daily rather than stalling on a big stock.
   // Skip buffer check for the bot account — it needs a large card pool for curation
   const isBot = BOT_USER_ID !== '' && userId === BOT_USER_ID
   if (!isBot) {
-    const bufferLimit = 2 * dailyLimit
-    const unseen = await unseenCardCount(userId)
-    if (unseen >= bufferLimit) {
-      console.log(`[pipeline] user=${userId} buffer full (${unseen}/${bufferLimit}), pausing`)
+    const [perDay, unseen] = await Promise.all([
+      recentCardsSeenPerDay(userId),
+      servableUnseenCount(userId),
+    ])
+    const bufferTarget = adaptiveBufferTarget(perDay, dailyLimit)
+    if (unseen >= bufferTarget) {
+      console.log(`[pipeline] user=${userId} buffer full (${unseen}/${bufferTarget}, ${perDay.toFixed(1)} seen/day), pausing`)
       return 0
     }
+    // Only fill up to the target this run (at least one batch, so a chunk's
+    // cards are never split awkwardly by a tiny budget).
+    budget = Math.min(budget, Math.max(bufferTarget - unseen, CARDS_PER_BATCH))
   }
 
   const staleThreshold = new Date(Date.now() - LOCK_EXPIRY_MS)
