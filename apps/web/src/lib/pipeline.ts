@@ -22,7 +22,7 @@ import { MACHINE_ID, addAffinity, hasAffinity, cleanAffinity } from './machine.t
 import { captureException } from './posthog.ts'
 import {
   eligibleTypesFor, shownCardCount, chunkMasteryGate, prerequisiteGate,
-  casualGoalGate, neverShownGate, notDismissedGate,
+  neverShownGate, notDismissedGate,
   adaptiveBufferTarget, CONSUMPTION_WINDOW_DAYS,
 } from './feed-gates.ts'
 
@@ -224,7 +224,7 @@ async function cardsGeneratedToday(userId: string): Promise<number> {
 /**
  * Count cards that are unseen AND the feed could actually serve right now.
  * Uses the same gates as the feed endpoint (cold-start types, mastery,
- * quiz/flashcard prerequisites, casual-goal exclusion, dismissals). Cards the
+ * quiz/flashcard prerequisites, dismissals). Cards the
  * feed can never show must not count, or they keep the buffer "full" while the
  * user only gets re-shown old cards.
  */
@@ -235,13 +235,11 @@ async function servableUnseenCount(userId: string): Promise<number> {
     .select({ count: sql<number>`count(*)::int` })
     .from(cards)
     .innerJoin(chunks, eq(cards.chunkId, chunks.id))
-    .innerJoin(documents, eq(chunks.documentId, documents.id))
     .where(and(
       eq(cards.userId, userId),
       inArray(cards.cardType, eligibleTypes),
       neverShownGate,
       notDismissedGate,
-      casualGoalGate,
       chunkMasteryGate(userId),
       prerequisiteGate(userId),
     ))
