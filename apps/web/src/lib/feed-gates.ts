@@ -138,3 +138,71 @@ export function adaptiveBufferTarget(cardsSeenPerDay: number, dailyLimit: number
   const target = Math.ceil(cardsSeenPerDay * BUFFER_DAYS)
   return Math.min(Math.max(target, MIN_BUFFER), 2 * dailyLimit)
 }
+
+/**
+ * A document counts as "being read" when it accounts for at least this share
+ * of the distinct cards seen in the consumption window. Keeps a stray card or
+ * two from an old book from making it a focus document.
+ */
+export const FOCUS_MIN_SHARE = 0.1
+
+export type BufferPlan =
+  /** Nothing to do — every document being read has enough unseen cards. */
+  | { kind: 'pause'; reason: string }
+  /**
+   * Generate up to `need` cards. `focusDocIds` are the documents being read
+   * that are short of cards; they go first. When `focusOnly` is true the
+   * account-wide buffer is already full, so only those documents may be
+   * processed — stock in books the user isn't reading must not grow.
+   */
+  | { kind: 'generate'; need: number; focusDocIds: string[]; focusOnly: boolean }
+
+/**
+ * Decide whether to generate and for which documents.
+ *
+ * The buffer is sized per document by the user's reading mix, so a large
+ * stock of unseen cards in books the user isn't reading (e.g. other
+ * collections) can't keep the buffer "full" and starve the one they are.
+ *
+ * @param seenByDoc      distinct cards seen per document over the consumption window
+ * @param unseenByDoc    servable unseen cards per document
+ * @param activeDocIds   documents that can still produce cards
+ * @param bufferTarget   account-wide target from adaptiveBufferTarget()
+ */
+export function planBuffer(
+  seenByDoc: Map<string, number>,
+  unseenByDoc: Map<string, number>,
+  activeDocIds: Set<string>,
+  bufferTarget: number,
+): BufferPlan {
+  const totalSeen = [...seenByDoc.values()].reduce((a, b) => a + b, 0)
+  const totalUnseen = [...unseenByDoc.values()].reduce((a, b) => a + b, 0)
+
+  // Each document being read gets a share of the target matching its share of reading
+  const shortfalls: { docId: string; short: number }[] = []
+  if (totalSeen > 0) {
+    for (const [docId, seen] of seenByDoc) {
+      const share = seen / totalSeen
+      if (share < FOCUS_MIN_SHARE || !activeDocIds.has(docId)) continue
+      const docTarget = Math.ceil(bufferTarget * share)
+      const short = docTarget - (unseenByDoc.get(docId) ?? 0)
+      if (short > 0) shortfalls.push({ docId, short })
+    }
+  }
+  shortfalls.sort((a, b) => b.short - a.short)
+  const focusDocIds = shortfalls.map((s) => s.docId)
+  const focusNeed = shortfalls.reduce((a, s) => a + s.short, 0)
+
+  if (totalUnseen < bufferTarget) {
+    return {
+      kind: 'generate',
+      need: Math.max(bufferTarget - totalUnseen, focusNeed),
+      focusDocIds,
+      focusOnly: false,
+    }
+  }
+  if (focusDocIds.length > 0) {
+    return { kind: 'generate', need: focusNeed, focusDocIds, focusOnly: true }
+  }
+  return { kind: 'pause', reason: `buffer full (${totalUnseen}/${bufferTarget})` }
+}

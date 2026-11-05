@@ -23,7 +23,7 @@ import { captureException } from './posthog.ts'
 import {
   eligibleTypesFor, shownCardCount, chunkMasteryGate, prerequisiteGate,
   neverShownGate, notDismissedGate,
-  adaptiveBufferTarget, CONSUMPTION_WINDOW_DAYS,
+  adaptiveBufferTarget, planBuffer, CONSUMPTION_WINDOW_DAYS,
 } from './feed-gates.ts'
 
 // ── Resolve binary paths ──
@@ -228,11 +228,11 @@ async function cardsGeneratedToday(userId: string): Promise<number> {
  * feed can never show must not count, or they keep the buffer "full" while the
  * user only gets re-shown old cards.
  */
-async function servableUnseenCount(userId: string): Promise<number> {
+async function servableUnseenByDoc(userId: string): Promise<Map<string, number>> {
   const eligibleTypes = eligibleTypesFor(await shownCardCount(userId))
 
-  const [row] = await db
-    .select({ count: sql<number>`count(*)::int` })
+  const rows = await db
+    .select({ documentId: chunks.documentId, count: sql<number>`count(*)::int` })
     .from(cards)
     .innerJoin(chunks, eq(cards.chunkId, chunks.id))
     .where(and(
@@ -243,20 +243,25 @@ async function servableUnseenCount(userId: string): Promise<number> {
       chunkMasteryGate(userId),
       prerequisiteGate(userId),
     ))
-  return row?.count ?? 0
+    .groupBy(chunks.documentId)
+  return new Map(rows.flatMap((r) => (r.documentId ? [[r.documentId, r.count] as const] : [])))
 }
 
 /**
- * Distinct cards the user has seen per day, averaged over the recent window.
- * Drives the adaptive buffer size.
+ * Distinct cards the user has seen per document over the recent window.
+ * The total drives the adaptive buffer size; the split says which documents
+ * the user is actually reading.
  */
-async function recentCardsSeenPerDay(userId: string): Promise<number> {
+async function recentCardsSeenByDoc(userId: string): Promise<Map<string, number>> {
   const since = new Date(Date.now() - CONSUMPTION_WINDOW_DAYS * 24 * 60 * 60 * 1000)
-  const [row] = await db
-    .select({ count: sql<number>`count(distinct ${feedEvents.cardId})::int` })
+  const rows = await db
+    .select({ documentId: chunks.documentId, count: sql<number>`count(distinct ${feedEvents.cardId})::int` })
     .from(feedEvents)
+    .innerJoin(cards, eq(cards.id, feedEvents.cardId))
+    .innerJoin(chunks, eq(chunks.id, cards.chunkId))
     .where(and(eq(feedEvents.userId, userId), gte(feedEvents.createdAt, since)))
-  return (row?.count ?? 0) / CONSUMPTION_WINDOW_DAYS
+    .groupBy(chunks.documentId)
+  return new Map(rows.flatMap((r) => (r.documentId ? [[r.documentId, r.count] as const] : [])))
 }
 
 // ── Document Locking ────────────────────────────────────────
@@ -914,30 +919,10 @@ async function _processUser(userId: string, tier: Tier): Promise<number> {
     return 0
   }
 
-  // Adaptive buffer: keep ~BUFFER_DAYS of the user's recent consumption ready
-  // as servable unseen cards. Quiet readers get a small buffer, so generation
-  // keeps trickling in fresh cards daily rather than stalling on a big stock.
-  // Skip buffer check for the bot account — it needs a large card pool for curation
-  const isBot = BOT_USER_ID !== '' && userId === BOT_USER_ID
-  if (!isBot) {
-    const [perDay, unseen] = await Promise.all([
-      recentCardsSeenPerDay(userId),
-      servableUnseenCount(userId),
-    ])
-    const bufferTarget = adaptiveBufferTarget(perDay, dailyLimit)
-    if (unseen >= bufferTarget) {
-      console.log(`[pipeline] user=${userId} buffer full (${unseen}/${bufferTarget}, ${perDay.toFixed(1)} seen/day), pausing`)
-      return 0
-    }
-    // Only fill up to the target this run (at least one batch, so a chunk's
-    // cards are never split awkwardly by a tiny budget).
-    budget = Math.min(budget, Math.max(bufferTarget - unseen, CARDS_PER_BATCH))
-  }
-
   const staleThreshold = new Date(Date.now() - LOCK_EXPIRY_MS)
 
   // Fetch active documents that are not locked by another machine and not paused
-  const activeDocs = await db
+  let activeDocs = await db
     .select()
     .from(documents)
     .where(and(
@@ -953,6 +938,38 @@ async function _processUser(userId: string, tier: Tier): Promise<number> {
     .orderBy(asc(documents.docVirtualTime))
 
   if (activeDocs.length === 0) return 0
+
+  // Adaptive buffer: keep ~BUFFER_DAYS of the user's recent consumption ready
+  // as servable unseen cards, split across documents by how much each is being
+  // read. Quiet readers get a small buffer, so generation keeps trickling in
+  // fresh cards daily rather than stalling on a big stock — and a stock in
+  // books the user isn't reading can't starve the one they are.
+  // Skip buffer check for the bot account — it needs a large card pool for curation
+  const isBot = BOT_USER_ID !== '' && userId === BOT_USER_ID
+  let focusDocIds = new Set<string>()
+  if (!isBot) {
+    const [seenByDoc, unseenByDoc] = await Promise.all([
+      recentCardsSeenByDoc(userId),
+      servableUnseenByDoc(userId),
+    ])
+    const totalSeen = [...seenByDoc.values()].reduce((a, b) => a + b, 0)
+    const perDay = totalSeen / CONSUMPTION_WINDOW_DAYS
+    const bufferTarget = adaptiveBufferTarget(perDay, dailyLimit)
+    const plan = planBuffer(seenByDoc, unseenByDoc, new Set(activeDocs.map((d) => d.id)), bufferTarget)
+
+    if (plan.kind === 'pause') {
+      console.log(`[pipeline] user=${userId} ${plan.reason}, ${perDay.toFixed(1)} seen/day, pausing`)
+      return 0
+    }
+    focusDocIds = new Set(plan.focusDocIds)
+    if (plan.focusOnly) {
+      activeDocs = activeDocs.filter((d) => focusDocIds.has(d.id))
+      console.log(`[pipeline] user=${userId} account buffer full, topping up ${focusDocIds.size} doc(s) being read (need ${plan.need})`)
+    }
+    // Only fill up to the target this run (at least one batch, so a chunk's
+    // cards are never split awkwardly by a tiny budget).
+    budget = Math.min(budget, Math.max(plan.need, CARDS_PER_BATCH))
+  }
 
   // Priority doc = pinned > active (user-set); no createdAt tiebreak so
   // equal-priority docs compete fairly via virtual time.
@@ -972,6 +989,10 @@ async function _processUser(userId: string, tier: Tier): Promise<number> {
     const candidates = activeDocs
       .filter((d) => !exhausted.has(d.id))
       .sort((a, b) => {
+        // Documents the user is reading and that are short of cards go first
+        const aFocus = focusDocIds.has(a.id) ? 0 : 1
+        const bFocus = focusDocIds.has(b.id) ? 0 : 1
+        if (aFocus !== bFocus) return aFocus - bFocus
         const vtDiff = (a.docVirtualTime ?? 0) - (b.docVirtualTime ?? 0)
         if (vtDiff !== 0) return vtDiff
         // Tie-break: prefer docs we have affinity with
