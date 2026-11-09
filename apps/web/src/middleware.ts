@@ -3,6 +3,7 @@ import { createSupabaseServer } from './lib/supabase.ts'
 import { startCronTimer } from './lib/machine.ts'
 import { processCron } from './lib/pipeline.ts'
 import { DISABLE_CRON } from 'astro:env/server'
+import { captureException } from './lib/posthog.ts'
 
 // Start the in-process cron timer (runs once at module load)
 if (!DISABLE_CRON) {
@@ -22,5 +23,11 @@ export const onRequest = defineMiddleware(async (context, next) => {
     data: { user },
   } = await supabase.auth.getUser()
   context.locals.user = user
-  return next()
+  try {
+    return await next()
+  } catch (err) {
+    // Report unhandled route errors to PostHog, then let Astro render its error page
+    captureException(err, user?.id, { path: context.url.pathname, method: context.request.method })
+    throw err
+  }
 })

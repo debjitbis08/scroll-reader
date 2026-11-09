@@ -14,6 +14,7 @@ const extractConfig = {
   extractorBin: EXTRACTOR_BIN || join(HERE, '../../../../../packages/extractor/target/debug/extractor'),
 }
 import { uploadDocument } from '../../lib/storage.ts'
+import { captureException } from '../../lib/posthog.ts'
 import { TIER_LIMITS } from '@scroll-reader/shared-types'
 import type { Tier } from '@scroll-reader/shared-types'
 
@@ -85,6 +86,7 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
     toc = tocEntries
   } catch (err) {
     console.error('[upload] preview extraction failed:', err)
+    captureException(err, userId, { stage: 'upload_extract', file_name: file.name, file_size: file.size })
     await unlink(tmpPath).catch(() => {})
     return redirect('/upload?error=Could+not+read+document')
   }
@@ -114,6 +116,7 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
     await db.update(documents).set({ filePath: path }).where(eq(documents.id, doc.id))
   } catch (err) {
     console.error('[upload] storage upload failed:', err)
+    captureException(err, userId, { stage: 'upload_storage', file_name: file.name, file_size: file.size, document_id: doc.id })
     await db.delete(documents).where(eq(documents.id, doc.id))
     return redirect('/upload?error=Could+not+store+document')
   }
