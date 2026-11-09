@@ -253,6 +253,13 @@
       "when": 1776617119090,
       "tag": "0035_majestic_moira_mactaggert",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1794229521391,
+      "tag": "0036_collection_last_filtered_at",
+      "breakpoints": true
     }
   ]
 }

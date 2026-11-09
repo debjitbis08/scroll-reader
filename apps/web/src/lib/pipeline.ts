@@ -3,7 +3,7 @@ import { readFile, writeFile, unlink, rm } from 'node:fs/promises'
 import { extname, basename, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { db } from './db.ts'
-import { documents, chunks, chunkImages, cards, feedEvents, jobs, profiles, aiUsageLogs, usageEvents, catalogCards } from '@scroll-reader/db'
+import { documents, chunks, chunkImages, cards, feedEvents, jobs, profiles, aiUsageLogs, usageEvents, catalogCards, collections, collectionDocuments } from '@scroll-reader/db'
 import type { Document, Chunk } from '@scroll-reader/db'
 import {
   extractDocument, filterByPageRange, filterByToc,
@@ -23,7 +23,7 @@ import { captureException } from './posthog.ts'
 import {
   eligibleTypesFor, shownCardCount, chunkMasteryGate, prerequisiteGate,
   neverShownGate, notDismissedGate,
-  adaptiveBufferTarget, planBuffer, CONSUMPTION_WINDOW_DAYS,
+  adaptiveBufferTarget, planBuffer, CONSUMPTION_WINDOW_DAYS, FILTER_RECENT_DAYS,
 } from './feed-gates.ts'
 
 // ── Resolve binary paths ──
@@ -262,6 +262,29 @@ async function recentCardsSeenByDoc(userId: string): Promise<Map<string, number>
     .where(and(eq(feedEvents.userId, userId), gte(feedEvents.createdAt, since)))
     .groupBy(chunks.documentId)
   return new Map(rows.flatMap((r) => (r.documentId ? [[r.documentId, r.count] as const] : [])))
+}
+
+/**
+ * The user's collections per document, plus the collections they recently
+ * filtered the feed to. Collections are the feed's reading groups, so the
+ * buffer is split across them.
+ */
+async function collectionGroups(userId: string): Promise<{ docGroups: Map<string, string[]>; filtered: Set<string> }> {
+  const since = new Date(Date.now() - FILTER_RECENT_DAYS * 24 * 60 * 60 * 1000)
+  const [memberships, recent] = await Promise.all([
+    db
+      .select({ documentId: collectionDocuments.documentId, collectionId: collectionDocuments.collectionId })
+      .from(collectionDocuments)
+      .innerJoin(collections, eq(collections.id, collectionDocuments.collectionId))
+      .where(eq(collections.userId, userId)),
+    db
+      .select({ id: collections.id })
+      .from(collections)
+      .where(and(eq(collections.userId, userId), gte(collections.lastFilteredAt, since))),
+  ])
+  const docGroups = new Map<string, string[]>()
+  for (const m of memberships) docGroups.set(m.documentId, [...(docGroups.get(m.documentId) ?? []), m.collectionId])
+  return { docGroups, filtered: new Set(recent.map((r) => r.id)) }
 }
 
 // ── Document Locking ────────────────────────────────────────
@@ -940,22 +963,24 @@ async function _processUser(userId: string, tier: Tier): Promise<number> {
   if (activeDocs.length === 0) return 0
 
   // Adaptive buffer: keep ~BUFFER_DAYS of the user's recent consumption ready
-  // as servable unseen cards, split across documents by how much each is being
-  // read. Quiet readers get a small buffer, so generation keeps trickling in
-  // fresh cards daily rather than stalling on a big stock — and a stock in
-  // books the user isn't reading can't starve the one they are.
+  // as servable unseen cards, split across collections by how much each is
+  // being read (seen cards + recent feed filters). Quiet readers get a small
+  // buffer, so generation keeps trickling in fresh cards daily rather than
+  // stalling on a big stock — and a stock in collections the user isn't
+  // reading can't starve the one they are.
   // Skip buffer check for the bot account — it needs a large card pool for curation
   const isBot = BOT_USER_ID !== '' && userId === BOT_USER_ID
   let focusDocIds = new Set<string>()
   if (!isBot) {
-    const [seenByDoc, unseenByDoc] = await Promise.all([
+    const [seenByDoc, unseenByDoc, { docGroups, filtered }] = await Promise.all([
       recentCardsSeenByDoc(userId),
       servableUnseenByDoc(userId),
+      collectionGroups(userId),
     ])
     const totalSeen = [...seenByDoc.values()].reduce((a, b) => a + b, 0)
     const perDay = totalSeen / CONSUMPTION_WINDOW_DAYS
     const bufferTarget = adaptiveBufferTarget(perDay, dailyLimit)
-    const plan = planBuffer(seenByDoc, unseenByDoc, new Set(activeDocs.map((d) => d.id)), bufferTarget)
+    const plan = planBuffer(docGroups, seenByDoc, unseenByDoc, new Set(activeDocs.map((d) => d.id)), filtered, bufferTarget)
 
     if (plan.kind === 'pause') {
       console.log(`[pipeline] user=${userId} ${plan.reason}, ${perDay.toFixed(1)} seen/day, pausing`)
@@ -964,7 +989,7 @@ async function _processUser(userId: string, tier: Tier): Promise<number> {
     focusDocIds = new Set(plan.focusDocIds)
     if (plan.focusOnly) {
       activeDocs = activeDocs.filter((d) => focusDocIds.has(d.id))
-      console.log(`[pipeline] user=${userId} account buffer full, topping up ${focusDocIds.size} doc(s) being read (need ${plan.need})`)
+      console.log(`[pipeline] user=${userId} account buffer full, topping up ${focusDocIds.size} doc(s) in collection(s) being read (need ${plan.need})`)
     }
     // Only fill up to the target this run (at least one batch, so a chunk's
     // cards are never split awkwardly by a tiny budget).
@@ -989,7 +1014,7 @@ async function _processUser(userId: string, tier: Tier): Promise<number> {
     const candidates = activeDocs
       .filter((d) => !exhausted.has(d.id))
       .sort((a, b) => {
-        // Documents the user is reading and that are short of cards go first
+        // Documents in collections being read that are short of cards go first
         const aFocus = focusDocIds.has(a.id) ? 0 : 1
         const bFocus = focusDocIds.has(b.id) ? 0 : 1
         if (aFocus !== bFocus) return aFocus - bFocus

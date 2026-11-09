@@ -96,6 +96,9 @@ export const collections = pgTable('collections', {
     .notNull(),
   name: text('name').notNull(),
   description: text('description'),
+  // Last time the user filtered the feed to this collection. Tells card
+  // generation the collection is being read even before any card is seen.
+  lastFilteredAt: timestamp('last_filtered_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 }, (t) => [

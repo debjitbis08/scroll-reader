@@ -1,0 +1,1 @@
+ALTER TABLE "collections" ADD COLUMN "last_filtered_at" timestamp with time zone;

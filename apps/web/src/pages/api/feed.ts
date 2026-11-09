@@ -58,6 +58,20 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
 
   const hasCollectionFilter = collectionIds.length > 0
 
+  // Record the filter so card generation treats these collections as being
+  // read, even before any of their cards exist. Throttled to one write per
+  // minute; failures must not break the feed.
+  if (hasCollectionFilter) {
+    db.update(collections)
+      .set({ lastFilteredAt: new Date() })
+      .where(and(
+        inArray(collections.id, collectionIds),
+        eq(collections.userId, user.id),
+        sql`(${collections.lastFilteredAt} IS NULL OR ${collections.lastFilteredAt} < now() - interval '1 minute')`,
+      ))
+      .catch((err) => console.error('[feed] failed to record collection filter', err))
+  }
+
   // --- 1. User context ---
 
   // Cold start: how many distinct cards has the user seen?

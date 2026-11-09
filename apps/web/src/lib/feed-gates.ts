@@ -140,57 +140,94 @@ export function adaptiveBufferTarget(cardsSeenPerDay: number, dailyLimit: number
 }
 
 /**
- * A document counts as "being read" when it accounts for at least this share
- * of the distinct cards seen in the consumption window. Keeps a stray card or
- * two from an old book from making it a focus document.
+ * The feed's reading groups are the user's collections (the feed filter).
+ * Documents in no collection share this single group.
+ */
+export const UNCOLLECTED = ''
+
+/**
+ * A collection counts as "being read" when it accounts for at least this
+ * share of the distinct cards seen in the consumption window. Keeps a stray
+ * card or two from an old collection from making it a focus.
  */
 export const FOCUS_MIN_SHARE = 0.1
+/**
+ * A collection the user recently filtered the feed to gets at least this
+ * share of the buffer, so it fills up even before any of its cards are seen.
+ */
+export const FILTERED_MIN_SHARE = 0.5
+/** How recently a feed filter must have been used to count. */
+export const FILTER_RECENT_DAYS = 2
 
 export type BufferPlan =
-  /** Nothing to do — every document being read has enough unseen cards. */
+  /** Nothing to do — every collection being read has enough unseen cards. */
   | { kind: 'pause'; reason: string }
   /**
-   * Generate up to `need` cards. `focusDocIds` are the documents being read
-   * that are short of cards; they go first. When `focusOnly` is true the
-   * account-wide buffer is already full, so only those documents may be
-   * processed — stock in books the user isn't reading must not grow.
+   * Generate up to `need` cards. `focusDocIds` are the active documents of
+   * collections being read that are short of cards; they go first. When
+   * `focusOnly` is true the account-wide buffer is already full, so only those
+   * documents may be processed — stock in collections the user isn't reading
+   * must not grow.
    */
   | { kind: 'generate'; need: number; focusDocIds: string[]; focusOnly: boolean }
 
 /**
  * Decide whether to generate and for which documents.
  *
- * The buffer is sized per document by the user's reading mix, so a large
- * stock of unseen cards in books the user isn't reading (e.g. other
- * collections) can't keep the buffer "full" and starve the one they are.
+ * The buffer is sized per collection by the user's reading mix, so a large
+ * stock of unseen cards in collections the user isn't reading can't keep the
+ * buffer "full" and starve the one they are. Within a collection, any of its
+ * books can fill the share, so the feed for that filter stays supplied.
  *
- * @param seenByDoc      distinct cards seen per document over the consumption window
- * @param unseenByDoc    servable unseen cards per document
- * @param activeDocIds   documents that can still produce cards
- * @param bufferTarget   account-wide target from adaptiveBufferTarget()
+ * @param docGroups        collection ids per document (missing/empty = UNCOLLECTED)
+ * @param seenByDoc        distinct cards seen per document over the consumption window
+ * @param unseenByDoc      servable unseen cards per document
+ * @param activeDocIds     documents that can still produce cards
+ * @param filteredGroups   collections the user recently filtered the feed to
+ * @param bufferTarget     account-wide target from adaptiveBufferTarget()
  */
 export function planBuffer(
+  docGroups: Map<string, string[]>,
   seenByDoc: Map<string, number>,
   unseenByDoc: Map<string, number>,
   activeDocIds: Set<string>,
+  filteredGroups: Set<string>,
   bufferTarget: number,
 ): BufferPlan {
+  const groupsOf = (docId: string) => {
+    const g = docGroups.get(docId)
+    return g && g.length > 0 ? g : [UNCOLLECTED]
+  }
+  const addTo = (m: Map<string, number>, docId: string, n: number) => {
+    for (const g of groupsOf(docId)) m.set(g, (m.get(g) ?? 0) + n)
+  }
+
+  // A document in several collections counts toward each of them: a card it
+  // has unseen can be served under any of those filters.
+  const seenByGroup = new Map<string, number>()
+  const unseenByGroup = new Map<string, number>()
+  const activeByGroup = new Map<string, string[]>()
+  for (const [docId, n] of seenByDoc) addTo(seenByGroup, docId, n)
+  for (const [docId, n] of unseenByDoc) addTo(unseenByGroup, docId, n)
+  for (const docId of activeDocIds) {
+    for (const g of groupsOf(docId)) activeByGroup.set(g, [...(activeByGroup.get(g) ?? []), docId])
+  }
+
   const totalSeen = [...seenByDoc.values()].reduce((a, b) => a + b, 0)
   const totalUnseen = [...unseenByDoc.values()].reduce((a, b) => a + b, 0)
 
-  // Each document being read gets a share of the target matching its share of reading
-  const shortfalls: { docId: string; short: number }[] = []
-  if (totalSeen > 0) {
-    for (const [docId, seen] of seenByDoc) {
-      const share = seen / totalSeen
-      if (share < FOCUS_MIN_SHARE || !activeDocIds.has(docId)) continue
-      const docTarget = Math.ceil(bufferTarget * share)
-      const short = docTarget - (unseenByDoc.get(docId) ?? 0)
-      if (short > 0) shortfalls.push({ docId, short })
-    }
+  // Each collection being read gets a share of the target matching its share of reading
+  const shortfalls: { group: string; short: number }[] = []
+  for (const group of new Set([...seenByGroup.keys(), ...filteredGroups])) {
+    let share = totalSeen > 0 ? (seenByGroup.get(group) ?? 0) / totalSeen : 0
+    if (filteredGroups.has(group)) share = Math.max(share, FILTERED_MIN_SHARE)
+    if (share < FOCUS_MIN_SHARE || !activeByGroup.has(group)) continue
+    const groupTarget = Math.ceil(bufferTarget * share)
+    const short = groupTarget - (unseenByGroup.get(group) ?? 0)
+    if (short > 0) shortfalls.push({ group, short })
   }
   shortfalls.sort((a, b) => b.short - a.short)
-  const focusDocIds = shortfalls.map((s) => s.docId)
+  const focusDocIds = [...new Set(shortfalls.flatMap((s) => activeByGroup.get(s.group) ?? []))]
   const focusNeed = shortfalls.reduce((a, s) => a + s.short, 0)
 
   if (totalUnseen < bufferTarget) {
